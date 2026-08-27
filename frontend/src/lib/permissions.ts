@@ -89,7 +89,7 @@ export function hasPermission(
 
   // Simple flat permission check for now.
   // The server handles study/site scoping authoritatively.
-  return user.permissions.includes(permission)
+  return (user.permissions ?? []).includes(permission)
 }
 
 /**
@@ -105,7 +105,7 @@ export function usePermission(
   // Flat check — scoping delegated to server
   void studyId
   void siteId
-  return user.permissions.includes(permission)
+  return (user.permissions ?? []).includes(permission)
 }
 
 /**

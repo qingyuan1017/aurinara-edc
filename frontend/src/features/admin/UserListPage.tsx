@@ -15,8 +15,7 @@ interface User {
   email: string
   first_name: string
   last_name: string
-  is_active: boolean
-  roles: { role_id: string; role_name: string }[]
+  status: string
   created_at: string
 }
 
@@ -35,21 +34,17 @@ const columns = [
     header: 'Name',
   }),
   columnHelper.accessor('email', { header: 'Email' }),
-  columnHelper.accessor((row) => row.roles.map((r) => r.role_name).join(', ') || '—', {
-    id: 'roles',
-    header: 'Roles',
-  }),
-  columnHelper.accessor('is_active', {
+  columnHelper.accessor('status', {
     header: 'Status',
     cell: (info) => (
       <span
         className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-          info.getValue()
+          info.getValue() === 'active'
             ? 'bg-green-100 text-green-800'
             : 'bg-red-100 text-red-800'
         }`}
       >
-        {info.getValue() ? 'Active' : 'Inactive'}
+        {info.getValue()}
       </span>
     ),
   }),
@@ -174,7 +169,7 @@ export function UserListPage() {
                     ))}
                     {canDeactivate && (
                       <td className="px-4 py-3 text-sm">
-                        {row.original.is_active && (
+                        {row.original.status === 'active' && (
                           <button
                             onClick={() => deactivateMutation.mutate(row.original.id)}
                             disabled={deactivateMutation.isPending}

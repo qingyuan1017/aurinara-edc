@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: clinical-edc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: edc
+      POSTGRES_USER: edetek
+      POSTGRES_PASSWORD: edetekpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - ${POSTGRES_DATA_PATH:-edc_postgres_data}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edetek -d edc"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  edc_postgres_data:

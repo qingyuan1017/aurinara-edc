@@ -7,6 +7,13 @@ import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage'
 import { AcceptInvitationPage } from '@/features/auth/AcceptInvitationPage'
 import { AccessDeniedPage } from '@/features/auth/AccessDeniedPage'
+import { AuditViewerPage, UserListPage } from '@/features/admin'
+import { ExportCenterPage } from '@/features/exports'
+import { SiteListPage } from '@/features/sites'
+import { StudyDashboardPage } from '@/features/dashboards'
+import { StudyListPage } from '@/features/studies'
+import { SubjectListPage } from '@/features/subjects'
+import { useStudyContext } from './study-context'
 
 /**
  * Root route — renders an Outlet so child routes appear.
@@ -86,52 +93,57 @@ const appShellLayout = createRoute({
 const indexRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/',
-  component: () =>
-    createElement(
-      'div',
-      { className: 'space-y-4' },
-      createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Dashboard'),
-      createElement('p', { className: 'text-gray-600' }, 'Welcome to the Clinical EDC System.'),
-    ),
+  component: () => createElement(StudyDashboardRoute),
 })
 
-/**
- * Placeholder routes for navigation items.
- * Each will be expanded with feature-specific components.
- */
+function StudyDashboardRoute() {
+  const studyId = useStudyContext((state) => state.selectedStudyId)
+  return studyId
+    ? createElement(StudyDashboardPage, { studyId })
+    : createElement('div', { className: 'space-y-4' },
+        createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Dashboard'),
+        createElement('p', { className: 'text-gray-600' }, 'Select a study to view its dashboard.'),
+      )
+}
+
 const studiesRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/studies',
-  component: () => createElement('div', { className: 'space-y-4' },
-    createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Studies'),
-    createElement('p', { className: 'text-gray-600' }, 'Study management coming soon.'),
-  ),
+  component: () => createElement(StudyListPage),
 })
 
 const sitesRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/sites',
-  component: () => createElement('div', { className: 'space-y-4' },
-    createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Sites'),
-    createElement('p', { className: 'text-gray-600' }, 'Site management coming soon.'),
-  ),
+  component: () => createElement(StudyScopedSitesRoute),
 })
+
+function StudyScopedSitesRoute() {
+  const studyId = useStudyContext((state) => state.selectedStudyId)
+  return studyId
+    ? createElement(SiteListPage, { studyId })
+    : createElement('p', { className: 'text-gray-600' }, 'Select a study to view sites.')
+}
 
 const subjectsRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/subjects',
-  component: () => createElement('div', { className: 'space-y-4' },
-    createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Subjects'),
-    createElement('p', { className: 'text-gray-600' }, 'Subject management coming soon.'),
-  ),
+  component: () => createElement(StudyScopedSubjectsRoute),
 })
+
+function StudyScopedSubjectsRoute() {
+  const studyId = useStudyContext((state) => state.selectedStudyId)
+  return studyId
+    ? createElement(SubjectListPage, { studyId })
+    : createElement('p', { className: 'text-gray-600' }, 'Select a study to view subjects.')
+}
 
 const formsRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/forms',
   component: () => createElement('div', { className: 'space-y-4' },
     createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Forms'),
-    createElement('p', { className: 'text-gray-600' }, 'Form management coming soon.'),
+    createElement('p', { className: 'text-gray-600' }, 'Open a form instance from a subject casebook to begin data entry.'),
   ),
 })
 
@@ -140,25 +152,29 @@ const queriesRoute = createRoute({
   path: '/queries',
   component: () => createElement('div', { className: 'space-y-4' },
     createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Queries'),
-    createElement('p', { className: 'text-gray-600' }, 'Query management coming soon.'),
+    createElement('p', { className: 'text-gray-600' }, 'Query management is not yet connected to a page.'),
   ),
 })
 
 const exportsRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/exports',
-  component: () => createElement('div', { className: 'space-y-4' },
-    createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Exports'),
-    createElement('p', { className: 'text-gray-600' }, 'Data export coming soon.'),
-  ),
+  component: () => createElement(StudyScopedExportsRoute),
 })
+
+function StudyScopedExportsRoute() {
+  const studyId = useStudyContext((state) => state.selectedStudyId)
+  return studyId
+    ? createElement(ExportCenterPage, { studyId })
+    : createElement('p', { className: 'text-gray-600' }, 'Select a study to view exports.')
+}
 
 const adminRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/admin',
   component: () => createElement('div', { className: 'space-y-4' },
     createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Admin'),
-    createElement('p', { className: 'text-gray-600' }, 'Administration coming soon.'),
+    createElement(UserListPage),
   ),
 })
 
@@ -167,7 +183,7 @@ const auditRoute = createRoute({
   path: '/audit',
   component: () => createElement('div', { className: 'space-y-4' },
     createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Audit Trail'),
-    createElement('p', { className: 'text-gray-600' }, 'Audit trail viewer coming soon.'),
+    createElement(AuditViewerPage),
   ),
 })
 

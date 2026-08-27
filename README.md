@@ -41,7 +41,7 @@ edc/
 
 - Python 3.11+
 - Node.js 20+ and npm
-- PostgreSQL 14+ (running locally or reachable via `DATABASE_URL`)
+- Docker Desktop (recommended for local PostgreSQL), or PostgreSQL 14+ running locally
 - Optional: Redis (background jobs), AWS account (Cognito, S3, RDS, ECS/Fargate)
 
 ---
@@ -69,6 +69,25 @@ Set `DATABASE_URL` in `.env` to point at your PostgreSQL instance, for example:
 ```
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/edc
 ```
+
+### PostgreSQL with Docker
+
+From the repository root, start the local PostgreSQL container:
+
+```bash
+docker compose up -d postgres
+docker compose ps
+```
+
+The Compose configuration creates database `edc` and user `edetek`, matching the
+default `backend/.env` configuration. Stop the container with:
+
+```bash
+docker compose stop postgres
+```
+
+The database is persisted in the `edc-postgres-data` Docker volume. To remove the
+container and its data completely, run `docker compose down -v`.
 
 Generate a strong `SECRET_KEY` for anything beyond local development:
 

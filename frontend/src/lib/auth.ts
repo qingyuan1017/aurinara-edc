@@ -14,10 +14,21 @@ export interface CurrentUser {
 }
 
 export interface UserRoleAssignment {
-  role_id: string
+  role_id?: string
   role_name: string
+  scope_level?: string
+  permissions?: string[]
   study_id?: string
   site_id?: string
+}
+
+/** Adapt the API's role-scoped permissions to the flat shape used by the UI. */
+function normalizeCurrentUser(user: Omit<CurrentUser, 'permissions'> & { permissions?: string[] }): CurrentUser {
+  const permissions = user.roles.flatMap((role) => role.permissions ?? [])
+  return {
+    ...user,
+    permissions: [...new Set(user.permissions ?? permissions)],
+  }
 }
 
 export interface TokenPair {
@@ -60,7 +71,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       // Fetch full user profile after login
       const { data: user } = await api.get<CurrentUser>('/auth/me')
-      set({ user })
+      set({ user: normalizeCurrentUser(user) })
     } finally {
       set({ isLoading: false })
     }
@@ -83,7 +94,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true })
     try {
       const { data } = await api.get<CurrentUser>('/auth/me')
-      set({ user: data, isAuthenticated: true })
+      set({ user: normalizeCurrentUser(data), isAuthenticated: true })
     } catch {
       set({ user: null, isAuthenticated: false })
     } finally {
