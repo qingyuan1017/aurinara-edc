@@ -46,6 +46,15 @@ class FormInstanceResponse(BaseSchema):
     submitted_at: datetime | None = None
     submitted_by: UUID | None = None
     field_values: list[FieldValueResponse] = Field(default_factory=list)
+    # Presentation fields for clients rendering a data-entry form. These are
+    # assembled from the related form definition by the route layer.
+    form_name: str | None = None
+    subject_number: str | None = None
+    visit_name: str | None = None
+    sections: list[dict[str, object]] = Field(default_factory=list)
+    data: dict[str, Any] = Field(default_factory=dict)
+    is_frozen: bool = False
+    is_locked: bool = False
 
 
 # ---------------------------------------------------------------------------

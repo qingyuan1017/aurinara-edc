@@ -1,4 +1,4 @@
-import { createRouter, createRootRoute, createRoute, Outlet } from '@tanstack/react-router'
+import { createRouter, createRootRoute, createRoute, Outlet, useParams } from '@tanstack/react-router'
 import { createElement } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { AuthGuard } from '@/components/guards/AuthGuard'
@@ -12,7 +12,11 @@ import { ExportCenterPage } from '@/features/exports'
 import { SiteListPage } from '@/features/sites'
 import { StudyDashboardPage } from '@/features/dashboards'
 import { StudyListPage } from '@/features/studies'
-import { SubjectListPage } from '@/features/subjects'
+import { StudyDetailPage } from '@/features/studies/StudyDetailPage'
+import { SubjectCasebookPage, SubjectListPage } from '@/features/subjects'
+import { FormBuilderPage, FormEntryPage } from '@/features/forms'
+import { QueryListPage } from '@/features/queries'
+import { VisitListPage } from '@/features/visits'
 import { useStudyContext } from './study-context'
 
 /**
@@ -112,6 +116,39 @@ const studiesRoute = createRoute({
   component: () => createElement(StudyListPage),
 })
 
+const studyDetailRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/studies/$studyId',
+  component: StudyDetailRoute,
+})
+
+const studyDashboardRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/studies/$studyId/dashboard',
+  component: StudyDashboardDetailRoute,
+})
+
+const studyFormsRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/studies/$studyId/forms',
+  component: StudyFormsRoute,
+})
+
+function StudyDetailRoute() {
+  const { studyId } = useParams({ from: '/authenticated/app-shell/studies/$studyId' })
+  return createElement(StudyDetailPage, { studyId })
+}
+
+function StudyDashboardDetailRoute() {
+  const { studyId } = useParams({ from: '/authenticated/app-shell/studies/$studyId/dashboard' })
+  return createElement(StudyDashboardPage, { studyId })
+}
+
+function StudyFormsRoute() {
+  const { studyId } = useParams({ from: '/authenticated/app-shell/studies/$studyId/forms' })
+  return createElement(FormBuilderPage, { studyId })
+}
+
 const sitesRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/sites',
@@ -141,20 +178,62 @@ function StudyScopedSubjectsRoute() {
 const formsRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/forms',
-  component: () => createElement('div', { className: 'space-y-4' },
-    createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Forms'),
-    createElement('p', { className: 'text-gray-600' }, 'Open a form instance from a subject casebook to begin data entry.'),
-  ),
+  component: () => createElement(StudyScopedFormsRoute),
 })
+
+function StudyScopedFormsRoute() {
+  const studyId = useStudyContext((state) => state.selectedStudyId)
+  return studyId
+    ? createElement(FormBuilderPage, { studyId })
+    : createElement('div', { className: 'space-y-4' },
+        createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Forms'),
+        createElement('p', { className: 'text-gray-600' }, 'Select a study to configure its forms.'),
+      )
+}
+
+const formEntryRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/subjects/$subjectId/forms/$formInstanceId',
+  component: FormEntryRoute,
+})
+
+const subjectCasebookRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/subjects/$subjectId/casebook',
+  component: SubjectCasebookRoute,
+})
+
+const subjectVisitsRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/subjects/$subjectId/visits',
+  component: SubjectVisitsRoute,
+})
+
+function FormEntryRoute() {
+  const { formInstanceId } = useParams({ from: '/authenticated/app-shell/subjects/$subjectId/forms/$formInstanceId' })
+  return createElement(FormEntryPage, { formInstanceId })
+}
+
+function SubjectCasebookRoute() {
+  const { subjectId } = useParams({ from: '/authenticated/app-shell/subjects/$subjectId/casebook' })
+  return createElement(SubjectCasebookPage, { subjectId })
+}
+
+function SubjectVisitsRoute() {
+  const { subjectId } = useParams({ from: '/authenticated/app-shell/subjects/$subjectId/visits' })
+  return createElement(VisitListPage, { subjectId })
+}
 
 const queriesRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/queries',
-  component: () => createElement('div', { className: 'space-y-4' },
-    createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Queries'),
-    createElement('p', { className: 'text-gray-600' }, 'Query management is not yet connected to a page.'),
-  ),
+  component: () => createElement(StudyScopedQueriesRoute),
 })
+
+function StudyScopedQueriesRoute() {
+  const studyId = useStudyContext((state) => state.selectedStudyId)
+  return studyId ? createElement(QueryListPage, { studyId }) : createElement('p', { className: 'text-gray-600' }, 'Select a study to view queries.')
+}
 
 const exportsRoute = createRoute({
   getParentRoute: () => appShellLayout,
@@ -197,9 +276,15 @@ const routeTree = rootRoute.addChildren([
     appShellLayout.addChildren([
       indexRoute,
       studiesRoute,
+      studyDetailRoute,
+      studyDashboardRoute,
+      studyFormsRoute,
       sitesRoute,
       subjectsRoute,
+      subjectCasebookRoute,
+      subjectVisitsRoute,
       formsRoute,
+      formEntryRoute,
       queriesRoute,
       exportsRoute,
       adminRoute,

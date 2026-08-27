@@ -88,7 +88,7 @@ export function UserListPage() {
 
   const inviteMutation = useMutation({
     mutationFn: async (payload: InviteUserPayload) => {
-      const { data } = await api.post('/users/invite', payload)
+      const { data } = await api.post('/auth/invite', { email: payload.email, role_id: payload.role_id })
       return data
     },
     onSuccess: () => {
@@ -105,7 +105,7 @@ export function UserListPage() {
 
   const deactivateMutation = useMutation({
     mutationFn: async (userId: string) => {
-      await api.patch(`/users/${userId}`, { is_active: false })
+      await api.post(`/users/${userId}/deactivate`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })

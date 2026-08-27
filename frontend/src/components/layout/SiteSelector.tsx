@@ -1,13 +1,8 @@
+import { useQuery } from '@tanstack/react-query'
+import { api, type PaginatedResponse } from '@/lib/api'
 import { useStudyContext } from '@/lib/study-context'
 
-/**
- * Placeholder site data — replaced by API calls with TanStack Query
- * once the sites feature is connected.
- */
-const PLACEHOLDER_SITES = [
-  { id: 'site-1', name: 'Site 001 – Boston' },
-  { id: 'site-2', name: 'Site 002 – London' },
-]
+interface SiteOption { id: string; site_number: string; name: string }
 
 /**
  * SiteSelector — dropdown that lets users switch site context.
@@ -16,6 +11,13 @@ const PLACEHOLDER_SITES = [
  */
 export function SiteSelector() {
   const { selectedStudyId, selectedSiteId, setSite } = useStudyContext()
+  const { data } = useQuery({
+    queryKey: ['site-selector', selectedStudyId],
+    enabled: !!selectedStudyId,
+    queryFn: async () => (await api.get<PaginatedResponse<SiteOption>>(
+      `/studies/${selectedStudyId}/sites`, { params: { page: 1, page_size: 100 } },
+    )).data,
+  })
 
   return (
     <select
@@ -26,9 +28,9 @@ export function SiteSelector() {
       className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <option value="">All Sites</option>
-      {PLACEHOLDER_SITES.map((site) => (
+      {data?.items.map((site) => (
         <option key={site.id} value={site.id}>
-          {site.name}
+          {site.site_number} — {site.name}
         </option>
       ))}
     </select>

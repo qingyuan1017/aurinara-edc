@@ -81,6 +81,7 @@ class FormDefinitionResponse(BaseSchema):
     display_order: int
     is_repeating: bool
     created_at: datetime
+    sections: list[FormSectionResponse] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +110,7 @@ class FormSectionResponse(BaseSchema):
     form_definition_id: UUID
     name: str
     display_order: int
+    fields: list[FieldDefinitionResponse] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

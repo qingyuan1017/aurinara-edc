@@ -1,13 +1,8 @@
+import { useQuery } from '@tanstack/react-query'
+import { api, type PaginatedResponse } from '@/lib/api'
 import { useStudyContext } from '@/lib/study-context'
 
-/**
- * Placeholder study data — replaced by API calls with TanStack Query
- * once the studies feature is connected.
- */
-const PLACEHOLDER_STUDIES = [
-  { id: 'study-1', name: 'TRIAL-001' },
-  { id: 'study-2', name: 'TRIAL-002' },
-]
+interface StudyOption { id: string; study_code: string; title: string }
 
 /**
  * StudySelector — dropdown that lets users switch study context.
@@ -15,6 +10,12 @@ const PLACEHOLDER_STUDIES = [
  */
 export function StudySelector() {
   const { selectedStudyId, setStudy } = useStudyContext()
+  const { data } = useQuery({
+    queryKey: ['study-selector'],
+    queryFn: async () => (await api.get<PaginatedResponse<StudyOption>>('/studies', {
+      params: { page: 1, page_size: 100 },
+    })).data,
+  })
 
   return (
     <select
@@ -24,9 +25,9 @@ export function StudySelector() {
       className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
     >
       <option value="">All Studies</option>
-      {PLACEHOLDER_STUDIES.map((study) => (
+      {data?.items.map((study) => (
         <option key={study.id} value={study.id}>
-          {study.name}
+          {study.study_code} — {study.title}
         </option>
       ))}
     </select>

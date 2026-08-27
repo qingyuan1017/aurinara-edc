@@ -17,7 +17,7 @@ interface FormSection {
   fields: FieldDefinition[]
 }
 
-type FormInstanceStatus = 'draft' | 'submitted' | 'reviewed' | 'frozen' | 'locked'
+type FormInstanceStatus = string
 
 interface FormInstanceData {
   id: string
@@ -102,7 +102,6 @@ export function FormEntryPage({ formInstanceId }: FormEntryPageProps) {
   const [fetchError, setFetchError] = React.useState('')
   const [saving, setSaving] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
-  const [reopening, setReopening] = React.useState(false)
   const [toast, setToast] = React.useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   // Server-side validation errors
@@ -156,7 +155,8 @@ export function FormEntryPage({ formInstanceId }: FormEntryPageProps) {
   })
 
   // --- Derived state ---
-  const isSubmitted = formInstance?.status === 'submitted' || formInstance?.status === 'reviewed'
+  const normalizedStatus = formInstance?.status.toLowerCase().replaceAll(' ', '_')
+  const isSubmitted = normalizedStatus === 'submitted' || normalizedStatus === 'reviewed'
   const isDisabled = formInstance?.is_frozen || formInstance?.is_locked || false
 
   // --- Field labels lookup ---
@@ -198,7 +198,7 @@ export function FormEntryPage({ formInstanceId }: FormEntryPageProps) {
     setSaving(true)
     setServerErrors({})
     try {
-      await api.patch(`/form-instances/${formInstanceId}/data`, { data: values })
+      await api.patch(`/form-instances/${formInstanceId}/data`, { values })
       setToast({ type: 'success', message: 'Form saved successfully.' })
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { errors?: Record<string, string> } } }
@@ -227,7 +227,7 @@ export function FormEntryPage({ formInstanceId }: FormEntryPageProps) {
     setServerErrors({})
     try {
       // Save data first, then submit
-      await api.patch(`/form-instances/${formInstanceId}/data`, { data: values })
+      await api.patch(`/form-instances/${formInstanceId}/data`, { values })
       const { data } = await api.post<FormInstanceData>(`/form-instances/${formInstanceId}/submit`)
       setFormInstance(data)
       setToast({ type: 'success', message: 'Form submitted successfully.' })
@@ -241,22 +241,6 @@ export function FormEntryPage({ formInstanceId }: FormEntryPageProps) {
       }
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  /**
-   * Reopen a submitted form (returns it to draft status).
-   */
-  const handleReopen = async () => {
-    setReopening(true)
-    try {
-      const { data } = await api.post<FormInstanceData>(`/form-instances/${formInstanceId}/reopen`)
-      setFormInstance(data)
-      setToast({ type: 'success', message: 'Form reopened for editing.' })
-    } catch {
-      setToast({ type: 'error', message: 'Failed to reopen form.' })
-    } finally {
-      setReopening(false)
     }
   }
 
@@ -407,7 +391,7 @@ export function FormEntryPage({ formInstanceId }: FormEntryPageProps) {
       {/* Action buttons */}
       {!isDisabled && (
         <div className="flex items-center gap-3 pt-2 border-t">
-          {formInstance.status === 'draft' && (
+          {(normalizedStatus === 'draft' || normalizedStatus === 'not_started' || normalizedStatus === 'in_progress') && (
             <>
               <Button
                 onClick={handleSave}
@@ -425,24 +409,6 @@ export function FormEntryPage({ formInstanceId }: FormEntryPageProps) {
             </>
           )}
 
-          {isSubmitted && (
-            <>
-              <Button
-                onClick={handleSave}
-                variant="outline"
-                disabled={saving}
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </Button>
-              <Button
-                onClick={handleReopen}
-                variant="secondary"
-                disabled={reopening}
-              >
-                {reopening ? 'Reopening...' : 'Reopen'}
-              </Button>
-            </>
-          )}
         </div>
       )}
 

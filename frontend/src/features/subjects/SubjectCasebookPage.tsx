@@ -5,17 +5,18 @@ import { StatusBadge } from './components/StatusBadge'
 
 /** A form within a visit */
 export interface CasebookForm {
-  id: string
-  form_name: string
+  form_instance_id: string | null
+  form_definition_id: string | null
+  name: string | null
   status: string
-  query_count: number
 }
 
 /** A visit section in the casebook */
 export interface CasebookVisit {
-  id: string
-  visit_name: string
-  visit_number: number
+  visit_instance_id: string | null
+  visit_definition_id: string | null
+  name: string | null
+  status: string
   forms: CasebookForm[]
 }
 
@@ -72,6 +73,7 @@ export function SubjectCasebookPage({ subjectId }: SubjectCasebookPageProps) {
           </h1>
           <StatusBadge domain="subject" status={casebook.status} />
         </div>
+        <a href={`/subjects/${subjectId}/visits`} className="rounded border px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">Manage visits</a>
       </div>
 
       {/* Visit list */}
@@ -80,7 +82,7 @@ export function SubjectCasebookPage({ subjectId }: SubjectCasebookPageProps) {
           <p className="text-gray-500 py-4">No visits scheduled for this subject.</p>
         ) : (
           casebook.visits.map((visit) => (
-            <VisitSection key={visit.id} visit={visit} subjectId={subjectId} />
+            <VisitSection key={visit.visit_instance_id ?? visit.visit_definition_id} visit={visit} subjectId={subjectId} />
           ))
         )}
       </div>
@@ -102,6 +104,7 @@ function VisitSection({
     (f) => f.status.toLowerCase() === 'submitted' || f.status.toLowerCase() === 'locked',
   ).length
   const totalForms = visit.forms.length
+  const visitId = visit.visit_instance_id ?? visit.visit_definition_id ?? 'visit'
 
   return (
     <div className="rounded-md border bg-white">
@@ -109,7 +112,7 @@ function VisitSection({
         className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
-        aria-controls={`visit-${visit.id}-forms`}
+        aria-controls={`visit-${visitId}-forms`}
       >
         <div className="flex items-center gap-3">
           <span
@@ -120,7 +123,7 @@ function VisitSection({
             ▶
           </span>
           <span className="font-medium text-gray-900">
-            Visit {visit.visit_number}: {visit.visit_name}
+            {visit.name ?? 'Visit'}
           </span>
         </div>
         <span className="text-sm text-gray-500">
@@ -130,27 +133,22 @@ function VisitSection({
 
       {isExpanded && (
         <div
-          id={`visit-${visit.id}-forms`}
+          id={`visit-${visitId}-forms`}
           className="border-t divide-y divide-gray-100"
           role="region"
-          aria-label={`Forms for ${visit.visit_name}`}
+          aria-label={`Forms for ${visit.name ?? 'visit'}`}
         >
           {visit.forms.length === 0 ? (
             <p className="px-4 py-3 text-sm text-gray-500">No forms in this visit.</p>
           ) : (
             visit.forms.map((form) => (
               <a
-                key={form.id}
-                href={`/subjects/${subjectId}/forms/${form.id}`}
+                key={form.form_instance_id ?? form.form_definition_id}
+                href={form.form_instance_id ? `/subjects/${subjectId}/forms/${form.form_instance_id}` : '#'}
                 className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
               >
-                <span className="text-sm text-gray-900">{form.form_name}</span>
+                <span className="text-sm text-gray-900">{form.name ?? 'Form'}</span>
                 <div className="flex items-center gap-3">
-                  {form.query_count > 0 && (
-                    <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                      {form.query_count} {form.query_count === 1 ? 'query' : 'queries'}
-                    </span>
-                  )}
                   <StatusBadge domain="form" status={form.status} />
                 </div>
               </a>

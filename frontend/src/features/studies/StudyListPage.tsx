@@ -12,7 +12,7 @@ import { usePermission, PERMISSIONS } from '@/lib/permissions'
 
 interface Study {
   id: string
-  code: string
+  study_code: string
   title: string
   phase: string
   status: string
@@ -20,7 +20,7 @@ interface Study {
 }
 
 interface CreateStudyPayload {
-  code: string
+  study_code: string
   title: string
   phase: string
 }
@@ -28,7 +28,7 @@ interface CreateStudyPayload {
 const columnHelper = createColumnHelper<Study>()
 
 const columns = [
-  columnHelper.accessor('code', { header: 'Code' }),
+  columnHelper.accessor('study_code', { header: 'Code', cell: (info) => <a href={`/studies/${info.row.original.id}`} className="font-medium text-blue-600 hover:underline">{info.getValue()}</a> }),
   columnHelper.accessor('title', { header: 'Title' }),
   columnHelper.accessor('phase', { header: 'Phase' }),
   columnHelper.accessor('status', {
@@ -50,7 +50,7 @@ export function StudyListPage() {
   const canCreate = usePermission(PERMISSIONS.STUDY_CREATE)
   const [page, setPage] = useState(1)
   const [showModal, setShowModal] = useState(false)
-  const [formData, setFormData] = useState<CreateStudyPayload>({ code: '', title: '', phase: '' })
+  const [formData, setFormData] = useState<CreateStudyPayload>({ study_code: '', title: '', phase: '' })
   const [error, setError] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
@@ -71,7 +71,7 @@ export function StudyListPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['studies'] })
       setShowModal(false)
-      setFormData({ code: '', title: '', phase: '' })
+      setFormData({ study_code: '', title: '', phase: '' })
       setError(null)
     },
     onError: (err: unknown) => {
@@ -184,8 +184,8 @@ export function StudyListPage() {
                 <input
                   id="study-code"
                   type="text"
-                  value={formData.code}
-                  onChange={(e) => setFormData((d) => ({ ...d, code: e.target.value }))}
+                  value={formData.study_code}
+                  onChange={(e) => setFormData((d) => ({ ...d, study_code: e.target.value }))}
                   className="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />

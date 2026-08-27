@@ -45,6 +45,56 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 router = APIRouter(prefix="/form-instances", tags=["form-data"])
 
 
+def _instance_payload(form_instance: Any) -> dict[str, Any]:
+    """Return the persisted instance plus the metadata needed by the UI."""
+    definition = form_instance.form_definition
+    sections = [
+        {
+            "id": section.id,
+            "title": section.name,
+            "fields": [
+                {
+                    "id": field.id,
+                    "label": field.label,
+                    "variable_name": field.variable_name,
+                    "control_type": field.control_type,
+                    "data_type": field.data_type,
+                    "is_required": field.is_required,
+                    "default_value": field.default_value,
+                    "help_text": field.help_text,
+                    "unit": field.unit,
+                }
+                for field in section.fields
+            ],
+        }
+        for section in definition.sections
+    ]
+    values = form_instance.data_jsonb or {
+        str(value.field_definition_id): value.value
+        for value in form_instance.field_values
+    }
+    return {
+        "id": form_instance.id,
+        "subject_id": form_instance.subject_id,
+        "visit_instance_id": form_instance.visit_instance_id,
+        "form_definition_id": form_instance.form_definition_id,
+        "status": form_instance.status,
+        "data_jsonb": form_instance.data_jsonb,
+        "created_at": form_instance.created_at,
+        "updated_at": form_instance.updated_at,
+        "submitted_at": form_instance.submitted_at,
+        "submitted_by": form_instance.submitted_by,
+        "field_values": form_instance.field_values,
+        "form_name": definition.name,
+        "subject_number": form_instance.subject.subject_number,
+        "visit_name": form_instance.visit_instance.name if form_instance.visit_instance else None,
+        "sections": sections,
+        "data": values,
+        "is_frozen": str(form_instance.status).lower() == "frozen",
+        "is_locked": str(form_instance.status).lower() == "locked",
+    }
+
+
 @router.get("/{form_instance_id}", response_model=FormInstanceResponse)
 async def get_form_instance(
     form_instance_id: UUID,
@@ -57,7 +107,7 @@ async def get_form_instance(
     Requirement 10.1: Returns the form instance with current data.
     """
     form_instance = await data_capture_service.load(session, form_instance_id)
-    return FormInstanceResponse.model_validate(form_instance)
+    return FormInstanceResponse.model_validate(_instance_payload(form_instance))
 
 
 @router.patch("/{form_instance_id}/data", response_model=FormInstanceResponse)
@@ -80,7 +130,7 @@ async def patch_form_data(
         values=body.values,
         actor_id=current_user.id,
     )
-    return FormInstanceResponse.model_validate(updated)
+    return FormInstanceResponse.model_validate(_instance_payload(updated))
 
 
 @router.post("/{form_instance_id}/save", response_model=FormInstanceResponse)
@@ -103,7 +153,7 @@ async def save_form_draft(
         values=body.values,
         actor_id=current_user.id,
     )
-    return FormInstanceResponse.model_validate(updated)
+    return FormInstanceResponse.model_validate(_instance_payload(updated))
 
 
 @router.post("/{form_instance_id}/submit", response_model=FormInstanceResponse)
@@ -125,7 +175,7 @@ async def submit_form(
         form_instance=form_instance,
         actor_id=current_user.id,
     )
-    return FormInstanceResponse.model_validate(updated)
+    return FormInstanceResponse.model_validate(_instance_payload(updated))
 
 
 @router.post(
@@ -152,7 +202,7 @@ async def change_field_value(
         reason=body.reason,
         actor_id=current_user.id,
     )
-    return FormInstanceResponse.model_validate(updated)
+    return FormInstanceResponse.model_validate(_instance_payload(updated))
 
 
 @router.get(
