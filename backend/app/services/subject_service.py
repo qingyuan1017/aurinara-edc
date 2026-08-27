@@ -12,7 +12,7 @@ Satisfies Requirements:
 
 Note: Visit_Instance initialization (Req 7.4 / 8.2) is wired into
 ``create_subject`` via the Visit_Service. Form_Instance initialization
-(Req 11.6) is wired in by a later task.
+(Req 7.4) is wired in via the Form_Instance_Service.
 """
 
 from __future__ import annotations
@@ -168,11 +168,17 @@ class SubjectService:
 
         # Initialize Visit_Instances from the bound Study_Version's visit
         # definitions (Req 7.4, 8.2). Imported here to avoid a circular import
-        # at module load time. Form_Instance initialization is wired in by a
-        # later task (11.6).
+        # at module load time.
         from app.services.visit_service import visit_service
 
         await visit_service.initialize_instances(session, subject, actor_id)
+
+        # Initialize Form_Instances from the bound Study_Version's form
+        # definitions (Req 7.4). Must run after visit initialization so that
+        # visit_instances exist to link against.
+        from app.services.form_instance_service import form_instance_service
+
+        await form_instance_service.initialize_instances(session, subject, actor_id)
 
         logger.info(
             "Subject created: id=%s study_id=%s site_id=%s subject_number=%s actor=%s",

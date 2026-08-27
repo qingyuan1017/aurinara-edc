@@ -138,6 +138,10 @@ class TestCreateSubject:
                 "app.services.visit_service.visit_service.initialize_instances",
                 new=AsyncMock(return_value=[]),
             ) as mock_init,
+            patch(
+                "app.services.form_instance_service.form_instance_service.initialize_instances",
+                new=AsyncMock(return_value=[]),
+            ) as mock_form_init,
         ):
             mock_audit.record = AsyncMock()
             subject = await service.create_subject(
@@ -153,6 +157,8 @@ class TestCreateSubject:
         assert subject.subject_number == "101-0001"
         # Visit_Instances are initialized from the bound version (Req 7.4, 8.2)
         mock_init.assert_awaited_once_with(mock_session, subject, actor_id)
+        # Form_Instances are initialized from the bound version (Req 7.4)
+        mock_form_init.assert_awaited_once_with(mock_session, subject, actor_id)
 
     async def test_create_subject_uses_provided_number(
         self, service, mock_session, actor_id, study_id, site_id
@@ -174,6 +180,10 @@ class TestCreateSubject:
             patch("app.services.subject_service.audit_service") as mock_audit,
             patch(
                 "app.services.visit_service.visit_service.initialize_instances",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.form_instance_service.form_instance_service.initialize_instances",
                 new=AsyncMock(return_value=[]),
             ),
         ):
@@ -254,6 +264,10 @@ class TestCreateSubject:
             patch("app.services.subject_service.audit_service") as mock_audit,
             patch(
                 "app.services.visit_service.visit_service.initialize_instances",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.form_instance_service.form_instance_service.initialize_instances",
                 new=AsyncMock(return_value=[]),
             ),
         ):

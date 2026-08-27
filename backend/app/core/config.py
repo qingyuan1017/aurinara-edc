@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
 
     # --- Database ---
-    database_url: PostgresDsn = "postgresql+asyncpg://postgres:postgres@localhost:5432/edc"  # type: ignore[assignment]
+    database_url: PostgresDsn = "postgresql+asyncpg://edetek:edetekpassword@localhost:5432/edc"  # type: ignore[assignment]
     database_echo: bool = False
     database_pool_size: int = 10
     database_max_overflow: int = 20

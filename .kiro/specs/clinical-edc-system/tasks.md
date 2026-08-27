@@ -141,7 +141,7 @@ Property-based tests (Hypothesis) cover all 37 correctness properties, each as a
     - `GET/POST /studies/{id}/sites`, `GET/PATCH/DELETE /sites/{id}`
     - _Requirements: 6.1, 6.4, 6.5, 21.1_
 
-- [ ] 9. Subject management
+- [x] 9. Subject management
   - [x] 9.1 Create subjects model and migration
     - Define `subjects` (subject_number unique within study, bound study_version_id); add filter indexes (study, site, status)
     - _Requirements: 7.1, 7.2, 22.5, 22.6_
@@ -151,151 +151,151 @@ Property-based tests (Hypothesis) cover all 37 correctness properties, each as a
   - [x] 9.3 Implement subjects routes
     - `GET/POST /studies/{id}/subjects`, `GET/PATCH /subjects/{id}`, `POST /subjects/{id}/screen-fail|randomize|terminate`, `GET /subjects/{id}/casebook`
     - _Requirements: 7.1, 7.3, 7.5, 21.1_
-  - [ ] 9.4 Write property test for scoped uniqueness
+  - [x] 9.4 Write property test for scoped uniqueness
     - **Property 7: Scoped uniqueness is enforced**
     - **Validates: Requirements 4.2, 6.2, 7.2, 22.5**
-  - [ ] 9.5 Write property test for soft-deletion retention
+  - [x] 9.5 Write property test for soft-deletion retention
     - **Property 22: Soft deletion retains records**
     - **Validates: Requirements 3.4, 6.4, 22.2, 27.3**
 
-- [ ] 10. Visit schedule
+- [x] 10. Visit schedule
   - [x] 10.1 Create visit_definitions and visit_instances models and migration
     - _Requirements: 8.1, 8.2_
   - [x] 10.2 Implement Visit_Service
     - `define_visit` (draft-only via guard_mutable), `record_visit_date` (compute before/in/after window status), `create_unscheduled`, `mark_missed`; write Audit_Events
     - _Requirements: 8.1, 8.3, 8.4, 8.5_
-  - [ ] 10.3 Wire Visit_Instance initialization into subject creation
+  - [x] 10.3 Wire Visit_Instance initialization into subject creation
     - `initialize_instances(subject)` creates Visit_Instances from the bound version's definitions
     - _Requirements: 7.4, 8.2_
-  - [ ] 10.4 Implement visits routes
+  - [x] 10.4 Implement visits routes
     - `GET /subjects/{id}/visits`, `POST /subjects/{id}/visits/unscheduled`, `GET/PATCH /visits/{id}`, `POST /visits/{id}/mark-missed`
     - _Requirements: 8.1, 8.3, 8.4, 8.5, 21.1_
-  - [ ] 10.5 Write property test for visit window status
+  - [x] 10.5 Write property test for visit window status
     - **Property 13: Visit window status is computed correctly**
     - **Validates: Requirements 8.3**
-  - [ ] 10.6 Write property test for record round-trip persistence
+  - [x] 10.6 Write property test for record round-trip persistence
     - **Property 9: Persisted records round-trip**
     - **Validates: Requirements 4.1, 6.1, 6.5, 8.1**
 
-- [ ] 11. eCRF form metadata (Form_Metadata_Service)
+- [x] 11. eCRF form metadata (Form_Metadata_Service)
   - [x] 11.1 Create form metadata models and migration
     - Define `form_definitions` (versioned via study_version_id, no form_versions table), `form_sections`, `field_definitions`, `codelists`, `codelist_items` (with normal_low/normal_high)
     - _Requirements: 9.1, 9.2, 9.5, 22.1, 22.6_
-  - [ ] 11.2 Implement Form_Metadata_Service
+  - [x] 11.2 Implement Form_Metadata_Service
     - Draft-only CRUD/order of forms/sections/fields (guard_mutable), all control types and field attributes, code lists; write Audit_Events
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 5.2_
-  - [ ] 11.3 Implement standard form template seeding
+  - [x] 11.3 Implement standard form template seeding
     - Seed AE, CM, DM/Demographics, MH, VS, LB, EX, DS, EG, and Visit Date templates into a draft version
     - _Requirements: 9.3, 9.4_
-  - [ ] 11.4 Implement the shared safe expression evaluator and calculated fields
+  - [x] 11.4 Implement the shared safe expression evaluator and calculated fields
     - Server-side evaluation of declarative calculation expressions (e.g., BMI), reused later by the Edit_Check_Engine
     - _Requirements: 9.4_
-  - [ ] 11.5 Implement forms/fields routes
+  - [x] 11.5 Implement forms/fields routes
     - `GET/POST /studies/{id}/forms`, `GET/PATCH/DELETE /forms/{id}`, `POST /forms/{id}/sections|fields`, `PATCH/DELETE /fields/{id}`
     - _Requirements: 9.1, 9.2, 21.1_
-  - [ ] 11.6 Wire Form_Instance initialization from definitions
+  - [x] 11.6 Wire Form_Instance initialization from definitions
     - On subject/visit initialization, create Form_Instances for the bound version's form definitions
     - _Requirements: 7.4_
-  - [ ] 11.7 Write property test for published-version immutability
+  - [x] 11.7 Write property test for published-version immutability
     - **Property 10: Published study versions are immutable**
     - **Validates: Requirements 5.2, 9.1, 9.2, 12.6**
-  - [ ] 11.8 Write property test for subject binding and instance initialization
+  - [x] 11.8 Write property test for subject binding and instance initialization
     - **Property 12: Subject binding and instance initialization**
     - **Validates: Requirements 7.1, 7.4, 8.2**
 
-- [ ] 12. Clinical data capture (Data_Capture_Service)
-  - [ ] 12.1 Create form_instances and field_values models and migration
+- [x] 12. Clinical data capture (Data_Capture_Service)
+  - [x] 12.1 Create form_instances and field_values models and migration
     - Hybrid storage: `form_instances.data_jsonb` plus normalized `field_values` rows; add indexes
     - _Requirements: 10.2, 22.3, 22.6_
-  - [ ] 12.2 Implement Data_Capture_Service
+  - [x] 12.2 Implement Data_Capture_Service
     - `load`, `save_draft` (status In Progress), `submit` (validate required/type/range/codelist/conditional; preserve values on failure), `change_value` (Reason_For_Change after submit; lock-block hook), `mark_not_applicable`; status machine (Not Started/In Progress/Submitted/Reviewed/Frozen/Locked/Signed); write Audit_Event in the same transaction, keeping data_jsonb and field_values consistent
     - _Requirements: 10.1, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 21.4, 23.3_
-  - [ ] 12.3 Implement form data routes
+  - [x] 12.3 Implement form data routes
     - `GET /form-instances/{id}`, `PATCH /form-instances/{id}/data`, `POST /form-instances/{id}/save|submit|reopen`, `GET /form-instances/{id}/audit`
     - _Requirements: 10.1, 10.3, 10.5, 21.1_
-  - [ ] 12.4 Write property test for draft save
+  - [x] 12.4 Write property test for draft save
     - **Property 14: Draft save persists values and sets In Progress**
     - **Validates: Requirements 10.1, 10.6**
-  - [ ] 12.5 Write property test for submission validation
+  - [x] 12.5 Write property test for submission validation
     - **Property 15: Submission validates atomically and preserves data on failure**
     - **Validates: Requirements 10.3, 10.4**
-  - [ ] 12.6 Write property test for post-submission reason
+  - [x] 12.6 Write property test for post-submission reason
     - **Property 16: Post-submission changes require a reason**
     - **Validates: Requirements 10.5, 18.3**
-  - [ ] 12.7 Write property test for audit atomicity
+  - [x] 12.7 Write property test for audit atomicity
     - **Property 17: Clinical mutations write an atomic, complete Audit_Event**
     - **Validates: Requirements 4.5, 7.6, 9.6, 10.8, 11.2, 13.7, 14.4, 15.4, 16.5, 17.4, 18.1, 21.4, 22.4, 25.2, 31.5**
-  - [ ] 12.8 Write property test for hybrid storage consistency
+  - [x] 12.8 Write property test for hybrid storage consistency
     - **Property 31: Hybrid storage stays consistent**
     - **Validates: Requirements 22.3**
 
-- [ ] 13. Manual queries (Query_Service)
-  - [ ] 13.1 Create queries and query_messages models and migration
+- [x] 13. Manual queries (Query_Service)
+  - [x] 13.1 Create queries and query_messages models and migration
     - Exactly-one affected-object target; append-only thread; indexes
     - _Requirements: 13.1, 13.6, 22.6_
-  - [ ] 13.2 Implement Query_Service
+  - [x] 13.2 Implement Query_Service
     - `create_query` (manual; one affected object), `respond`, `close`, `reopen`, `cancel` (status machine Open/Answered/Closed/Reopened/Cancelled), threaded history; write Audit_Events
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7_
-  - [ ] 13.3 Implement queries routes
+  - [x] 13.3 Implement queries routes
     - `GET/POST /queries`, `GET /queries/{id}`, `POST /queries/{id}/respond|close|reopen|cancel`, `GET /queries/{id}/history`
     - _Requirements: 13.1, 13.3, 13.4, 13.5, 21.1_
-  - [ ] 13.4 Write property test for query linkage and thread ordering
+  - [x] 13.4 Write property test for query linkage and thread ordering
     - **Property 26: A query is linked to exactly one affected object with an ordered, append-only thread**
     - **Validates: Requirements 13.1, 13.6**
 
-- [ ] 14. CSV export (Export_Service)
-  - [ ] 14.1 Create exports model and implement Export_Service job lifecycle
+- [x] 14. CSV export (Export_Service)
+  - [x] 14.1 Create exports model and implement Export_Service job lifecycle
     - `exports` table; `create_export` (status Queued→Running→Completed/Failed), `subject_list_export`, filter parsing
     - _Requirements: 19.1, 19.2, 19.3_
-  - [ ] 14.2 Implement the CSV export worker
+  - [x] 14.2 Implement the CSV export worker
     - Async job that applies filters (study/site/subject/visit/form/domain/date range/changed-since/locked-only/clean-only), generates CSV, stores it, and audits downloads
     - _Requirements: 19.1, 19.3, 19.4, 19.5, 29.3_
-  - [ ] 14.3 Implement exports routes
+  - [x] 14.3 Implement exports routes
     - `GET/POST /studies/{id}/exports`, `GET /exports/{id}`, `GET /exports/{id}/download`
     - _Requirements: 19.1, 19.4, 21.1_
-  - [ ] 14.4 Write property test for status-machine transitions
+  - [x] 14.4 Write property test for status-machine transitions
     - **Property 8: Only legal status transitions are accepted**
     - **Validates: Requirements 4.3, 5.1, 7.3, 13.2, 13.3, 13.4, 13.5, 19.1**
-  - [ ] 14.5 Write property test for export filtering and fidelity (CSV)
+  - [x] 14.5 Write property test for export filtering and fidelity (CSV)
     - **Property 34: Export filtering and content fidelity**
     - **Validates: Requirements 18.4, 19.3, 19.4, 19.5**
 
-- [ ] 15. Audit viewer and core Dashboard_Service
-  - [ ] 15.1 Implement Dashboard_Service (core)
+- [x] 15. Audit viewer and core Dashboard_Service
+  - [x] 15.1 Implement Dashboard_Service (core)
     - `study_dashboard`, `site_dashboard`, `query_metrics` computed strictly within the caller's Authorization_Scope (read-only)
     - _Requirements: 4.4, 6.3, 20.1, 20.2, 20.3, 20.4_
-  - [ ] 15.2 Implement audit and dashboards routes
+  - [x] 15.2 Implement audit and dashboards routes
     - `GET /audit-events`, `GET /subjects/{id}/audit`, `GET /form-instances/{id}/audit`, `GET /fields/{id}/audit`, audit export, `GET /studies/{id}/dashboard`, `GET /sites/{id}/dashboard`, `GET /studies/{id}/query-metrics`
     - _Requirements: 18.5, 18.6, 20.1, 20.2, 20.3, 21.1_
 
-- [ ] 16. Frontend foundations, auth/permission UI, and Phase 1 clinical UI
-  - [ ] 16.1 Build authentication UI
+- [x] 16. Frontend foundations, auth/permission UI, and Phase 1 clinical UI
+  - [x] 16.1 Build authentication UI
     - Login, forgot-password, reset-password, accept-invitation pages; token/session handling and inactivity logout
     - _Requirements: 1.1, 1.6, 3.2, 24.2_
-  - [ ] 16.2 Build permission-aware routing and app shell
+  - [x] 16.2 Build permission-aware routing and app shell
     - PermissionGuard, access-denied view, StudySelector/SiteSelector, app shell and navigation (frontend checks are convenience only)
     - _Requirements: 2.6, 24.1, 24.6_
-  - [ ] 16.3 Build clinical status components and subject/casebook views
+  - [x] 16.3 Build clinical status components and subject/casebook views
     - Status badges (subject/form/query/SDV/review/lock/signature), ClinicalDataTable, subject list, subject casebook
     - _Requirements: 24.1_
-  - [ ] 16.4 Build the form data-entry page
+  - [x] 16.4 Build the form data-entry page
     - RHF + Zod validation, required-missing highlighting, Reason_For_Change dialog on post-submit edits, save/submit/reopen, audit and query side panels
     - _Requirements: 24.2, 24.3, 24.5_
-  - [ ] 16.5 Build study/site/subject/user management, dashboards, audit viewer, and export center
+  - [x] 16.5 Build study/site/subject/user management, dashboards, audit viewer, and export center
     - _Requirements: 4.1, 6.1, 7.1, 20.1, 24.1_
-  - [ ] 16.6 Write frontend component, route, and form tests
+  - [x] 16.6 Write frontend component, route, and form tests
     - Status rendering snapshots, guarded-route hide/deny, Zod validation, Reason_For_Change dialog
     - _Requirements: 24.1, 24.2, 24.3, 24.6_
 
-- [ ] 17. Phase 1 end-to-end and compliance/validation testing
-  - [ ] 17.1 Write the Phase 1 Playwright end-to-end flow
+- [x] 17. Phase 1 end-to-end and compliance/validation testing
+  - [x] 17.1 Write the Phase 1 Playwright end-to-end flow
     - login → create subject → enter data → submit → create/answer query → CSV export
     - _Requirements: 26.1_
-  - [ ] 17.2 Write the compliance and validation suite
+  - [x] 17.2 Write the compliance and validation suite
     - 21 CFR Part 11 / ALCOA+ (audit completeness/immutability, Reason_For_Change), environment-separation smoke tests, UTC clock derivation; independent verification of scope enforcement and audit immutability
     - _Requirements: 25.1, 25.2, 25.5, 25.6, 26.4_
 
-- [ ] 18. Checkpoint — Phase 1 MVP
+- [x] 18. Checkpoint — Phase 1 MVP
   - Ensure all tests pass, ask the user if questions arise.
 
 ---
@@ -303,7 +303,7 @@ Property-based tests (Hypothesis) cover all 37 correctness properties, each as a
 ### Phase 2 — Validation, SDV, Review, Lock, Files, Notifications (Requirements 5 draft, 11, 12, 14, 15, 16, 20, 27, 28)
 
 - [ ] 19. Edit_Check_Engine
-  - [ ] 19.1 Create edit_checks and validation_results models and migration
+  - [x] 19.1 Create edit_checks and validation_results models and migration
     - Versioned with owning study version
     - _Requirements: 12.1, 12.6, 22.6_
   - [ ] 19.2 Implement the safe JSON DSL parser, schema validator, and evaluator
@@ -329,7 +329,7 @@ Property-based tests (Hypothesis) cover all 37 correctness properties, each as a
     - **Validates: Requirements 12.5**
 
 - [ ] 20. Repeating records (Repeating_Record_Service)
-  - [ ] 20.1 Create form_records model and migration
+  - [x] 20.1 Create form_records model and migration
     - Sequence number and soft-delete columns (deleted_at/by/reason)
     - _Requirements: 11.1, 11.3, 22.2, 22.6_
   - [ ] 20.2 Implement Repeating_Record_Service
@@ -343,7 +343,7 @@ Property-based tests (Hypothesis) cover all 37 correctness properties, each as a
     - **Validates: Requirements 11.1, 11.3, 11.4**
 
 - [ ] 21. Source data verification (SDV_Service)
-  - [ ] 21.1 Create sdv_status model and migration
+  - [x] 21.1 Create sdv_status model and migration
     - _Requirements: 14.1, 22.6_
   - [ ] 21.2 Implement SDV_Service
     - `set_sdv`/`clear_sdv` at field/form/visit/subject scope (actor/timestamp), `progress` counts; write Audit_Events
@@ -353,7 +353,7 @@ Property-based tests (Hypothesis) cover all 37 correctness properties, each as a
     - _Requirements: 14.1, 14.2, 14.3, 21.1_
 
 - [ ] 22. Clinical review (Review_Service)
-  - [ ] 22.1 Create review_status model and migration
+  - [x] 22.1 Create review_status model and migration
     - _Requirements: 15.1, 22.6_
   - [ ] 22.2 Implement Review_Service
     - `mark_reviewed`/`clear_review` (actor/timestamp), `progress` counts; write Audit_Events
@@ -366,7 +366,7 @@ Property-based tests (Hypothesis) cover all 37 correctness properties, each as a
     - **Validates: Requirements 14.1, 14.2, 14.3, 15.1, 15.2, 15.3**
 
 - [ ] 23. Freeze, lock, and unlock (Lock_Service)
-  - [ ] 23.1 Create freezes and locks models and migration
+  - [x] 23.1 Create freezes and locks models and migration
     - Unlock reason recorded; indexes on (object_type, object_id)
     - _Requirements: 16.1, 16.2, 16.4, 22.6_
   - [ ] 23.2 Implement Lock_Service

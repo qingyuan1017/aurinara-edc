@@ -10,8 +10,18 @@ import time
 from fastapi import FastAPI, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
+from app.api.routes.audit import fields_audit_router, subjects_audit_router
+from app.api.routes.audit import router as audit_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.dashboards import site_dashboard_router, study_dashboard_router
+from app.api.routes.exports import router as exports_router
+from app.api.routes.exports import study_exports_router
+from app.api.routes.form_data import router as form_data_router
+from app.api.routes.forms import fields_router, study_forms_router
+from app.api.routes.forms import router as forms_router
 from app.api.routes.health import router as health_router
+from app.api.routes.queries import router as queries_router
+from app.api.routes.queries import study_queries_router
 from app.api.routes.sites import router as sites_router
 from app.api.routes.sites import study_sites_router
 from app.api.routes.studies import router as studies_router
@@ -75,6 +85,19 @@ def create_app() -> FastAPI:
     app.include_router(subjects_router, prefix=settings.api_v1_prefix)
     app.include_router(subject_visits_router, prefix=settings.api_v1_prefix)
     app.include_router(visits_router, prefix=settings.api_v1_prefix)
+    app.include_router(study_forms_router, prefix=settings.api_v1_prefix)
+    app.include_router(forms_router, prefix=settings.api_v1_prefix)
+    app.include_router(fields_router, prefix=settings.api_v1_prefix)
+    app.include_router(form_data_router, prefix=settings.api_v1_prefix)
+    app.include_router(study_queries_router, prefix=settings.api_v1_prefix)
+    app.include_router(queries_router, prefix=settings.api_v1_prefix)
+    app.include_router(study_exports_router, prefix=settings.api_v1_prefix)
+    app.include_router(exports_router, prefix=settings.api_v1_prefix)
+    app.include_router(study_dashboard_router, prefix=settings.api_v1_prefix)
+    app.include_router(site_dashboard_router, prefix=settings.api_v1_prefix)
+    app.include_router(audit_router, prefix=settings.api_v1_prefix)
+    app.include_router(subjects_audit_router, prefix=settings.api_v1_prefix)
+    app.include_router(fields_audit_router, prefix=settings.api_v1_prefix)
 
     return app
 

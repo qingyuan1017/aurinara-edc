@@ -9,10 +9,10 @@ Satisfies Requirements:
 
 Endpoints:
   - GET   /subjects/{subject_id}/visits               list visit instances (subject.read)
-  - POST  /subjects/{subject_id}/visits/unscheduled   create unscheduled visit (subject.update)
+  - POST  /subjects/{subject_id}/visits/unscheduled   create unscheduled visit (form.enter)
   - GET   /visits/{visit_id}                          get visit instance (subject.read)
-  - PATCH /visits/{visit_id}                           record visit date (subject.update)
-  - POST  /visits/{visit_id}/mark-missed              mark missed (subject.update)
+  - PATCH /visits/{visit_id}                           record visit date (form.enter)
+  - POST  /visits/{visit_id}/mark-missed              mark missed (form.enter)
 """
 
 import logging
@@ -81,11 +81,11 @@ async def create_unscheduled_visit(
     subject_id: UUID,
     body: UnscheduledVisitCreate,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("subject.update"))],
+    current_user: Annotated[User, Depends(require_permission("form.enter"))],
 ) -> VisitInstanceResponse:
     """Create an unscheduled visit instance for a subject.
 
-    Permission: subject.update
+    Permission: form.enter
     Requirement 8.4: Create an unscheduled Visit_Instance.
     """
     subject = await subject_service.get_subject(session, subject_id)
@@ -124,11 +124,11 @@ async def record_visit_date(
     visit_id: UUID,
     body: VisitDateRecord,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("subject.update"))],
+    current_user: Annotated[User, Depends(require_permission("form.enter"))],
 ) -> VisitInstanceResponse:
     """Record a visit date and compute the window status.
 
-    Permission: subject.update
+    Permission: form.enter
     Requirement 8.3: Compute window status from the visit date relative to the
     owning definition's target day and window bounds.
     """
@@ -147,11 +147,11 @@ async def record_visit_date(
 async def mark_visit_missed(
     visit_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("subject.update"))],
+    current_user: Annotated[User, Depends(require_permission("form.enter"))],
 ) -> VisitInstanceResponse:
     """Mark a visit instance as missed.
 
-    Permission: subject.update
+    Permission: form.enter
     Requirement 8.5: Set the visit instance status to missed.
     """
     instance = await visit_service.get_instance(session, visit_id)
