@@ -13,9 +13,11 @@ from uuid import UUID
 import pytest
 
 from app.api.deps import (
+    CTMSPermissionGuard,
     PermissionGuard,
     _extract_uuid,
     get_permission_service,
+    require_ctms_permission,
     require_permission,
 )
 from app.core.exceptions import AuthorizationError
@@ -102,6 +104,21 @@ def _make_system_admin() -> StubUser:
     role = StubRole(name="System Administrator", scope_level="system", role_permissions=perms)
     user_role = StubUserRole(role=role, study_id=None, site_id=None)
     return StubUser(user_roles=[user_role])
+
+
+def _make_ctms_operator(study_id: UUID, site_id: UUID) -> StubUser:
+    role = StubRole(
+        name="CTMS_Operations_User",
+        scope_level="study",
+        role_permissions=[
+            StubRolePermission(
+                permission=StubPermission(
+                    code="ctms.operational_study_management"
+                )
+            )
+        ],
+    )
+    return StubUser(user_roles=[StubUserRole(role=role, study_id=study_id, site_id=site_id)])
 
 
 # ---------------------------------------------------------------------------
@@ -240,8 +257,40 @@ class TestRequirePermission:
 
 
 # ---------------------------------------------------------------------------
-# Tests: PermissionGuard
+# Tests: CTMS permission guards
 # ---------------------------------------------------------------------------
+
+
+class TestCTMSPermissionGuard:
+    """CTMS uses the same scoped guard and baseline authorization errors."""
+
+    @pytest.mark.asyncio
+    async def test_requirement_name_alias_is_enforced_at_scope(self):
+        user = _make_ctms_operator(STUDY_A, SITE_1)
+        request = StubRequest(
+            path_params={"study_id": str(STUDY_A), "site_id": str(SITE_1)}
+        )
+        result = await require_ctms_permission("operational-study-management")(
+            request=request,
+            current_user=user,
+            permission_service=PermissionService(),
+        )
+        assert result is user
+
+    @pytest.mark.asyncio
+    async def test_out_of_scope_ctms_mutation_keeps_baseline_error(self):
+        user = _make_ctms_operator(STUDY_A, SITE_1)
+        request = StubRequest(
+            path_params={"study_id": str(STUDY_B), "site_id": str(SITE_1)}
+        )
+        with pytest.raises(AuthorizationError) as exc_info:
+            await CTMSPermissionGuard("operational-study-management")(
+                request=request,
+                current_user=user,
+                permission_service=PermissionService(),
+            )
+        assert exc_info.value.details["required_permission"] == "operational-study-management"
+
 
 
 class TestPermissionGuard:

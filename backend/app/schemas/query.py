@@ -38,6 +38,10 @@ class QueryCreate(BaseCreateSchema):
     query_type: QueryType = Field(
         default=QueryType.manual, description="Origin of the query"
     )
+    assigned_role: str | None = Field(
+        None, min_length=1, max_length=100,
+        description="Role assigned to resolve the query",
+    )
     site_id: UUID | None = Field(None, description="Optional site context")
     subject_id: UUID | None = Field(None, description="Optional subject context")
 
@@ -71,6 +75,7 @@ class QueryResponse(BaseSchema):
     target_id: UUID
     text: str
     query_type: str
+    assigned_role: str | None = None
     status: str
     created_by: UUID
     created_at: datetime
@@ -91,6 +96,7 @@ class QueryListResponse(BaseSchema):
     target_id: UUID
     text: str
     query_type: str
+    assigned_role: str | None = None
     status: str
     created_by: UUID
     created_at: datetime

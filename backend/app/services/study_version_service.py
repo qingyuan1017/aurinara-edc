@@ -17,14 +17,110 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit_service
-from app.core.exceptions import BusinessRuleError, NotFoundError
-from app.models.study import StudyVersion, StudyVersionStatus
+from app.core.exceptions import (
+    BusinessRuleError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
+from app.models.study import Study, StudyVersion, StudyVersionStatus
+from app.repositories.study_version_repository import StudyVersionRepository
 
 logger = logging.getLogger(__name__)
 
 
 class StudyVersionService:
-    """Manages Study_Version lifecycle: creation, retrieval, publish, and the mutable guard."""
+    """Manages Study_Version lifecycle and immutable version history."""
+
+    def __init__(self, repository: StudyVersionRepository | None = None) -> None:
+        self.repository = repository or StudyVersionRepository()
+
+    # ------------------------------------------------------------------
+    # Amendment creation (Requirements 5.3, 5.4)
+    # ------------------------------------------------------------------
+
+    async def create_amendment(
+        self,
+        session: AsyncSession,
+        study: Study,
+        reason: str,
+        actor_id: UUID,
+    ) -> StudyVersion:
+        """Create a draft amendment without changing published history.
+
+        Amendments are based on the latest published version.  The source
+        version is retained through ``amended_from_version_id`` and published
+        versions are never updated or replaced.  Only one draft may be open
+        for a study at a time so an amendment has a deterministic successor.
+        """
+        normalized_reason = reason.strip()
+        if not normalized_reason:
+            raise ValidationError(
+                "Amendment reason is required",
+                details={"field": "reason"},
+            )
+
+        source = await self.repository.latest_published(session, study.id)
+        if source is None:
+            raise BusinessRuleError(
+                "An amendment can only be created from a published study version",
+                details={"study_id": str(study.id)},
+            )
+
+        existing_draft = await self.repository.draft_for_study(session, study.id)
+        if existing_draft is not None:
+            raise ConflictError(
+                "A draft study version already exists for this study",
+                details={
+                    "study_id": str(study.id),
+                    "version_id": str(existing_draft.id),
+                },
+            )
+
+        version = StudyVersion(
+            study_id=study.id,
+            version_number=self._next_version_number(source.version_number),
+            status=StudyVersionStatus.draft,
+            amendment_reason=normalized_reason,
+            amended_from_version_id=source.id,
+        )
+        await self.repository.add(session, version)
+
+        await audit_service.record(
+            session,
+            entity_type="study_version",
+            entity_id=version.id,
+            action="amend",
+            study_id=study.id,
+            actor_id=actor_id,
+            old_value=str(source.id),
+            new_value=(
+                f"version={version.version_number}; reason={normalized_reason}; "
+                f"amended_from={source.id}"
+            ),
+            reason=normalized_reason,
+        )
+
+        logger.info(
+            "Study amendment created: version_id=%s source_version_id=%s study_id=%s actor=%s",
+            version.id,
+            source.id,
+            study.id,
+            actor_id,
+        )
+        return version
+
+    @staticmethod
+    def _next_version_number(source_version_number: str) -> str:
+        """Return the next major version while preserving a stable ``N.0`` shape."""
+        try:
+            major = int(source_version_number.split(".", 1)[0])
+        except (ValueError, TypeError):
+            raise ValidationError(
+                "Published version number must start with an integer",
+                details={"version_number": source_version_number},
+            ) from None
+        return f"{major + 1}.0"
 
     # ------------------------------------------------------------------
     # Publish (Requirement 5.1)

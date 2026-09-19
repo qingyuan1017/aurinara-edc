@@ -2,14 +2,54 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type PaginatedResponse } from '@/lib/api'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
+import { DataTableShell, OwnershipBadge, PageContainer, PageHeader, PageToolbar, StatusBadge } from '@/components/patterns'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
 
-interface QueryItem { id: string; target_type: string; target_id: string; text: string; status: string; query_type: string; created_at: string }
-const statusStyle: Record<string, string> = { Open: 'bg-yellow-100 text-yellow-800', Answered: 'bg-blue-100 text-blue-800', Closed: 'bg-green-100 text-green-800', Reopened: 'bg-orange-100 text-orange-800', Cancelled: 'bg-gray-100 text-gray-700' }
+interface QueryItem { id: string; target_type: string; target_id: string; text: string; status: string; query_type: string; assigned_role?: string | null; subject_id?: string | null; created_at: string }
+const STATUSES = ['Open', 'Answered', 'Closed', 'Reopened', 'Cancelled']
 
 export function QueryListPage({ studyId }: { studyId: string }) {
-  const client = useQueryClient(); const canCreate = usePermission(PERMISSIONS.QUERY_CREATE); const [status, setStatus] = useState(''); const [showCreate, setShowCreate] = useState(false); const [text, setText] = useState(''); const [targetId, setTargetId] = useState(''); const [error, setError] = useState('')
-  const query = useQuery({ queryKey: ['queries', studyId, status], queryFn: async () => (await api.get<PaginatedResponse<QueryItem>>(`/studies/${studyId}/queries`, { params: { page: 1, page_size: 50, ...(status ? { status } : {}) } })).data })
-  const create = useMutation({ mutationFn: () => api.post(`/studies/${studyId}/queries`, { target_type: 'Subject', target_id: targetId, text }), onSuccess: () => { client.invalidateQueries({ queryKey: ['queries', studyId] }); setShowCreate(false); setText(''); setTargetId('') }, onError: () => setError('Could not create query. Check the target ID and permission.') })
+  const client = useQueryClient()
+  const canCreate = usePermission(PERMISSIONS.QUERY_CREATE)
+  const [status, setStatus] = useState('')
+  const [type, setType] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
+  const [text, setText] = useState('')
+  const [targetId, setTargetId] = useState('')
+  const [targetType, setTargetType] = useState('Subject')
+  const [assignedRole, setAssignedRole] = useState('')
+  const [error, setError] = useState('')
+  const query = useQuery({ queryKey: ['queries', studyId, status, type], queryFn: async () => (await api.get<PaginatedResponse<QueryItem>>(`/studies/${studyId}/queries`, { params: { page: 1, page_size: 50, ...(status ? { status } : {}), ...(type ? { query_type: type } : {}) } })).data })
+  const create = useMutation({ mutationFn: () => api.post(`/studies/${studyId}/queries`, { target_type: targetType, target_id: targetId, text, assigned_role: assignedRole || null }), onSuccess: () => { client.invalidateQueries({ queryKey: ['queries', studyId] }); setShowCreate(false); setText(''); setTargetId(''); setAssignedRole('') }, onError: () => setError('Could not create query. Check the target ID and permission.') })
   const action = useMutation({ mutationFn: ({ id, verb }: { id: string; verb: string }) => api.post(`/queries/${id}/${verb}`), onSuccess: () => client.invalidateQueries({ queryKey: ['queries', studyId] }) })
-  return <div className="space-y-5"><div className="flex items-center justify-between"><div><h1 className="text-2xl font-bold">Queries</h1><p className="text-sm text-gray-500">Track and resolve data clarification queries.</p></div>{canCreate && <button onClick={() => setShowCreate(true)} className="rounded bg-blue-600 px-4 py-2 text-sm text-white">New query</button>}</div><div className="flex gap-3"><select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded border px-3 py-2 text-sm"><option value="">All statuses</option>{['Open','Answered','Closed','Reopened','Cancelled'].map((item) => <option key={item}>{item}</option>)}</select></div>{query.isLoading ? <p className="text-gray-500">Loading…</p> : <div className="overflow-x-auto rounded-lg border bg-white"><table className="min-w-full divide-y"><thead className="bg-gray-50"><tr>{['Target','Description','Status','Created','Actions'].map((h) => <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">{h}</th>)}</tr></thead><tbody className="divide-y">{query.data?.items.map((item) => <tr key={item.id}><td className="px-4 py-3 text-sm">{item.target_type}<br /><span className="text-xs text-gray-400">{item.target_id}</span></td><td className="max-w-md px-4 py-3 text-sm">{item.text}</td><td className="px-4 py-3 text-sm"><span className={`rounded px-2 py-1 text-xs ${statusStyle[item.status] ?? ''}`}>{item.status}</span></td><td className="px-4 py-3 text-sm text-gray-500">{new Date(item.created_at).toLocaleDateString()}</td><td className="px-4 py-3 text-sm space-x-2">{(item.status === 'Open' || item.status === 'Reopened') && <button onClick={() => action.mutate({ id: item.id, verb: 'close' })} className="text-green-700">Close</button>}{item.status === 'Closed' && <button onClick={() => action.mutate({ id: item.id, verb: 'reopen' })} className="text-blue-700">Reopen</button>}{(item.status === 'Open' || item.status === 'Answered') && <button onClick={() => action.mutate({ id: item.id, verb: 'cancel' })} className="text-red-700">Cancel</button>}</td></tr>)}</tbody></table>{!query.data?.items.length && <p className="p-6 text-sm text-gray-500">No queries found.</p>}</div>}{showCreate && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"><form onSubmit={(e) => { e.preventDefault(); create.mutate() }} className="w-full max-w-md space-y-4 rounded-lg bg-white p-6"><h2 className="text-lg font-semibold">New query</h2>{error && <p className="rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}<input required placeholder="Affected subject ID" value={targetId} onChange={(e) => setTargetId(e.target.value)} className="w-full rounded border px-3 py-2 text-sm" /><textarea required placeholder="Describe the issue" value={text} onChange={(e) => setText(e.target.value)} className="h-28 w-full rounded border px-3 py-2 text-sm" /><div className="flex justify-end gap-2"><button type="button" onClick={() => setShowCreate(false)} className="rounded border px-3 py-2 text-sm">Cancel</button><button disabled={create.isPending} className="rounded bg-blue-600 px-3 py-2 text-sm text-white">Create</button></div></form></div>}</div>
+  const items = query.data?.items ?? []
+
+  return <PageContainer>
+    <PageHeader title="Query inbox" description="Track, respond to, and resolve data clarification queries." actions={canCreate ? <Button onClick={() => { setError(''); setShowCreate(true) }}>New query</Button> : undefined} ownership={<OwnershipBadge owner="EDC" />} />
+    <PageToolbar label="Query filters">
+      <Label className="flex items-center gap-2 text-sm">Status<select aria-label="Query status filter" value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="">All statuses</option>{STATUSES.map((item) => <option key={item}>{item}</option>)}</select></Label>
+      <Label className="flex items-center gap-2 text-sm">Origin<select aria-label="Query type filter" value={type} onChange={(event) => setType(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="">All origins</option><option value="manual">manual</option><option value="system">system</option></select></Label>
+    </PageToolbar>
+    <DataTableShell label="queries" state={query.isLoading ? 'loading' : query.error ? 'error' : items.length ? undefined : 'empty'} errorMessage="Queries could not be loaded." emptyTitle="No queries found" emptyDescription="No queries match the selected filters." onRetry={() => void query.refetch()}>
+      <Table><TableHeader><TableRow>{['Query', 'Target', 'Origin', 'Status', 'Assigned role', 'Created', 'Actions'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader><TableBody>{items.map((item) => <TableRow key={item.id}><TableCell className="max-w-sm"><a href={`/queries/${item.id}`} className="font-medium text-primary hover:underline">{item.text}</a><span className="block text-xs text-muted-foreground">{item.id.slice(0, 8)}</span></TableCell><TableCell>{item.target_type}<span className="block text-xs text-muted-foreground">{item.target_id.slice(0, 8)}</span></TableCell><TableCell>{item.query_type}</TableCell><TableCell><StatusBadge label="query status" status={item.status} /></TableCell><TableCell className="text-muted-foreground">{item.assigned_role ?? '—'}</TableCell><TableCell className="text-muted-foreground">{new Date(item.created_at).toLocaleDateString()}</TableCell><TableCell><div className="flex flex-wrap gap-2">{(item.status === 'Open' || item.status === 'Reopened') ? <Button size="sm" variant="outline" onClick={() => action.mutate({ id: item.id, verb: 'close' })} disabled={action.isPending}>Close</Button> : null}{item.status === 'Closed' ? <Button size="sm" variant="outline" onClick={() => action.mutate({ id: item.id, verb: 'reopen' })} disabled={action.isPending}>Reopen</Button> : null}</div></TableCell></TableRow>)}</TableBody></Table>
+    </DataTableShell>
+    <Dialog open={showCreate} onOpenChange={(open) => { setShowCreate(open); if (!open) setError('') }}>
+      <DialogContent><DialogHeader><DialogTitle>New query</DialogTitle><DialogDescription>Create a query against an existing EDC clinical object.</DialogDescription></DialogHeader>
+        <form onSubmit={(event) => { event.preventDefault(); create.mutate() }} className="space-y-4">
+          {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+          <div className="space-y-1.5"><Label htmlFor="query-target-type">Affected object</Label><select id="query-target-type" value={targetType} onChange={(event) => setTargetType(event.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option>Subject</option><option>Visit_Instance</option><option>Form_Instance</option><option>Form_Record</option><option>Field</option></select></div>
+          <div className="space-y-1.5"><Label htmlFor="query-target-id">Affected object ID</Label><Input id="query-target-id" required value={targetId} onChange={(event) => setTargetId(event.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="query-assigned-role">Assigned role (optional)</Label><Input id="query-assigned-role" value={assignedRole} onChange={(event) => setAssignedRole(event.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="query-text">Describe the issue</Label><Textarea id="query-text" required value={text} onChange={(event) => setText(event.target.value)} className="h-28" /></div>
+          <DialogFooter><Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button type="submit" pending={create.isPending} loadingText="Creating…">Create</Button></DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  </PageContainer>
 }

@@ -43,7 +43,7 @@ def upgrade() -> None:
             sa.String(30),
             nullable=False,
             server_default="csv",
-            comment="Export format: csv, subject_list, etc.",
+            comment="Export format: csv, excel, json, sas_xpt, odm_xml, subject_list.",
         ),
         sa.Column(
             "status",

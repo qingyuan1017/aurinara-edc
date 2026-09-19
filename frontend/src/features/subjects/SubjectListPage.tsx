@@ -1,11 +1,16 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper, type PaginationState } from '@tanstack/react-table'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { DataTableShell, PageContainer, PageHeader, PageToolbar, StatusBadge } from '@/components/patterns'
+import { Label } from '@/components/ui/label'
 import { api, type PaginatedResponse } from '@/lib/api'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
 import { useStudyContext } from '@/lib/study-context'
 import { ClinicalDataTable } from './components/ClinicalDataTable'
-import { StatusBadge } from './components/StatusBadge'
 
 /** Subject as returned by GET /studies/{id}/subjects */
 export interface Subject {
@@ -27,10 +32,7 @@ const columns = [
   columnHelper.accessor('subject_number', {
     header: 'Subject #',
     cell: (info) => (
-      <a
-        href={`/subjects/${info.row.original.id}/casebook`}
-        className="text-blue-600 hover:underline font-medium"
-      >
+      <a href={`/subjects/${info.row.original.id}/casebook`} className="font-medium text-primary hover:underline">
         {info.getValue()}
       </a>
     ),
@@ -41,9 +43,7 @@ const columns = [
   }),
   columnHelper.accessor('status', {
     header: 'Status',
-    cell: (info) => (
-      <StatusBadge domain="subject" status={info.getValue()} />
-    ),
+    cell: (info) => <StatusBadge status={info.getValue()} label="Subject status" />,
   }),
   columnHelper.accessor('created_at', {
     header: 'Created At',
@@ -75,7 +75,7 @@ export function SubjectListPage({ studyId }: SubjectListPageProps) {
   })
   const [globalFilter, setGlobalFilter] = useState('')
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['subjects', studyId, pagination.pageIndex, pagination.pageSize, globalFilter],
     queryFn: async () => {
       const params: Record<string, string | number> = {
@@ -95,41 +95,70 @@ export function SubjectListPage({ studyId }: SubjectListPageProps) {
 
   const createSubject = useMutation({
     mutationFn: () => api.post(`/studies/${studyId}/subjects`, { site_id: selectedSiteId, subject_number: subjectNumber || null }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['subjects', studyId] }); setShowCreate(false); setSubjectNumber('') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['subjects', studyId] }); setShowCreate(false); setSubjectNumber(''); setCreateError('') },
     onError: () => setCreateError('Select a site first, then try again.'),
   })
 
+  const hasRows = Boolean(data && data.items.length > 0)
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Subjects</h1>
-        <div className="flex items-center gap-3">
-          {canCreate && <button onClick={() => setShowCreate(true)} className="rounded-md bg-blue-600 px-3 py-2 text-sm text-white">Add subject</button>}
-          <input
-            type="search"
-            placeholder="Search subjects…"
-            className="rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            aria-label="Search subjects"
-          />
-        </div>
-      </div>
-
-      {showCreate && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"><form onSubmit={(e) => { e.preventDefault(); createSubject.mutate() }} className="w-full max-w-md space-y-4 rounded-lg bg-white p-6"><h2 className="text-lg font-semibold">Add subject</h2><p className="text-sm text-gray-500">Site: {selectedSiteId ?? 'not selected'}</p>{createError && <p className="rounded bg-red-50 p-2 text-sm text-red-700">{createError}</p>}<input placeholder="Subject number (optional)" value={subjectNumber} onChange={(e) => setSubjectNumber(e.target.value)} className="w-full rounded border px-3 py-2 text-sm" /><div className="flex justify-end gap-2"><button type="button" onClick={() => setShowCreate(false)} className="rounded border px-3 py-2 text-sm">Cancel</button><button disabled={!selectedSiteId || createSubject.isPending} className="rounded bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50">Create</button></div></form></div>}
-
-      <ClinicalDataTable
-        columns={columns}
-        data={data?.items ?? []}
-        totalRows={data?.total}
-        manualPagination
-        onPaginationChange={setPagination}
-        initialPageSize={pagination.pageSize}
-        globalFilter={globalFilter}
-        onGlobalFilterChange={setGlobalFilter}
-        isLoading={isLoading}
-        emptyMessage="No subjects found for this study."
+    <PageContainer wide>
+      <PageHeader
+        title="Subjects"
+        description="Review clinical subjects for the selected study without changing server-owned status or totals."
+        actions={canCreate ? <Button type="button" onClick={() => setShowCreate(true)}>Add subject</Button> : null}
       />
-    </div>
+
+      <PageToolbar label="Subject list controls">
+        <Input
+          type="search"
+          placeholder="Search subjects…"
+          value={globalFilter}
+          onChange={(event) => setGlobalFilter(event.target.value)}
+          aria-label="Search subjects"
+          className="max-w-sm"
+        />
+        <span className="text-sm text-muted-foreground">
+          {data ? `${data.total} total subjects · server ordered` : `Subjects for study ${studyId}`}
+        </span>
+      </PageToolbar>
+
+      <DataTableShell
+        label="Subjects"
+        loading={isLoading}
+        error={isError}
+        errorMessage="Failed to load subjects."
+        onRetry={() => void refetch()}
+        empty={!isLoading && !isError && Boolean(data) && !hasRows}
+        emptyTitle="No subjects found."
+        emptyDescription={globalFilter ? 'Try changing the subject search.' : 'No subjects are available for the selected study.'}
+      >
+        <ClinicalDataTable
+          columns={columns}
+          data={data?.items ?? []}
+          totalRows={data?.total}
+          manualPagination
+          onPaginationChange={setPagination}
+          initialPageSize={pagination.pageSize}
+          globalFilter={globalFilter}
+          onGlobalFilterChange={setGlobalFilter}
+          isLoading={isLoading}
+          emptyMessage="No subjects found for this study."
+        />
+      </DataTableShell>
+
+      <Dialog open={showCreate} onOpenChange={(open) => { setShowCreate(open); if (!open) setCreateError('') }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add subject</DialogTitle><DialogDescription>Create a clinical subject for the selected site.</DialogDescription></DialogHeader>
+          <p className="text-sm text-muted-foreground">Site: {selectedSiteId ?? 'not selected'}</p>
+          {createError ? <Alert variant="destructive"><AlertDescription>{createError}</AlertDescription></Alert> : null}
+          <form onSubmit={(event) => { event.preventDefault(); createSubject.mutate() }} className="space-y-4">
+            <Label htmlFor="subject-number">Subject number (optional)</Label>
+            <Input id="subject-number" placeholder="Subject number (optional)" value={subjectNumber} onChange={(event) => setSubjectNumber(event.target.value)} />
+            <DialogFooter><Button type="button" variant="outline" onClick={() => { setShowCreate(false); setCreateError('') }}>Cancel</Button><Button type="submit" pending={createSubject.isPending} loadingText="Creating…" disabled={!selectedSiteId}>Create</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </PageContainer>
   )
 }

@@ -3,6 +3,7 @@ import { RouterProvider } from '@tanstack/react-router'
 import { Suspense } from 'react'
 import { queryClient } from './lib/query-client'
 import { router } from './lib/router'
+import { ThemeProvider } from './lib/theme'
 import { useInactivityLogout } from './features/auth'
 
 function InactivityGuard({ children }: { children: React.ReactNode }) {
@@ -12,19 +13,21 @@ function InactivityGuard({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <InactivityGuard>
-        <Suspense
-          fallback={
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-              <p className="text-gray-500">Loading…</p>
-            </div>
-          }
-        >
-          <RouterProvider router={router} />
-        </Suspense>
-      </InactivityGuard>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <InactivityGuard>
+          <Suspense
+            fallback={
+              <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
+                <p className="text-muted-foreground">Loading…</p>
+              </div>
+            }
+          >
+            <RouterProvider router={router} />
+          </Suspense>
+        </InactivityGuard>
+      </QueryClientProvider>
+    </ThemeProvider>
   )
 }
 

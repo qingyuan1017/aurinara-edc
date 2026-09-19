@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-} from '@tanstack/react-table'
-import { api } from '@/lib/api'
-import type { PaginatedResponse } from '@/lib/api'
+import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
+import { api, type PaginatedResponse } from '@/lib/api'
+import { DataTableShell, PageContainer, PageHeader, PageToolbar, StatusBadge } from '@/components/patterns'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 interface AuditEvent {
   id: string
@@ -24,47 +24,19 @@ interface AuditEvent {
 }
 
 const columnHelper = createColumnHelper<AuditEvent>()
-
 const columns = [
-  columnHelper.accessor('timestamp', {
-    header: 'Timestamp',
-    cell: (info) => new Date(info.getValue()).toLocaleString(),
-  }),
+  columnHelper.accessor('timestamp', { header: 'Timestamp', cell: (info) => new Date(info.getValue()).toLocaleString() }),
   columnHelper.accessor('actor_email', { header: 'Actor' }),
-  columnHelper.accessor('action', {
-    header: 'Action',
-    cell: (info) => (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-        {info.getValue()}
-      </span>
-    ),
-  }),
+  columnHelper.accessor('action', { header: 'Action', cell: (info) => <StatusBadge status={info.getValue()} label="Audit action" /> }),
   columnHelper.accessor('entity_type', { header: 'Entity Type' }),
-  columnHelper.accessor('entity_id', {
-    header: 'Entity ID',
-    cell: (info) => (
-      <span className="font-mono text-xs">{info.getValue().slice(0, 8)}…</span>
-    ),
-  }),
-  columnHelper.accessor('field', {
-    header: 'Field',
-    cell: (info) => info.getValue() ?? '—',
-  }),
-  columnHelper.accessor('old_value', {
-    header: 'Old',
-    cell: (info) => {
-      const val = info.getValue()
-      return val ? <span className="text-red-600 text-xs">{val}</span> : '—'
-    },
-  }),
-  columnHelper.accessor('new_value', {
-    header: 'New',
-    cell: (info) => {
-      const val = info.getValue()
-      return val ? <span className="text-green-600 text-xs">{val}</span> : '—'
-    },
-  }),
+  columnHelper.accessor('entity_id', { header: 'Entity ID', cell: (info) => <span className="font-mono text-xs">{info.getValue().slice(0, 8)}…</span> }),
+  columnHelper.accessor('field', { header: 'Field', cell: (info) => info.getValue() ?? '—' }),
+  columnHelper.accessor('old_value', { header: 'Old', cell: (info) => { const value = info.getValue(); return value ? <span className="text-xs text-destructive">{value}</span> : '—' } }),
+  columnHelper.accessor('new_value', { header: 'New', cell: (info) => { const value = info.getValue(); return value ? <span className="text-xs text-success">{value}</span> : '—' } }),
 ]
+
+const entityTypes = ['study', 'site', 'subject', 'form', 'field_data', 'query', 'user', 'role', 'export']
+const actions = ['create', 'update', 'delete', 'login', 'logout', 'status_change']
 
 export function AuditViewerPage() {
   const [page, setPage] = useState(1)
@@ -74,7 +46,6 @@ export function AuditViewerPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
-  // Build query params
   const params: Record<string, string | number> = { page, page_size: 50 }
   if (search) params.search = search
   if (entityType) params.entity_type = entityType
@@ -82,206 +53,54 @@ export function AuditViewerPage() {
   if (startDate) params.start_date = startDate
   if (endDate) params.end_date = endDate
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['audit-events', params],
     queryFn: async () => {
-      const { data } = await api.get<PaginatedResponse<AuditEvent>>('/audit-events', { params })
-      return data
+      const response = await api.get<PaginatedResponse<AuditEvent>>('/audit-events', { params })
+      return response.data
     },
   })
 
-  const table = useReactTable({
-    data: data?.items ?? [],
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-  })
-
+  const table = useReactTable({ data: data?.items ?? [], columns, getCoreRowModel: getCoreRowModel() })
   const totalPages = data ? Math.ceil(data.total / data.page_size) : 0
+  const clearFilters = () => { setSearch(''); setEntityType(''); setAction(''); setStartDate(''); setEndDate(''); setPage(1) }
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900">Audit Trail</h1>
+    <PageContainer wide>
+      <PageHeader title="Audit Trail" description="Review immutable activity recorded by the EDC audit service." />
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3 bg-gray-50 p-4 rounded-lg border">
-        <div className="flex-1 min-w-[200px]">
-          <label htmlFor="audit-search" className="block text-xs font-medium text-gray-600 mb-1">
-            Search
-          </label>
-          <input
-            id="audit-search"
-            type="text"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setPage(1)
-            }}
-            placeholder="Actor email, entity ID…"
-            className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      <PageToolbar label="Audit filters" actions={<Button type="button" variant="outline" size="sm" onClick={clearFilters}>Clear filters</Button>}>
+        <div className="min-w-[200px] flex-1 space-y-1">
+          <Label htmlFor="audit-search">Search</Label>
+          <Input id="audit-search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} placeholder="Actor email, entity ID…" />
         </div>
-        <div>
-          <label
-            htmlFor="audit-entity-type"
-            className="block text-xs font-medium text-gray-600 mb-1"
-          >
-            Entity Type
-          </label>
-          <select
-            id="audit-entity-type"
-            value={entityType}
-            onChange={(e) => {
-              setEntityType(e.target.value)
-              setPage(1)
-            }}
-            className="px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All</option>
-            <option value="study">Study</option>
-            <option value="site">Site</option>
-            <option value="subject">Subject</option>
-            <option value="form">Form</option>
-            <option value="field_data">Field Data</option>
-            <option value="query">Query</option>
-            <option value="user">User</option>
-            <option value="role">Role</option>
-            <option value="export">Export</option>
-          </select>
+        <div className="min-w-[150px] space-y-1">
+          <Label htmlFor="audit-entity-type">Entity type</Label>
+          <Select value={entityType || 'all'} onValueChange={(value) => { setEntityType(value === 'all' ? '' : value); setPage(1) }}>
+            <SelectTrigger id="audit-entity-type" aria-label="Entity type"><SelectValue placeholder="All" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">All</SelectItem>{entityTypes.map((type) => <SelectItem key={type} value={type}>{type.replace('_', ' ')}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
-        <div>
-          <label htmlFor="audit-action" className="block text-xs font-medium text-gray-600 mb-1">
-            Action
-          </label>
-          <select
-            id="audit-action"
-            value={action}
-            onChange={(e) => {
-              setAction(e.target.value)
-              setPage(1)
-            }}
-            className="px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All</option>
-            <option value="create">Create</option>
-            <option value="update">Update</option>
-            <option value="delete">Delete</option>
-            <option value="login">Login</option>
-            <option value="logout">Logout</option>
-            <option value="status_change">Status Change</option>
-          </select>
+        <div className="min-w-[140px] space-y-1">
+          <Label htmlFor="audit-action">Action</Label>
+          <Select value={action || 'all'} onValueChange={(value) => { setAction(value === 'all' ? '' : value); setPage(1) }}>
+            <SelectTrigger id="audit-action" aria-label="Action"><SelectValue placeholder="All" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">All</SelectItem>{actions.map((value) => <SelectItem key={value} value={value}>{value.replace('_', ' ')}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
-        <div>
-          <label htmlFor="audit-start" className="block text-xs font-medium text-gray-600 mb-1">
-            From
-          </label>
-          <input
-            id="audit-start"
-            type="date"
-            value={startDate}
-            onChange={(e) => {
-              setStartDate(e.target.value)
-              setPage(1)
-            }}
-            className="px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div>
-          <label htmlFor="audit-end" className="block text-xs font-medium text-gray-600 mb-1">
-            To
-          </label>
-          <input
-            id="audit-end"
-            type="date"
-            value={endDate}
-            onChange={(e) => {
-              setEndDate(e.target.value)
-              setPage(1)
-            }}
-            className="px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <button
-          onClick={() => {
-            setSearch('')
-            setEntityType('')
-            setAction('')
-            setStartDate('')
-            setEndDate('')
-            setPage(1)
-          }}
-          className="px-3 py-2 text-sm border rounded-md hover:bg-white"
-        >
-          Clear
-        </button>
-      </div>
+        <div className="space-y-1"><Label htmlFor="audit-start">From</Label><Input id="audit-start" type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setPage(1) }} /></div>
+        <div className="space-y-1"><Label htmlFor="audit-end">To</Label><Input id="audit-end" type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setPage(1) }} /></div>
+      </PageToolbar>
 
-      {/* Table */}
-      {isLoading ? (
-        <p className="text-gray-500">Loading audit events…</p>
-      ) : (
-        <>
-          <div className="overflow-x-auto border rounded-lg">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-gray-50">
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                {(data?.items.length ?? 0) === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
-                      No audit events match your filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+      <DataTableShell label="Audit events" loading={isLoading} error={Boolean(error)} errorMessage="Audit events could not be loaded." empty={data?.items.length === 0} emptyTitle="No audit events match your filters.">
+        <Table>
+          <caption className="sr-only">Audit events</caption>
+          <TableHeader>{table.getHeaderGroups().map((headerGroup) => <TableRow key={headerGroup.id}>{headerGroup.headers.map((header) => <TableHead key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</TableHead>)}</TableRow>)}</TableHeader>
+          <TableBody>{table.getRowModel().rows.map((row) => <TableRow key={row.id}>{row.getVisibleCells().map((cell) => <TableCell key={cell.id} className="whitespace-nowrap">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}</TableRow>)}</TableBody>
+        </Table>
+      </DataTableShell>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                Page {page} of {totalPages} ({data?.total ?? 0} events)
-              </p>
-              <div className="space-x-2">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="px-3 py-1 text-sm border rounded disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="px-3 py-1 text-sm border rounded disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+      {totalPages > 1 ? <div className="flex flex-wrap items-center justify-between gap-3 pt-4"><p className="text-sm text-muted-foreground">Page {page} of {totalPages} ({data?.total ?? 0} events)</p><div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</Button><Button type="button" variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next</Button></div></div> : null}
+    </PageContainer>
   )
 }

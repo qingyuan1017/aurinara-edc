@@ -69,6 +69,15 @@ export const PERMISSIONS = {
 
   // Files
   FILE_UPLOAD: 'file.upload',
+
+  // CTMS operational data and remediation (must match server permission codes)
+  CTMS_OPERATIONAL_DATA_READ: 'ctms.operational_data_read',
+  CTMS_OPERATIONAL_STUDY_MANAGEMENT: 'ctms.operational_study_management',
+  CTMS_OPERATIONAL_SITE_MANAGEMENT: 'ctms.operational_site_management',
+  CTMS_MONITORING_ACTIVITY_MANAGEMENT: 'ctms.monitoring_activity_management',
+  CTMS_ENROLLMENT_MANAGEMENT: 'ctms.enrollment_management',
+  CTMS_CONFLICT_MANAGEMENT: 'ctms.conflict_management',
+  CTMS_COORDINATION_REPLAY: 'ctms.coordination_replay',
 } as const
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]
@@ -81,14 +90,15 @@ export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]
  */
 export function hasPermission(
   permission: PermissionCode,
-  _studyId?: string,
-  _siteId?: string,
+  studyId?: string,
+  siteId?: string,
 ): boolean {
   const user = useAuthStore.getState().user
   if (!user) return false
 
-  // Simple flat permission check for now.
-  // The server handles study/site scoping authoritatively.
+  // Frontend checks are convenience only; the server handles study/site scoping.
+  void studyId
+  void siteId
   return (user.permissions ?? []).includes(permission)
 }
 

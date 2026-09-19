@@ -24,9 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import PaginationParams
 from app.api.pagination import paginate
 from app.core.audit import audit_service
-from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.core.ctms import Module
+from app.core.exceptions import BusinessRuleError, NotFoundError, ValidationError
 from app.models.export import Export, ExportStatus, ExportType
 from app.schemas.base import PaginatedResponse
+from app.schemas.ctms.export import OperationalExportFilters, OperationalExportFormat
+
+CTMS_EXPORT_FORMATS = frozenset(OperationalExportFormat)
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +50,9 @@ class ExportService:
         export_type: str = ExportType.csv,
         filters: dict | None = None,
         actor_id: UUID,
+        module: Module | str = Module.EDC,
+        content_owner: Module | str | None = None,
+        correlation_id: str | None = None,
     ) -> Export:
         """Create an export job with status Queued and record an Audit_Event.
 
@@ -61,10 +68,25 @@ class ExportService:
         Returns:
             The created Export instance with status Queued.
         """
+        resolved_module = module.value if isinstance(module, Module) else str(module)
+        resolved_owner = (
+            content_owner.value
+            if isinstance(content_owner, Module)
+            else str(content_owner) if content_owner is not None else resolved_module
+        )
+        if resolved_module != resolved_owner:
+            raise ValidationError(
+                message="Export module and content owner must match",
+                details={"module": resolved_module, "content_owner": resolved_owner},
+            )
+
         export = Export(
             study_id=study_id,
             export_type=export_type,
             status=ExportStatus.queued,
+            module=resolved_module,
+            content_owner=resolved_owner,
+            correlation_id=correlation_id,
             filters=filters,
             requested_by=actor_id,
         )
@@ -77,6 +99,10 @@ class ExportService:
             entity_type="export",
             entity_id=export.id,
             action="create",
+            module=module,
+            correlation_id=correlation_id,
+            scope={"study_id": study_id},
+            changed_fields=["status", "export_type", "filters"],
             study_id=study_id,
             actor_id=actor_id,
             new_value=f"export_type={export_type}, status=Queued",
@@ -297,8 +323,83 @@ class ExportService:
 
         return await paginate(session, stmt, pagination)
 
-    # ------------------------------------------------------------------
-    # Subject List Export (convenience) (Req 19.2)
+    async def create_ctms_export(
+        self,
+        session: AsyncSession,
+        *,
+        study_id: UUID,
+        export_type: str,
+        filters: dict | OperationalExportFilters | None,
+        actor_id: UUID,
+        correlation_id: str | None = None,
+    ) -> Export:
+        """Create a validated CTMS-owned operational job on shared infrastructure.
+
+        CTMS formats and filters are deliberately validated here as well as at
+        the HTTP boundary because workers and internal callers can submit jobs
+        without going through FastAPI.
+        """
+        try:
+            normalized_type = OperationalExportFormat(export_type)
+        except ValueError as exc:
+            raise ValidationError(
+                message="Unsupported CTMS operational export format",
+                details={"allowed_formats": sorted(value.value for value in CTMS_EXPORT_FORMATS)},
+            ) from exc
+
+        if filters is None:
+            normalized_filters = OperationalExportFilters()
+        elif isinstance(filters, OperationalExportFilters):
+            normalized_filters = filters
+        else:
+            try:
+                normalized_filters = OperationalExportFilters.model_validate(filters)
+            except ValueError as exc:
+                raise ValidationError(
+                    message="Invalid CTMS operational export filters",
+                    details={"reason": "filters must match the operational export contract"},
+                ) from exc
+
+        return await self.create_export(
+            session,
+            study_id=study_id,
+            export_type=normalized_type.value,
+            filters=normalized_filters.model_dump(mode="json", exclude_defaults=False),
+            actor_id=actor_id,
+            module=Module.CTMS,
+            content_owner=Module.CTMS,
+            correlation_id=correlation_id,
+        )
+
+    async def record_download(
+        self,
+        session: AsyncSession,
+        export: Export,
+        *,
+        actor_id: UUID,
+        correlation_id: str | None = None,
+    ) -> Export:
+        """Audit an authenticated download without exposing content semantics."""
+        if export.status != ExportStatus.completed or not export.file_path:
+            raise BusinessRuleError(
+                message="Export is not ready for download",
+                details={"export_id": str(export.id), "status": str(export.status)},
+            )
+        await audit_service.record(
+            session,
+            entity_type="export",
+            entity_id=export.id,
+            action="download",
+            module=export.module,
+            actor_id=actor_id,
+            correlation_id=correlation_id or export.correlation_id,
+            scope={"study_id": export.study_id},
+            changed_fields=[],
+            study_id=export.study_id,
+            new_value="downloaded=true",
+        )
+        return export
+
     # ------------------------------------------------------------------
 
     async def subject_list_export(

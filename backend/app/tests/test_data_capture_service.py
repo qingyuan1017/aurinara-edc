@@ -30,6 +30,17 @@ def service():
     return DataCaptureService()
 
 
+@pytest.fixture(autouse=True)
+def lock_check():
+    """Keep existing unit-test sessions focused on data-capture behavior."""
+    with patch(
+        "app.services.data_capture_service.lock_service.is_modification_blocked",
+        new_callable=AsyncMock,
+        return_value=False,
+    ) as check:
+        yield check
+
+
 @pytest.fixture
 def actor_id():
     return uuid.uuid4()
@@ -333,6 +344,47 @@ class TestSubmit:
 
         with pytest.raises(BusinessRuleError, match="Frozen"):
             await service.submit(mock_session, fi, actor_id)
+
+
+class TestLockServiceIntegration:
+    """Tests for hierarchy-aware mutation blocking (Reqs 10.7, 16.3)."""
+
+    async def test_change_value_passes_field_context_to_lock_service(
+        self, service, actor_id, field_def_id, lock_check
+    ):
+        """Field mutations use the active session and field/form context."""
+        fi = _make_form_instance(status=FormInstanceStatus.submitted)
+        lock_check.return_value = True
+
+        with pytest.raises(BusinessRuleError, match="frozen or locked"):
+            await service.change_value(
+                AsyncMock(), fi, field_def_id, "new", "corrected", actor_id
+            )
+
+        lock_check.assert_awaited_once()
+        args, kwargs = lock_check.call_args
+        assert args[0] is not None  # active AsyncSession
+        assert args[1].form_instance_id == fi.id
+        assert args[1].field_definition_id == field_def_id
+        assert kwargs == {
+            "object_type": "field",
+            "object_id": field_def_id,
+        }
+
+    async def test_form_mutation_uses_form_context_for_ancestor_lock(
+        self, service, actor_id, lock_check
+    ):
+        """Form mutations pass the form target so ancestor locks are enforced."""
+        fi = _make_form_instance(status=FormInstanceStatus.in_progress)
+        lock_check.return_value = True
+
+        with pytest.raises(BusinessRuleError, match="frozen or locked"):
+            await service.submit(AsyncMock(), fi, actor_id)
+
+        lock_check.assert_awaited_once()
+        args, kwargs = lock_check.call_args
+        assert args[1] is fi
+        assert kwargs == {}
 
 
 class TestChangeValue:

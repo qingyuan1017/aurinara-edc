@@ -20,6 +20,7 @@ from app.api.deps import PaginationParams, get_db, require_permission
 from app.core.audit import audit_service
 from app.schemas.base import PaginatedResponse
 from app.schemas.study import (
+    StudyAmendmentCreate,
     StudyCreate,
     StudyResponse,
     StudyStatusTransition,
@@ -77,6 +78,11 @@ async def create_study(
     study = await study_service.create_study(
         session=session, data=body, actor_id=current_user.id
     )
+    # The initial version is created by the service, but the relationship is
+    # not guaranteed to be loaded on this newly-created ORM instance. Load it
+    # explicitly before Pydantic reads the response model so async SQLAlchemy
+    # does not attempt implicit I/O during serialization.
+    await session.refresh(study, attribute_names=["versions"])
     return StudyResponse.model_validate(study)
 
 
@@ -236,6 +242,30 @@ async def create_version(
         study_id=study_id,
         version_number=body.version_number,
         amendment_reason=body.amendment_reason,
+        actor_id=current_user.id,
+    )
+    return StudyVersionResponse.model_validate(version)
+
+
+@router.post(
+    "/{study_id}/amend", response_model=StudyVersionResponse, status_code=201
+)
+async def create_amendment(
+    study_id: UUID,
+    body: StudyAmendmentCreate,
+    session: DbSession,
+    current_user: Annotated[..., Depends(require_permission("study.configure"))],
+) -> StudyVersionResponse:
+    """Create a draft amendment from the latest published version.
+
+    Permission: study.configure
+    Requirements 5.3 and 5.4: retain published history and record the reason.
+    """
+    study = await study_service.get_study(session, study_id)
+    version = await study_version_service.create_amendment(
+        session=session,
+        study=study,
+        reason=body.reason,
         actor_id=current_user.id,
     )
     return StudyVersionResponse.model_validate(version)

@@ -1,116 +1,49 @@
 import * as React from 'react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 
-interface ReasonForChangeDialogProps {
-  open: boolean
-  fieldLabel: string
-  onConfirm: (reason: string) => void
-  onCancel: () => void
-}
+interface ReasonForChangeDialogProps { open: boolean; fieldLabel: string; onConfirm: (reason: string) => void; onCancel: () => void }
 
-/**
- * Modal dialog that collects a Reason_For_Change before allowing
- * post-submission edits to clinical data (Requirement 24.3).
- *
- * After a form has been submitted, any field modification must include
- * a textual justification that is recorded in the audit trail.
- */
-export function ReasonForChangeDialog({
-  open,
-  fieldLabel,
-  onConfirm,
-  onCancel,
-}: ReasonForChangeDialogProps) {
+/** Accessible shared dialog for the required EDC Reason_For_Change audit value. */
+export function ReasonForChangeDialog({ open, fieldLabel, onConfirm, onCancel }: ReasonForChangeDialogProps) {
   const [reason, setReason] = React.useState('')
   const [error, setError] = React.useState('')
-  const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+  const reasonId = React.useId()
+  const errorId = `${reasonId}-error`
 
-  React.useEffect(() => {
-    if (open) {
-      setReason('')
-      setError('')
-      // Focus the textarea when dialog opens
-      setTimeout(() => textareaRef.current?.focus(), 50)
-    }
-  }, [open])
+  const handleCancel = () => {
+    setReason('')
+    setError('')
+    onCancel()
+  }
 
   const handleConfirm = () => {
     const trimmed = reason.trim()
-    if (!trimmed) {
-      setError('A reason for change is required.')
-      return
-    }
-    if (trimmed.length < 3) {
-      setError('Reason must be at least 3 characters.')
-      return
-    }
+    if (!trimmed) { setError('A reason for change is required.'); return }
+    if (trimmed.length < 3) { setError('Reason must be at least 3 characters.'); return }
     onConfirm(trimmed)
+    setReason('')
+    setError('')
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onCancel()
-    }
-  }
-
-  if (!open) return null
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="rfc-title"
-      onKeyDown={handleKeyDown}
-    >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={onCancel}
-        aria-hidden="true"
-      />
-
-      {/* Dialog content */}
-      <div className="relative z-10 w-full max-w-md bg-white rounded-lg shadow-xl p-6 space-y-4 mx-4">
-        <h2 id="rfc-title" className="text-lg font-semibold text-gray-900">
-          Reason for Change
-        </h2>
-
-        <p className="text-sm text-gray-600">
-          You are editing <span className="font-medium">{fieldLabel}</span> after submission.
-          Please provide a reason for this change.
-        </p>
-
-        <div className="space-y-1.5">
-          <textarea
-            ref={textareaRef}
-            value={reason}
-            onChange={(e) => {
-              setReason(e.target.value)
-              if (error) setError('')
-            }}
-            className={`w-full px-3 py-2 border rounded-md text-sm min-h-[100px] resize-y
-              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-              ${error ? 'border-red-500' : 'border-gray-300'}`}
-            placeholder="Enter your reason for making this change..."
-            aria-describedby={error ? 'rfc-error' : undefined}
-          />
-          {error && (
-            <p id="rfc-error" className="text-xs text-red-600" role="alert">
-              {error}
-            </p>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="outline" onClick={onCancel} type="button">
-            Cancel
-          </Button>
-          <Button onClick={handleConfirm} type="button">
-            Confirm Change
-          </Button>
-        </div>
+  return <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) handleCancel() }}>
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Reason for Change</DialogTitle>
+        <DialogDescription>You are editing <span className="font-medium text-foreground">{fieldLabel}</span> after submission. Please provide a reason for this change.</DialogDescription>
+      </DialogHeader>
+      <div className="space-y-1.5">
+        <Label htmlFor={reasonId}>Reason for change</Label>
+        <Textarea id={reasonId} value={reason} onChange={(event) => { setReason(event.target.value); if (error) setError('') }} placeholder="Enter your reason for making this change..." autoFocus aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} />
+        {error ? <Alert variant="destructive" className="p-3" role="alert"><AlertDescription id={errorId}>{error}</AlertDescription></Alert> : null}
       </div>
-    </div>
-  )
+      <DialogFooter>
+        <Button variant="outline" onClick={handleCancel} type="button">Cancel</Button>
+        <Button onClick={handleConfirm} type="button">Confirm Change</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 }

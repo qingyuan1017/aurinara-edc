@@ -9,15 +9,19 @@ import { useAuthStore } from '@/lib/auth'
  */
 export function AuthGuard() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const user = useAuthStore((s) => s.user)
+  const refreshUser = useAuthStore((s) => s.refreshUser)
   const navigate = useNavigate()
 
   useEffect(() => {
     if (!isAuthenticated) {
       navigate({ to: '/login' })
+    } else if (!user) {
+      void refreshUser()
     }
-  }, [isAuthenticated, navigate])
+  }, [isAuthenticated, navigate, refreshUser, user])
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return null
   }
 

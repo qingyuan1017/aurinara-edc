@@ -4,3 +4,4 @@
  */
 export { StudyListPage } from './StudyListPage'
 export { StudyDetailPage } from './StudyDetailPage'
+export { StudyVersioningPage } from './StudyVersioningPage'

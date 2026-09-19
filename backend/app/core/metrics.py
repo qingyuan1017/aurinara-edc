@@ -9,7 +9,7 @@ Satisfies Requirements:
 
 import time
 from collections import defaultdict
-from threading import Lock
+from threading import RLock
 
 
 class _MetricsCollector:
@@ -24,7 +24,7 @@ class _MetricsCollector:
     """
 
     def __init__(self) -> None:
-        self._lock = Lock()
+        self._lock = RLock()
         self._request_count: int = 0
         self._request_latency_sum: float = 0.0
         self._request_latency_buckets: dict[str, int] = defaultdict(int)
@@ -33,6 +33,13 @@ class _MetricsCollector:
         self._auth_failure_count: int = 0
         self._export_failure_count: int = 0
         self._worker_failure_count: int = 0
+        self._ctms_events_pending: int = 0
+        self._ctms_events_accepted: int = 0
+        self._ctms_events_processed: int = 0
+        self._ctms_failed_event_count: int = 0
+        self._ctms_conflict_count: int = 0
+        self._ctms_projection_updates: int = 0
+        self._ctms_projection_lag_seconds: float = 0.0
 
     # --- Recording methods ---
 
@@ -73,7 +80,48 @@ class _MetricsCollector:
         with self._lock:
             self._worker_failure_count += 1
 
-    # --- Snapshot ---
+    def record_ctms_event_accepted(self) -> None:
+        """Record durable acceptance of a CTMS coordination event."""
+        with self._lock:
+            self._ctms_events_accepted += 1
+            self._ctms_events_pending += 1
+
+    def record_ctms_event_processed(self) -> None:
+        """Record successful completion of one CTMS coordination event."""
+        with self._lock:
+            self._ctms_events_processed += 1
+            self._ctms_events_pending = max(0, self._ctms_events_pending - 1)
+
+    def record_ctms_failed_event(self) -> None:
+        """Record a sanitized terminal CTMS event failure."""
+        with self._lock:
+            self._ctms_failed_event_count += 1
+            self._ctms_events_pending = max(0, self._ctms_events_pending - 1)
+
+    def record_ctms_conflict(self) -> None:
+        """Record a CTMS coordination conflict without retaining event content."""
+        with self._lock:
+            self._ctms_conflict_count += 1
+            self._ctms_events_pending = max(0, self._ctms_events_pending - 1)
+
+    def record_ctms_projection(self, lag_seconds: float = 0.0) -> None:
+        """Record a projection update and its non-sensitive freshness lag."""
+        with self._lock:
+            self._ctms_projection_updates += 1
+            self._ctms_projection_lag_seconds = max(0.0, float(lag_seconds))
+
+    def ctms_snapshot(self) -> dict[str, object]:
+        """Return queue/projection counters safe for health and metrics APIs."""
+        with self._lock:
+            return {
+                "events_accepted": self._ctms_events_accepted,
+                "events_processed": self._ctms_events_processed,
+                "pending_event_count": self._ctms_events_pending,
+                "failed_event_count": self._ctms_failed_event_count,
+                "conflict_count": self._ctms_conflict_count,
+                "projection_updates": self._ctms_projection_updates,
+                "projection_lag_seconds": self._ctms_projection_lag_seconds,
+            }
 
     def snapshot(self) -> dict:
         """Return a point-in-time snapshot of all metrics."""
@@ -95,6 +143,7 @@ class _MetricsCollector:
                 "auth_failures": self._auth_failure_count,
                 "export_failures": self._export_failure_count,
                 "worker_failures": self._worker_failure_count,
+                "ctms": self.ctms_snapshot(),
             }
 
     def reset(self) -> None:
@@ -108,6 +157,13 @@ class _MetricsCollector:
             self._auth_failure_count = 0
             self._export_failure_count = 0
             self._worker_failure_count = 0
+            self._ctms_events_pending = 0
+            self._ctms_events_accepted = 0
+            self._ctms_events_processed = 0
+            self._ctms_failed_event_count = 0
+            self._ctms_conflict_count = 0
+            self._ctms_projection_updates = 0
+            self._ctms_projection_lag_seconds = 0.0
 
 
 # Module-level singleton

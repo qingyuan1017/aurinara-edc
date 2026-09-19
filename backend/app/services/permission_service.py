@@ -12,10 +12,11 @@ Satisfies Requirements:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from uuid import UUID
 
-from app.core.exceptions import AuthorizationError
-from app.models.identity import User
+from app.core.exceptions import AuthenticationError, AuthorizationError
+from app.models.identity import User, UserStatus
 from app.schemas.permission import AuthorizationScope, PermissionGrant
 
 
@@ -25,6 +26,17 @@ class PermissionService:
     Resolves user permissions from their role assignments and enforces both
     route-level and object-level access checks.
     """
+
+    def _ensure_active(self, user: User) -> None:
+        """Reject deactivated accounts before resolving or enforcing scope.
+
+        ``get_current_user`` performs the same check at the HTTP boundary, but
+        keeping it here prevents direct service calls and background-triggered
+        mutations from using a stale role assignment after deactivation.
+        """
+        status = getattr(user, "status", None)
+        if status == UserStatus.inactive or status == UserStatus.inactive.value:
+            raise AuthenticationError("Account is inactive")
 
     def resolve_scope(self, user: User) -> AuthorizationScope:
         """Compute the union of permission codes across the user's assigned roles.
@@ -36,6 +48,7 @@ class PermissionService:
         Requirement 2.1: Authorization_Scope is the union of permission codes of assigned roles,
         each applied at the study and site scope of its assignment.
         """
+        self._ensure_active(user)
         grants: list[PermissionGrant] = []
 
         for user_role in user.user_roles:
@@ -97,23 +110,35 @@ class PermissionService:
         allowed_study_ids = scope.get_study_ids()
         return [sid for sid in study_ids if sid in allowed_study_ids]
 
-    def filter_sites(self, user: User, site_ids: list[UUID]) -> list[UUID]:
-        """Return only the site IDs within the user's scope.
+    def filter_sites(
+        self,
+        user: User,
+        site_ids: list[UUID],
+        site_study_ids: Mapping[UUID, UUID] | None = None,
+    ) -> list[UUID]:
+        """Return only sites within the user's system/study/site scope.
 
-        Requirement 2.4: list requests return only in-scope sites.
+        ``site_study_ids`` is optional for compatibility with callers that
+        already query a single study. When supplied, study-scoped grants also
+        include every site mapped to an authorized study.
         """
         scope = self.resolve_scope(user)
 
-        # System-scope users see all sites
+        # System-scope users see all sites.
         if scope.has_system_grant():
             return site_ids
 
         allowed_site_ids = scope.get_site_ids()
-        # Also include sites that belong to studies the user has study-scope for
-        # (study-scope grants cover all sites in that study — but we can't resolve
-        # site→study here without the site objects, so we rely on explicit site grants
-        # and study-scope grants are handled at a higher layer via filter_studies)
-        return [sid for sid in site_ids if sid in allowed_site_ids]
+        allowed_study_ids = scope.get_study_ids()
+        return [
+            site_id
+            for site_id in site_ids
+            if site_id in allowed_site_ids
+            or (
+                site_study_ids is not None
+                and site_study_ids.get(site_id) in allowed_study_ids
+            )
+        ]
 
     def assert_object_access(self, user: User, obj: object) -> None:
         """Check that the object's study_id/site_id is within the user's scope.

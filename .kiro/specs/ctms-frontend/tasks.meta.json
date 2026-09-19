@@ -1,0 +1,39 @@
+{
+  "pbtResults": {
+    "1.5 Write property tests for scoped filter serialization and query keys": {
+      "status": "passed",
+      "failingExample": "",
+      "lastRunTimestamp": 1788902281222
+    },
+    "1.6 Write property tests for safe operational payload/action construction": {
+      "status": "passed",
+      "lastRunTimestamp": 1788902319886
+    },
+    "3.5 Write form and transition property tests": {
+      "status": "passed",
+      "lastRunTimestamp": 1788909953373
+    },
+    "4.4 Write ownership/freshness property tests": {
+      "status": "failed",
+      "failingExample": "CTMSOwnershipFreshness.property.test.tsx:89 — Expected element to have text content: \"Operational status: Operational status 0\"; received: \"Operational status:Operational status 0CTMS · Authoritative\".",
+      "lastRunTimestamp": 1788911827473
+    },
+    "4.6 Write projection clinical-authority property tests": {
+      "status": "passed",
+      "lastRunTimestamp": 1788911830081
+    },
+    "4.5 Write server-authoritative filter/report property tests": {
+      "status": "passed",
+      "lastRunTimestamp": 1788911838631
+    },
+    "5.5 Write export lifecycle property tests": {
+      "status": "passed",
+      "lastRunTimestamp": 1788911839793
+    },
+    "5.4 Write sanitized remediation property tests": {
+      "status": "passed",
+      "lastRunTimestamp": 1788911863178
+    }
+  },
+  "executionHistory": {}
+}

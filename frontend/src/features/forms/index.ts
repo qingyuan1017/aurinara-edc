@@ -7,6 +7,8 @@ export { FormBuilderPage } from './FormBuilderPage'
 export { FormField } from './components/FormField'
 export { ReasonForChangeDialog } from './components/ReasonForChangeDialog'
 export { AuditPanel } from './components/AuditPanel'
+export { LockControls } from './components/LockControls'
+export { FileUpload } from './components/FileUpload'
 
 export type { FieldDefinition, ControlType, CodelistItem } from './components/FormField'
 export type { AuditEntry } from './components/AuditPanel'

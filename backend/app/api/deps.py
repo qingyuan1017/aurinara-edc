@@ -22,7 +22,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import async_session_factory
 from app.core.exceptions import AuthenticationError, AuthorizationError
-from app.core.request_context import actor_var
+from app.core.request_context import set_actor
 from app.core.security import (
     InvalidTokenError,
     decode_token,
@@ -122,8 +122,9 @@ async def get_current_user(
     if user.status == UserStatus.inactive:
         raise AuthenticationError("Account is inactive")
 
-    # --- Set actor context var for audit/logging ---
-    actor_var.set(user.id)
+    # --- Set actor context for audit/logging and request inspection ---
+    set_actor(user.id)
+    request.state.actor_id = user.id
 
     return user
 
@@ -220,6 +221,16 @@ def require_permission(permission: str) -> Callable:
     return _guard
 
 
+def require_ctms_permission(permission: str) -> Callable:
+    """Return the shared server-side guard for a CTMS operation.
+
+    CTMS routes use the same dependency implementation and error envelope as
+    EDC routes. Keeping a named factory makes CTMS mutation declarations
+    explicit while preventing a second authorization model from emerging.
+    """
+    return require_permission(permission)
+
+
 class PermissionGuard:
     """A flexible, parameterizable permission guard dependency.
 
@@ -264,6 +275,15 @@ class PermissionGuard:
             ) from None
 
         return current_user
+
+
+class CTMSPermissionGuard(PermissionGuard):
+    """Named class dependency for CTMS routes.
+
+    It intentionally inherits the shared guard so inactive-user checks,
+    study/site extraction, and baseline ``AuthorizationError`` behavior remain
+    identical across EDC and CTMS.
+    """
 
 
 @dataclass

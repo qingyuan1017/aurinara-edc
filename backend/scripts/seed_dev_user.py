@@ -47,6 +47,37 @@ async def main() -> None:
         )
         existing = result.scalars().first()
         if existing:
+            # Repair the role assignment for an existing development user.
+            # This keeps the seeder useful after role definitions gain new
+            # permissions or an earlier seed stopped before assignment.
+            role_result = await session.execute(
+                select(Role).where(Role.name == DEV_ROLE_NAME)
+            )
+            role = role_result.scalars().first()
+            if role is None:
+                print(f"✗ Role '{DEV_ROLE_NAME}' not found. Run migrations first.")
+                return
+
+            assignment_result = await session.execute(
+                select(UserRole).where(
+                    UserRole.user_id == existing.id,
+                    UserRole.role_id == role.id,
+                    UserRole.study_id.is_(None),
+                    UserRole.site_id.is_(None),
+                )
+            )
+            if assignment_result.scalars().first() is None:
+                session.add(
+                    UserRole(
+                        user_id=existing.id,
+                        role_id=role.id,
+                        study_id=None,
+                        site_id=None,
+                    )
+                )
+                await session.flush()
+                print(f"✓ Assigned {DEV_ROLE_NAME} role to existing user")
+
             print(f"✓ Dev user already exists: {DEV_USER_EMAIL}")
             await session.commit()
             return

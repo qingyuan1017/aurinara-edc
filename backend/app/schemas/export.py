@@ -51,7 +51,7 @@ class ExportCreate(BaseCreateSchema):
 
     export_type: ExportType = Field(
         default=ExportType.csv,
-        description="Export format type (csv, subject_list)",
+        description="Export format type (csv, excel, json, sas_xpt, odm_xml, subject_list)",
     )
     filters: ExportFilters | None = Field(
         default=None,
@@ -69,6 +69,9 @@ class ExportResponse(BaseSchema):
 
     id: UUID
     study_id: UUID
+    module: str = "EDC"
+    content_owner: str = "EDC"
+    correlation_id: str | None = None
     export_type: str
     status: str
     filters: dict | None = None
@@ -86,6 +89,9 @@ class ExportListResponse(BaseSchema):
 
     id: UUID
     study_id: UUID
+    module: str = "EDC"
+    content_owner: str = "EDC"
+    correlation_id: str | None = None
     export_type: str
     status: str
     file_size: int | None = None

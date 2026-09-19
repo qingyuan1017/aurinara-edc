@@ -15,7 +15,7 @@ Satisfies Requirements:
   - 10.7: Rejects modifications when Form_Instance is Frozen or Locked.
   - 10.8: Every Field_Value create/change writes an Audit_Event in the same tx.
   - 21.4: Audit_Event is written in the same transaction as the data change.
-  - 23.3: Hybrid storage (data_jsonb + field_values) stays consistent.
+  - 23.3: Mutation guards delegate hierarchy checks to Lock_Service.
 """
 
 from __future__ import annotations
@@ -34,6 +34,9 @@ from app.core.audit import audit_service
 from app.core.exceptions import BusinessRuleError, NotFoundError, ValidationError
 from app.models.form_data import FieldValue, FormInstance, FormInstanceStatus
 from app.models.form_metadata import CodelistItem, FieldDefinition
+from app.services.lock_service import lock_service
+from app.services.notification_service import notification_service
+from app.services.signature_service import signature_service
 
 logger = logging.getLogger(__name__)
 
@@ -117,11 +120,15 @@ class DataCaptureService:
         Raises:
             BusinessRuleError: If the form is Frozen or Locked (Req 10.7).
         """
-        self._guard_modification(form_instance)
+        await self._guard_modification(session, form_instance)
 
-        # Upsert field values
+        # Check each field target as well as the form so field-level controls
+        # block writes even when the form itself remains editable.
         for field_id_str, new_value in values.items():
             field_id = UUID(field_id_str)
+            await self._guard_modification(
+                session, form_instance, field_id=field_id
+            )
             await self._upsert_field_value(
                 session,
                 form_instance=form_instance,
@@ -137,6 +144,9 @@ class DataCaptureService:
 
         # Sync data_jsonb from field_values (Req 23.3)
         await self._sync_data_jsonb(session, form_instance)
+        await self._invalidate_signed_form(
+            session, form_instance, actor_id=actor_id
+        )
 
         form_instance.updated_at = datetime.now(UTC)
         await session.flush()
@@ -177,7 +187,7 @@ class DataCaptureService:
             ValidationError: With field-level errors if validation fails (Req 10.4).
             BusinessRuleError: If the form is Frozen or Locked.
         """
-        self._guard_modification(form_instance)
+        await self._guard_modification(session, form_instance)
 
         # Only allow submission from In Progress or Not Started
         if form_instance.status not in (
@@ -229,6 +239,10 @@ class DataCaptureService:
             new_value=FormInstanceStatus.submitted.value,
         )
 
+        # Notify responsible reviewers only after the submitted state and its
+        # audit event have been added to this same transaction.
+        await notification_service.on_form_submitted(session, form_instance)
+
         logger.info(
             "Form submitted: form_instance_id=%s actor=%s",
             form_instance.id,
@@ -266,17 +280,23 @@ class DataCaptureService:
             BusinessRuleError: If Frozen/Locked (Req 10.7).
             ValidationError: If reason is missing for post-submission change (Req 10.5).
         """
-        self._guard_modification(form_instance)
-
-        # Req 10.5: require Reason_For_Change after submission
+        status = FormInstanceStatus(form_instance.status)
+        # Validate the reason before hierarchy lookup for editable
+        # post-submission forms. Frozen/locked lifecycle states retain their
+        # lock error precedence in _guard_modification.
         if (
-            FormInstanceStatus(form_instance.status) in _POST_SUBMISSION_STATUSES
+            status in _POST_SUBMISSION_STATUSES
+            and status not in _LOCKED_STATUSES
             and (not reason or not reason.strip())
         ):
             raise ValidationError(
                 message="Reason_For_Change is required for post-submission edits",
                 details={"field_id": str(field_id)},
             )
+
+        await self._guard_modification(
+            session, form_instance, field_id=field_id
+        )
 
         await self._upsert_field_value(
             session,
@@ -289,6 +309,9 @@ class DataCaptureService:
 
         # Sync data_jsonb
         await self._sync_data_jsonb(session, form_instance)
+        await self._invalidate_signed_form(
+            session, form_instance, actor_id=actor_id, reason=reason
+        )
         form_instance.updated_at = datetime.now(UTC)
         await session.flush()
 
@@ -326,7 +349,9 @@ class DataCaptureService:
         Raises:
             BusinessRuleError: If Frozen/Locked.
         """
-        self._guard_modification(form_instance)
+        await self._guard_modification(
+            session, form_instance, field_id=field_id
+        )
 
         # Find or create the FieldValue row
         field_value = await self._get_or_create_field_value(
@@ -337,10 +362,14 @@ class DataCaptureService:
         field_value.is_not_applicable = True
         field_value.updated_at = datetime.now(UTC)
         field_value.updated_by = actor_id
-        await session.flush()
-
         # Sync data_jsonb
         await self._sync_data_jsonb(session, form_instance)
+        await self._invalidate_signed_form(
+            session,
+            form_instance,
+            actor_id=actor_id,
+            reason="Field marked not applicable after signature.",
+        )
         form_instance.updated_at = datetime.now(UTC)
         await session.flush()
 
@@ -365,17 +394,52 @@ class DataCaptureService:
         )
         return form_instance
 
+    async def _invalidate_signed_form(
+        self,
+        session: AsyncSession,
+        form_instance: FormInstance,
+        *,
+        actor_id: UUID,
+        reason: str | None = None,
+    ) -> None:
+        """Invalidate a form signature after a post-signature data mutation.
+
+        Only the explicit ``Signed`` lifecycle state triggers this lookup. It
+        keeps ordinary draft/submission mutations free of signature queries
+        while ensuring every edit to an electronically signed form is checked.
+        """
+        if FormInstanceStatus(form_instance.status) != FormInstanceStatus.signed:
+            return
+        await signature_service.invalidate_if_changed(
+            session,
+            form_instance,
+            actor_id=actor_id,
+            reason=reason,
+        )
+
     # ------------------------------------------------------------------
     # Internal: guard modifications (Req 10.7)
     # ------------------------------------------------------------------
 
-    def _guard_modification(self, form_instance: FormInstance) -> None:
-        """Reject modifications if the Form_Instance is Frozen or Locked.
+    async def _guard_modification(
+        self,
+        session: AsyncSession,
+        form_instance: FormInstance,
+        *,
+        field_id: UUID | None = None,
+    ) -> None:
+        """Reject modifications blocked by the Lock_Service hierarchy check.
 
-        This is the Phase 1 placeholder for Lock_Service integration;
-        Lock_Service wires the full hierarchy check in Phase 2.
+        Form-level mutations use the FormInstance target. Field mutations use a
+        lightweight FieldValue context so LockService can resolve the field,
+        owning form, visit, subject, site, and study ancestors even when the
+        normalized FieldValue row does not exist yet. This same polymorphic
+        target contract is the integration point for FileAttachmentService.
         """
+        target: Any = form_instance
         status = FormInstanceStatus(form_instance.status)
+        # Preserve the lifecycle-state error and avoid hierarchy queries for
+        # legacy forms that predate FreezeLock rows.
         if status in _LOCKED_STATUSES:
             raise BusinessRuleError(
                 message=f"Cannot modify a {status.value} form instance",
@@ -384,6 +448,51 @@ class DataCaptureService:
                     "status": status.value,
                 },
             )
+
+        object_type: str | None = None
+        object_id: UUID | None = None
+        if field_id is not None:
+            target = FieldValue(
+                form_instance_id=form_instance.id,
+                field_definition_id=field_id,
+            )
+            object_type = "field"
+            object_id = field_id
+
+        if field_id is None:
+            blocked = await lock_service.is_modification_blocked(
+                session, target
+            )
+        else:
+            blocked = await lock_service.is_modification_blocked(
+                session,
+                target,
+                object_type=object_type,
+                object_id=object_id,
+            )
+        # Keep the Phase 1 status invariant as a defensive fallback while
+        # existing records transition to FreezeLock rows. The hierarchy check
+        # above remains authoritative for ancestor controls.
+        status = FormInstanceStatus(form_instance.status)
+        if not blocked and status not in _LOCKED_STATUSES:
+            return
+
+        if status in _LOCKED_STATUSES:
+            raise BusinessRuleError(
+                message=f"Cannot modify a {status.value} form instance",
+                details={
+                    "form_instance_id": str(form_instance.id),
+                    "status": status.value,
+                },
+            )
+
+        details = {"form_instance_id": str(form_instance.id)}
+        if field_id is not None:
+            details["field_id"] = str(field_id)
+        raise BusinessRuleError(
+            message="Cannot modify a frozen or locked clinical object",
+            details=details,
+        )
 
     # ------------------------------------------------------------------
     # Internal: upsert field value with audit

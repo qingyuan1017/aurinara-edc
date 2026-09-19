@@ -1,10 +1,9 @@
-import { cva, type VariantProps } from 'class-variance-authority'
-import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 
 /**
  * Status color mappings for different clinical entity statuses.
  * Each domain (subject, form, query, SDV, review, lock, signature) has
- * its own set of statuses and corresponding visual treatments.
+ * its own set of statuses and corresponding semantic visual treatments.
  */
 
 type StatusDomain =
@@ -16,71 +15,53 @@ type StatusDomain =
   | 'lock'
   | 'signature'
 
-const badgeVariants = cva(
-  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
-  {
-    variants: {
-      color: {
-        blue: 'bg-blue-100 text-blue-800',
-        green: 'bg-green-100 text-green-800',
-        yellow: 'bg-yellow-100 text-yellow-800',
-        red: 'bg-red-100 text-red-800',
-        gray: 'bg-gray-100 text-gray-800',
-        purple: 'bg-purple-100 text-purple-800',
-        orange: 'bg-orange-100 text-orange-800',
-        indigo: 'bg-indigo-100 text-indigo-800',
-      },
-    },
-    defaultVariants: {
-      color: 'gray',
-    },
-  },
-)
-
-type BadgeColor = NonNullable<VariantProps<typeof badgeVariants>['color']>
+type StatusVariant = 'info' | 'success' | 'warning' | 'destructive' | 'secondary'
 
 /**
- * Map from (domain, status) → color.
+ * Map from (domain, status) to a semantic Badge variant.
+ * Semantic variants keep clinical status meaning while supporting both themes.
  */
-const STATUS_COLORS: Record<StatusDomain, Record<string, BadgeColor>> = {
+const STATUS_VARIANTS: Record<StatusDomain, Record<string, StatusVariant>> = {
   subject: {
-    screening: 'blue',
-    enrolled: 'green',
-    completed: 'indigo',
-    withdrawn: 'red',
-    'screen-failed': 'gray',
+    screening: 'info',
+    enrolled: 'success',
+    completed: 'info',
+    withdrawn: 'destructive',
+    'screen-failed': 'secondary',
   },
   form: {
-    'not started': 'gray',
-    'in progress': 'yellow',
-    submitted: 'green',
-    frozen: 'purple',
-    locked: 'red',
+    'not started': 'secondary',
+    'in progress': 'warning',
+    submitted: 'success',
+    frozen: 'secondary',
+    locked: 'destructive',
   },
   query: {
-    open: 'red',
-    answered: 'orange',
-    closed: 'green',
-    cancelled: 'gray',
+    open: 'destructive',
+    answered: 'warning',
+    closed: 'success',
+    cancelled: 'secondary',
   },
   sdv: {
-    pending: 'yellow',
-    verified: 'green',
-    'not required': 'gray',
+    pending: 'warning',
+    verified: 'success',
+    'not required': 'secondary',
   },
   review: {
-    pending: 'yellow',
-    reviewed: 'green',
-    'not required': 'gray',
+    pending: 'warning',
+    reviewed: 'success',
+    'not required': 'secondary',
   },
   lock: {
-    unlocked: 'gray',
-    locked: 'red',
+    unlocked: 'secondary',
+    locked: 'destructive',
   },
   signature: {
-    unsigned: 'gray',
-    signed: 'green',
-    invalidated: 'red',
+    unsigned: 'secondary',
+    valid: 'success',
+    signed: 'success',
+    stale: 'warning',
+    invalidated: 'destructive',
   },
 }
 
@@ -94,21 +75,21 @@ export interface StatusBadgeProps {
 }
 
 /**
- * StatusBadge renders a colored pill for clinical entity statuses.
+ * StatusBadge renders a semantic pill for clinical entity statuses.
  * Supports subjects, forms, queries, SDV, review, lock, and signature domains.
  */
 export function StatusBadge({ domain, status, className }: StatusBadgeProps) {
   const normalizedStatus = status.toLowerCase()
-  const domainColors = STATUS_COLORS[domain]
-  const color: BadgeColor = domainColors?.[normalizedStatus] ?? 'gray'
+  const variant = STATUS_VARIANTS[domain]?.[normalizedStatus] ?? 'secondary'
 
   return (
-    <span
-      className={cn(badgeVariants({ color }), className)}
+    <Badge
+      variant={variant}
+      className={className}
       role="status"
       aria-label={`${domain} status: ${status}`}
     >
       {status}
-    </span>
+    </Badge>
   )
 }

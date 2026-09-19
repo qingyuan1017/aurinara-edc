@@ -9,7 +9,22 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+CTMS_PERMISSION_ALIASES: dict[str, str] = {
+    "operational-data-read": "ctms.operational_data_read",
+    "operational-study-management": "ctms.operational_study_management",
+    "operational-site-management": "ctms.operational_site_management",
+    "monitoring-activity-management": "ctms.monitoring_activity_management",
+    "enrollment-management": "ctms.enrollment_management",
+    "conflict-management": "ctms.conflict_management",
+    "coordination-replay": "ctms.coordination_replay",
+}
+
+
+def normalize_permission_code(permission: str) -> str:
+    """Normalize human-readable CTMS permission names to stored codes."""
+    return CTMS_PERMISSION_ALIASES.get(permission, permission)
 
 
 class PermissionGrant(BaseModel):
@@ -33,7 +48,7 @@ class AuthorizationScope(BaseModel):
     each tagged with the study_id/site_id from its user_role assignment.
     """
 
-    grants: list[PermissionGrant] = []
+    grants: list[PermissionGrant] = Field(default_factory=list)
 
     def has_permission(
         self,
@@ -48,8 +63,9 @@ class AuthorizationScope(BaseModel):
         or any site within it.
         A site-scope grant (study_id set, site_id set) satisfies only that exact site.
         """
+        permission = normalize_permission_code(permission)
         for grant in self.grants:
-            if grant.permission_code != permission:
+            if normalize_permission_code(grant.permission_code) != permission:
                 continue
 
             # System-scope grant: matches everything
@@ -90,11 +106,18 @@ class AuthorizationScope(BaseModel):
         If permission is provided, checks for that specific permission at system scope.
         If permission is None, checks for any system-scope grant.
         """
+        normalized_permission = (
+            normalize_permission_code(permission) if permission is not None else None
+        )
         for grant in self.grants:
             if (
                 grant.study_id is None
                 and grant.site_id is None
-                and (permission is None or grant.permission_code == permission)
+                and (
+                    normalized_permission is None
+                    or normalize_permission_code(grant.permission_code)
+                    == normalized_permission
+                )
             ):
                 return True
         return False

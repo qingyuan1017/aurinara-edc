@@ -14,7 +14,8 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
-from app.core.request_context import get_actor, get_request_id
+from app.core.observability import sanitize_fields
+from app.core.request_context import get_actor, get_correlation_id, get_request_id, get_trace_id
 
 
 class StructuredFormatter(logging.Formatter):
@@ -27,6 +28,8 @@ class StructuredFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
             "request_id": get_request_id(),
+            "correlation_id": get_correlation_id(),
+            "trace_id": get_trace_id(),
         }
 
         actor = get_actor()
@@ -34,11 +37,11 @@ class StructuredFormatter(logging.Formatter):
             log_entry["actor"] = str(actor)
 
         if record.exc_info and record.exc_info[0] is not None:
-            log_entry["exception"] = self.formatException(record.exc_info)
+            log_entry["exception_type"] = record.exc_info[0].__name__
 
-        # Include any extra fields attached to the record
+        # Include only safe extra fields attached to the record.
         if hasattr(record, "extra_fields"):
-            log_entry.update(record.extra_fields)
+            log_entry.update(sanitize_fields(record.extra_fields))
 
         return json.dumps(log_entry, default=str)
 
@@ -49,9 +52,11 @@ class ReadableFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         ts = datetime.fromtimestamp(record.created, tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
         req_id = get_request_id() or "-"
-        base = f"{ts} [{record.levelname:<8}] {record.name} | req={req_id} | {record.getMessage()}"
+        correlation_id = get_correlation_id() or "-"
+        trace_id = get_trace_id() or "-"
+        base = f"{ts} [{record.levelname:<8}] {record.name} | req={req_id} corr={correlation_id} trace={trace_id} | {record.getMessage()}"
         if record.exc_info and record.exc_info[0] is not None:
-            base += "\n" + self.formatException(record.exc_info)
+            base += f"\nexception={record.exc_info[0].__name__}"
         return base
 
 

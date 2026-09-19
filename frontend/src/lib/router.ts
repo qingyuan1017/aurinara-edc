@@ -8,14 +8,20 @@ import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage'
 import { AcceptInvitationPage } from '@/features/auth/AcceptInvitationPage'
 import { AccessDeniedPage } from '@/features/auth/AccessDeniedPage'
 import { AuditViewerPage, UserListPage } from '@/features/admin'
+import { AIAssistantPage } from '@/features/ai'
+import { CTMSHomePage, CTMSWorkspacePage, type CTMSView } from '@/features/ctms'
 import { ExportCenterPage } from '@/features/exports'
 import { SiteListPage } from '@/features/sites'
-import { StudyDashboardPage } from '@/features/dashboards'
-import { StudyListPage } from '@/features/studies'
+import { StudyDashboardPage, DataCleaningDashboardPage } from '@/features/dashboards'
+import { EditCheckBuilderPage } from '@/features/edit-checks'
+import { NotificationsPage } from '@/features/notifications'
+import { SDVWorklistPage, ReviewWorklistPage } from '@/features/quality'
+import { StudyListPage, StudyVersioningPage } from '@/features/studies'
 import { StudyDetailPage } from '@/features/studies/StudyDetailPage'
 import { SubjectCasebookPage, SubjectListPage } from '@/features/subjects'
 import { FormBuilderPage, FormEntryPage } from '@/features/forms'
-import { QueryListPage } from '@/features/queries'
+import { QueryListPage, QueryDetailPage } from '@/features/queries'
+import { SubjectSignaturesPage } from '@/features/signatures'
 import { VisitListPage } from '@/features/visits'
 import { useStudyContext } from './study-context'
 
@@ -105,8 +111,8 @@ function StudyDashboardRoute() {
   return studyId
     ? createElement(StudyDashboardPage, { studyId })
     : createElement('div', { className: 'space-y-4' },
-        createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Dashboard'),
-        createElement('p', { className: 'text-gray-600' }, 'Select a study to view its dashboard.'),
+        createElement('h1', { className: 'text-2xl font-bold text-foreground' }, 'Dashboard'),
+        createElement('p', { className: 'text-muted-foreground' }, 'Select a study to view its dashboard.'),
       )
 }
 
@@ -134,6 +140,12 @@ const studyFormsRoute = createRoute({
   component: StudyFormsRoute,
 })
 
+const studyVersionsRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/studies/$studyId/versions',
+  component: StudyVersionsRoute,
+})
+
 function StudyDetailRoute() {
   const { studyId } = useParams({ from: '/authenticated/app-shell/studies/$studyId' })
   return createElement(StudyDetailPage, { studyId })
@@ -149,6 +161,11 @@ function StudyFormsRoute() {
   return createElement(FormBuilderPage, { studyId })
 }
 
+function StudyVersionsRoute() {
+  const { studyId } = useParams({ from: '/authenticated/app-shell/studies/$studyId/versions' })
+  return createElement(StudyVersioningPage, { studyId })
+}
+
 const sitesRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/sites',
@@ -159,7 +176,7 @@ function StudyScopedSitesRoute() {
   const studyId = useStudyContext((state) => state.selectedStudyId)
   return studyId
     ? createElement(SiteListPage, { studyId })
-    : createElement('p', { className: 'text-gray-600' }, 'Select a study to view sites.')
+    : createElement('p', { className: 'text-muted-foreground' }, 'Select a study to view sites.')
 }
 
 const subjectsRoute = createRoute({
@@ -172,7 +189,7 @@ function StudyScopedSubjectsRoute() {
   const studyId = useStudyContext((state) => state.selectedStudyId)
   return studyId
     ? createElement(SubjectListPage, { studyId })
-    : createElement('p', { className: 'text-gray-600' }, 'Select a study to view subjects.')
+    : createElement('p', { className: 'text-muted-foreground' }, 'Select a study to view subjects.')
 }
 
 const formsRoute = createRoute({
@@ -186,8 +203,8 @@ function StudyScopedFormsRoute() {
   return studyId
     ? createElement(FormBuilderPage, { studyId })
     : createElement('div', { className: 'space-y-4' },
-        createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Forms'),
-        createElement('p', { className: 'text-gray-600' }, 'Select a study to configure its forms.'),
+        createElement('h1', { className: 'text-2xl font-bold text-foreground' }, 'Forms'),
+        createElement('p', { className: 'text-muted-foreground' }, 'Select a study to configure its forms.'),
       )
 }
 
@@ -224,6 +241,17 @@ function SubjectVisitsRoute() {
   return createElement(VisitListPage, { subjectId })
 }
 
+const subjectSignaturesRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/subjects/$subjectId/signatures',
+  component: SubjectSignaturesRoute,
+})
+
+function SubjectSignaturesRoute() {
+  const { subjectId } = useParams({ from: '/authenticated/app-shell/subjects/$subjectId/signatures' })
+  return createElement(SubjectSignaturesPage, { subjectId })
+}
+
 const queriesRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/queries',
@@ -232,7 +260,18 @@ const queriesRoute = createRoute({
 
 function StudyScopedQueriesRoute() {
   const studyId = useStudyContext((state) => state.selectedStudyId)
-  return studyId ? createElement(QueryListPage, { studyId }) : createElement('p', { className: 'text-gray-600' }, 'Select a study to view queries.')
+  return studyId ? createElement(QueryListPage, { studyId }) : createElement('p', { className: 'text-muted-foreground' }, 'Select a study to view queries.')
+}
+
+const queryDetailRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/queries/$queryId',
+  component: QueryDetailRoute,
+})
+
+function QueryDetailRoute() {
+  const { queryId } = useParams({ from: '/authenticated/app-shell/queries/$queryId' })
+  return createElement(QueryDetailPage, { queryId })
 }
 
 const exportsRoute = createRoute({
@@ -245,14 +284,117 @@ function StudyScopedExportsRoute() {
   const studyId = useStudyContext((state) => state.selectedStudyId)
   return studyId
     ? createElement(ExportCenterPage, { studyId })
-    : createElement('p', { className: 'text-gray-600' }, 'Select a study to view exports.')
+    : createElement('p', { className: 'text-muted-foreground' }, 'Select a study to view exports.')
+}
+
+const editChecksRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/edit-checks',
+  component: () => createElement(StudyScopedEditChecksRoute),
+})
+
+function StudyScopedEditChecksRoute() {
+  const studyId = useStudyContext((state) => state.selectedStudyId)
+  return studyId ? createElement(EditCheckBuilderPage, { studyId }) : createElement('p', { className: 'text-muted-foreground' }, 'Select a study to configure edit checks.')
+}
+
+const studyEditChecksRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/studies/$studyId/edit-checks',
+  component: StudyEditChecksRoute,
+})
+
+function StudyEditChecksRoute() {
+  const { studyId } = useParams({ from: '/authenticated/app-shell/studies/$studyId/edit-checks' })
+  return createElement(EditCheckBuilderPage, { studyId })
+}
+
+const dataCleaningRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/data-cleaning',
+  component: () => createElement(StudyScopedDataCleaningRoute),
+})
+
+function StudyScopedDataCleaningRoute() {
+  const studyId = useStudyContext((state) => state.selectedStudyId)
+  return studyId ? createElement(DataCleaningDashboardPage, { studyId }) : createElement('p', { className: 'text-muted-foreground' }, 'Select a study to view data-cleaning metrics.')
+}
+
+const sdvRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/sdv',
+  component: () => createElement(StudyScopedSDVRoute),
+})
+function StudyScopedSDVRoute() { const studyId = useStudyContext((state) => state.selectedStudyId); return studyId ? createElement(SDVWorklistPage, { studyId }) : createElement('p', { className: 'text-muted-foreground' }, 'Select a study to view the SDV worklist.') }
+
+const reviewRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/review',
+  component: () => createElement(StudyScopedReviewRoute),
+})
+function StudyScopedReviewRoute() { const studyId = useStudyContext((state) => state.selectedStudyId); return studyId ? createElement(ReviewWorklistPage, { studyId }) : createElement('p', { className: 'text-muted-foreground' }, 'Select a study to view the review worklist.') }
+
+const aiAssistantRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/ai',
+  component: () => createElement(AIAssistantPage),
+})
+
+const notificationsRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/notifications',
+  component: () => createElement(NotificationsPage),
+})
+
+const ctmsRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/ctms',
+  component: () => createElement(CTMSHomePage),
+})
+
+const ctmsStudyWorkspaceRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'overview' }) })
+const ctmsProfileRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/profile', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'profile' }) })
+const ctmsPlansRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/plans', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'plans' }) })
+const ctmsEnrollmentRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/enrollment', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'enrollment' }) })
+const ctmsMilestonesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/milestones', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'milestones' }) })
+const ctmsTasksRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/tasks', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'tasks' }) })
+const ctmsContactsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/contacts', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'contacts' }) })
+const ctmsMonitoringPlansRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/monitoring-plans', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'monitoring-plans' }) })
+const ctmsMonitoringActivitiesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/monitoring-activities', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'monitoring-activities' }) })
+const ctmsProjectionsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/projections', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'projections' }) })
+const ctmsFailedEventsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/coordination/failed-events', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'failed-events' }) })
+const ctmsConflictsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/coordination/conflicts', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'conflicts' }) })
+const ctmsReportsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/reports/$type', component: () => createElement(CTMSReportRoute) })
+const ctmsExportsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/exports', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'exports' }) })
+const ctmsHealthRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/health', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'health' }) })
+const ctmsSiteWorkspaceRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/sites/$siteId/ctms', component: () => createElement(CTMSSiteWorkspaceRoute) })
+const ctmsSiteActivationRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/sites/$siteId/ctms/activation', component: () => createElement(CTMSSiteActivationRoute) })
+
+function CTMSStudyWorkspaceRoute({ view }: { view: CTMSView }) {
+  const params = useParams({ strict: false })
+  return createElement(CTMSWorkspacePage, { view, studyId: params.studyId })
+}
+
+function CTMSReportRoute() {
+  const params = useParams({ strict: false })
+  return createElement(CTMSWorkspacePage, { view: 'reports', studyId: params.studyId, reportType: params.type })
+}
+
+function CTMSSiteWorkspaceRoute() {
+  const params = useParams({ strict: false })
+  return createElement(CTMSWorkspacePage, { view: 'site-dashboard', siteId: params.siteId })
+}
+
+function CTMSSiteActivationRoute() {
+  const params = useParams({ strict: false })
+  return createElement(CTMSWorkspacePage, { view: 'activation', siteId: params.siteId })
 }
 
 const adminRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/admin',
   component: () => createElement('div', { className: 'space-y-4' },
-    createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Admin'),
+    createElement('h1', { className: 'text-2xl font-bold text-foreground' }, 'Admin'),
     createElement(UserListPage),
   ),
 })
@@ -261,7 +403,7 @@ const auditRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/audit',
   component: () => createElement('div', { className: 'space-y-4' },
-    createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Audit Trail'),
+    createElement('h1', { className: 'text-2xl font-bold text-foreground' }, 'Audit Trail'),
     createElement(AuditViewerPage),
   ),
 })
@@ -279,14 +421,42 @@ const routeTree = rootRoute.addChildren([
       studyDetailRoute,
       studyDashboardRoute,
       studyFormsRoute,
+      studyVersionsRoute,
       sitesRoute,
       subjectsRoute,
       subjectCasebookRoute,
       subjectVisitsRoute,
+      subjectSignaturesRoute,
       formsRoute,
       formEntryRoute,
       queriesRoute,
+      queryDetailRoute,
+      editChecksRoute,
+      studyEditChecksRoute,
+      sdvRoute,
+      reviewRoute,
+      dataCleaningRoute,
+      aiAssistantRoute,
+      notificationsRoute,
       exportsRoute,
+      ctmsRoute,
+      ctmsStudyWorkspaceRoute,
+      ctmsProfileRoute,
+      ctmsPlansRoute,
+      ctmsEnrollmentRoute,
+      ctmsMilestonesRoute,
+      ctmsTasksRoute,
+      ctmsContactsRoute,
+      ctmsMonitoringPlansRoute,
+      ctmsMonitoringActivitiesRoute,
+      ctmsProjectionsRoute,
+      ctmsFailedEventsRoute,
+      ctmsConflictsRoute,
+      ctmsReportsRoute,
+      ctmsExportsRoute,
+      ctmsHealthRoute,
+      ctmsSiteWorkspaceRoute,
+      ctmsSiteActivationRoute,
       adminRoute,
       auditRoute,
     ]),

@@ -4,3 +4,4 @@
  */
 export {}
 export { QueryListPage } from './QueryListPage'
+export { QueryDetailPage } from './QueryDetailPage'

@@ -116,6 +116,7 @@ async def create_query(
         site_id=body.site_id,
         subject_id=body.subject_id,
         query_type=body.query_type,
+        assigned_role=body.assigned_role,
     )
     return QueryResponse.model_validate(query)
 

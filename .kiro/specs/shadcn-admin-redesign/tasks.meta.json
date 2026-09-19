@@ -1,0 +1,413 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Extend semantic tokens and theme variables": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982289
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431996573
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789432162541
+      }
+    ],
+    "1.2 Complete the core UI primitive set": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982379
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789432167132
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789435195219
+      }
+    ],
+    "1.3 Add shared page and state presentation patterns": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982420
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789435204158
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789435456769
+      }
+    ],
+    "1.4 Wire theme resolution into the existing application root": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982477
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789432168825
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789435198499
+      }
+    ],
+    "2.1 Create the typed navigation and route-context adapters": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982598
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789435206549
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789435460377
+      }
+    ],
+    "2.2 Extract the desktop/sidebar presentation": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982629
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789435466331
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789437226641
+      }
+    ],
+    "2.3 Extract the header and account/context controls": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982662
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789437252813
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789437816581
+      }
+    ],
+    "2.4 Add responsive mobile navigation and shell layout": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982689
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789437824623
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789438093889
+      }
+    ],
+    "3.1 Implement search-preserving shell action helpers": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982713
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789438096694
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789438610557
+      }
+    ],
+    "3.2 Migrate dashboard and list/table page composition": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982737
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789438612489
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789443290051
+      }
+    ],
+    "3.3 Migrate detail, casebook, audit, and notification composition": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982766
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789443293503
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789478576665
+      }
+    ],
+    "4.1 Create the shared migrated form and dialog shell": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982797
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789435467973
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789437228403
+      }
+    ],
+    "4.2 Migrate EDC form entry and clinical lifecycle surfaces": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982822
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789443297082
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789478580428
+      }
+    ],
+    "4.3 Migrate auth, export, edit-check, and public page composition": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982871
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789478582711
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789479516457
+      }
+    ],
+    "5.1 Refactor CTMS workspace composition around shared patterns": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431982971
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789478588368
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789479518602
+      }
+    ],
+    "5.2 Migrate CTMS operational tables, forms, reports, and exports": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431983134
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789479523284
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789479810441
+      }
+    ],
+    "5.3 Migrate CTMS ownership, projection, coordination, and remediation surfaces": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431983257
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789479816253
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789480082542
+      }
+    ],
+    "6.1 Migrate remaining EDC feature pages to shared composition": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431983292
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789480087839
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789482383429
+      }
+    ],
+    "6.2 Replace remaining hard-coded visual styles with semantic tokens": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431983332
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789482389080
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789483134914
+      }
+    ],
+    "6.3 Add responsive/accessibility browser coverage": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431983360
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789482394510
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789483139639
+      }
+    ],
+    "7.1 Add route, query, and deep-link regression coverage": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431983409
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789482397251
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789483142852
+      }
+    ],
+    "7.2 Preserve and extend existing API/business-boundary tests": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431983486
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789483145831
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789483729520
+      }
+    ],
+    "7.3 Complete source-level dependency and migration checks": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431983611
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789483928129
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789484059207
+      }
+    ],
+    "7.4 Run the implementation validation matrix": [
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789431983684
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789484066669
+      },
+      {
+        "executionId": "5b8eaaf5-3ab0-496e-9326-ba2d025288df",
+        "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",
+        "timestamp": 1789484605984
+      }
+    ]
+  }
+}

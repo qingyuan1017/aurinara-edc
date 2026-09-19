@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import uuid as uuid_mod
+from collections.abc import Mapping, Sequence
 from typing import Any
 from uuid import UUID
 
@@ -25,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PaginationParams
 from app.api.pagination import paginate
+from app.core.ctms import Module, utc_now
 from app.core.request_context import get_actor, get_request_id
 from app.models.audit import AuditEvent
 from app.schemas.audit import AuditEventExport, AuditSearchFilters
@@ -47,6 +49,16 @@ class AuditService:
         entity_type: str,
         entity_id: UUID,
         action: str,
+        module: Module | str = Module.EDC,
+        actor_kind: str = "user",
+        worker_id: str | None = None,
+        correlation_id: str | None = None,
+        scope: Mapping[str, UUID | str | None] | None = None,
+        changed_fields: Sequence[str] | None = None,
+        source_module: Module | str | None = None,
+        target_module: Module | str | None = None,
+        source_record_id: UUID | None = None,
+        target_record_id: UUID | None = None,
         study_id: UUID | None = None,
         site_id: UUID | None = None,
         subject_id: UUID | None = None,
@@ -111,8 +123,31 @@ class AuditService:
         event = AuditEvent(
             actor_id=actor_id,
             actor_email=actor_email,
+            timestamp=utc_now(),
             entity_type=entity_type,
             entity_id=entity_id,
+            module=module.value if isinstance(module, Module) else str(module),
+            actor_kind=actor_kind,
+            worker_id=worker_id,
+            correlation_id=correlation_id,
+            scope_json={
+                key: (str(value) if isinstance(value, UUID) else value)
+                for key, value in (scope or {}).items()
+                if value is not None
+            } or None,
+            changed_fields=list(changed_fields) if changed_fields is not None else None,
+            source_module=(
+                source_module.value
+                if isinstance(source_module, Module)
+                else str(source_module) if source_module is not None else None
+            ),
+            target_module=(
+                target_module.value
+                if isinstance(target_module, Module)
+                else str(target_module) if target_module is not None else None
+            ),
+            source_record_id=source_record_id,
+            target_record_id=target_record_id,
             action=action,
             study_id=study_id,
             site_id=site_id,
@@ -182,6 +217,10 @@ class AuditService:
             query = query.where(AuditEvent.field_name == filters.field_name)
         if filters.action is not None:
             query = query.where(AuditEvent.action == filters.action)
+        if filters.module is not None:
+            query = query.where(AuditEvent.module == filters.module)
+        if filters.correlation_id is not None:
+            query = query.where(AuditEvent.correlation_id == filters.correlation_id)
         if filters.request_id is not None:
             query = query.where(AuditEvent.request_id == filters.request_id)
         if filters.date_from is not None:
@@ -235,6 +274,10 @@ class AuditService:
             query = query.where(AuditEvent.field_name == filters.field_name)
         if filters.action is not None:
             query = query.where(AuditEvent.action == filters.action)
+        if filters.module is not None:
+            query = query.where(AuditEvent.module == filters.module)
+        if filters.correlation_id is not None:
+            query = query.where(AuditEvent.correlation_id == filters.correlation_id)
         if filters.request_id is not None:
             query = query.where(AuditEvent.request_id == filters.request_id)
         if filters.date_from is not None:
@@ -258,6 +301,18 @@ class AuditService:
                     timestamp=event.timestamp.isoformat(),
                     entity_type=event.entity_type,
                     entity_id=str(event.entity_id),
+                    module=event.module if isinstance(event.module, str) else "EDC",
+                    actor_kind=event.actor_kind if isinstance(event.actor_kind, str) else "user",
+                    worker_id=event.worker_id if isinstance(event.worker_id, str) else None,
+                    correlation_id=(
+                        event.correlation_id
+                        if isinstance(event.correlation_id, str)
+                        else None
+                    ),
+                    scope_json=event.scope_json if isinstance(event.scope_json, dict) else None,
+                    changed_fields=(
+                        event.changed_fields if isinstance(event.changed_fields, list) else None
+                    ),
                     study_id=str(event.study_id) if event.study_id else None,
                     site_id=str(event.site_id) if event.site_id else None,
                     subject_id=str(event.subject_id) if event.subject_id else None,

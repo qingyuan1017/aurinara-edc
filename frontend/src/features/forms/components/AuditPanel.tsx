@@ -1,6 +1,9 @@
 import * as React from 'react'
 import { api } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { EmptyState, ErrorState, LoadingState } from '@/components/patterns'
 
 export interface AuditEntry {
   id: string
@@ -20,10 +23,7 @@ interface AuditPanelProps {
   onClose: () => void
 }
 
-/**
- * Side panel showing the audit trail for a form instance.
- * Displayed as a sheet overlay so primary clinical status remains visible (Requirement 24.5).
- */
+/** Side panel showing the audit trail for a form instance. */
 export function AuditPanel({ formInstanceId, open, onClose }: AuditPanelProps) {
   const [entries, setEntries] = React.useState<AuditEntry[]>([])
   const [loading, setLoading] = React.useState(false)
@@ -33,8 +33,12 @@ export function AuditPanel({ formInstanceId, open, onClose }: AuditPanelProps) {
     if (!open || !formInstanceId) return
 
     let cancelled = false
-    setLoading(true)
-    setError('')
+    const resetTimer = window.setTimeout(() => {
+      if (!cancelled) {
+        setLoading(true)
+        setError('')
+      }
+    }, 0)
 
     api
       .get<{ items: AuditEntry[] }>(`/form-instances/${formInstanceId}/audit`)
@@ -48,125 +52,51 @@ export function AuditPanel({ formInstanceId, open, onClose }: AuditPanelProps) {
         if (!cancelled) setLoading(false)
       })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      window.clearTimeout(resetTimer)
+    }
   }, [open, formInstanceId])
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') onClose()
-  }
 
   if (!open) return null
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex justify-end"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="audit-panel-title"
-      onKeyDown={handleKeyDown}
-    >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/30"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Side panel */}
-      <div className="relative z-10 w-full max-w-md bg-white shadow-xl flex flex-col h-full overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 id="audit-panel-title" className="text-lg font-semibold text-gray-900">
-            Audit Trail
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-gray-100 text-gray-500"
-            aria-label="Close audit panel"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <Sheet open={open} onOpenChange={(next) => { if (!next) onClose() }}>
+      <SheetContent side="right" className="w-full overflow-hidden sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Audit Trail</SheetTitle>
+          <SheetDescription>Immutable activity recorded for this form instance.</SheetDescription>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-2">
+          {loading ? <LoadingState label="audit trail" className="border-0 p-0 shadow-none" /> : null}
+          {error ? <ErrorState message={error} /> : null}
+          {!loading && !error && entries.length === 0 ? <EmptyState title="No audit entries yet." description="Recorded form activity will appear here." /> : null}
+          {!loading && !error ? entries.map((entry) => <AuditEntryCard key={entry.id} entry={entry} />) : null}
         </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {loading && (
-            <div className="text-center text-sm text-gray-500 py-8">Loading audit trail...</div>
-          )}
-
-          {error && (
-            <div className="text-center text-sm text-red-600 py-8">{error}</div>
-          )}
-
-          {!loading && !error && entries.length === 0 && (
-            <div className="text-center text-sm text-gray-500 py-8">No audit entries yet.</div>
-          )}
-
-          {!loading && !error && entries.map((entry) => (
-            <AuditEntryCard key={entry.id} entry={entry} />
-          ))}
-        </div>
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   )
 }
 
 function AuditEntryCard({ entry }: { entry: AuditEntry }) {
-  const ts = new Date(entry.timestamp)
-  const formattedTime = ts.toLocaleString()
+  const formattedTime = new Date(entry.timestamp).toLocaleString()
+  const variant = entry.action === 'create' || entry.action === 'submit' ? 'success' : entry.action === 'reopen' ? 'warning' : entry.action === 'update' ? 'info' : 'secondary'
 
   return (
-    <div className="border rounded-md p-3 text-sm space-y-1.5 bg-gray-50">
-      <div className="flex items-center justify-between">
-        <span className={cn(
-          'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
-          entry.action === 'create' && 'bg-green-100 text-green-800',
-          entry.action === 'update' && 'bg-blue-100 text-blue-800',
-          entry.action === 'submit' && 'bg-purple-100 text-purple-800',
-          entry.action === 'reopen' && 'bg-yellow-100 text-yellow-800',
-          !['create', 'update', 'submit', 'reopen'].includes(entry.action) && 'bg-gray-100 text-gray-800',
-        )}>
-          {entry.action}
-        </span>
-        <span className="text-xs text-gray-500">{formattedTime}</span>
-      </div>
-
-      <div className="text-xs text-gray-600">
-        by <span className="font-medium">{entry.actor_email}</span>
-      </div>
-
-      {entry.field_name && (
-        <div className="text-xs">
-          <span className="text-gray-500">Field:</span>{' '}
-          <span className="font-medium">{entry.field_name}</span>
+    <Card>
+      <CardContent className="space-y-1.5 p-3 text-sm">
+        <div className="flex items-center justify-between gap-2">
+          <Badge variant={variant}>{entry.action}</Badge>
+          <span className="text-xs text-muted-foreground">{formattedTime}</span>
         </div>
-      )}
-
-      {(entry.old_value !== undefined || entry.new_value !== undefined) && (
-        <div className="text-xs space-x-2">
-          {entry.old_value !== undefined && (
-            <span>
-              <span className="text-gray-500">From:</span>{' '}
-              <span className="line-through text-red-700">{entry.old_value || '(empty)'}</span>
-            </span>
-          )}
-          {entry.new_value !== undefined && (
-            <span>
-              <span className="text-gray-500">To:</span>{' '}
-              <span className="text-green-700">{entry.new_value || '(empty)'}</span>
-            </span>
-          )}
-        </div>
-      )}
-
-      {entry.reason && (
-        <div className="text-xs">
-          <span className="text-gray-500">Reason:</span>{' '}
-          <span className="italic">{entry.reason}</span>
-        </div>
-      )}
-    </div>
+        <div className="text-xs text-muted-foreground">by <span className="font-medium text-foreground">{entry.actor_email}</span></div>
+        {entry.field_name ? <div className="text-xs"><span className="text-muted-foreground">Field:</span>{' '}<span className="font-medium">{entry.field_name}</span></div> : null}
+        {(entry.old_value !== undefined || entry.new_value !== undefined) ? <div className="space-x-2 text-xs">
+          {entry.old_value !== undefined ? <span><span className="text-muted-foreground">From:</span>{' '}<span className="line-through text-destructive">{entry.old_value || '(empty)'}</span></span> : null}
+          {entry.new_value !== undefined ? <span><span className="text-muted-foreground">To:</span>{' '}<span className="text-success">{entry.new_value || '(empty)'}</span></span> : null}
+        </div> : null}
+        {entry.reason ? <div className="text-xs"><span className="text-muted-foreground">Reason:</span>{' '}<span className="italic">{entry.reason}</span></div> : null}
+      </CardContent>
+    </Card>
   )
 }

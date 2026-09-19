@@ -11,40 +11,28 @@ import {
   type ColumnFiltersState,
   type PaginationState,
 } from '@tanstack/react-table'
-import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface ClinicalDataTableProps<TData> {
-  /** Column definitions for TanStack Table */
+  // TanStack's column definitions use an invariant cell-value type; the table renders heterogeneous columns.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   columns: ColumnDef<TData, any>[]
-  /** Row data */
   data: TData[]
-  /** Total row count (for server-side pagination) */
   totalRows?: number
-  /** Page size options */
   pageSizeOptions?: number[]
-  /** Whether pagination is server-controlled */
   manualPagination?: boolean
-  /** Callback for server-side pagination changes */
   onPaginationChange?: (pagination: PaginationState) => void
-  /** Initial page size */
   initialPageSize?: number
-  /** Optional global filter value */
   globalFilter?: string
-  /** Callback when global filter changes */
   onGlobalFilterChange?: (value: string) => void
-  /** Optional className for the wrapper */
   className?: string
-  /** Loading state */
   isLoading?: boolean
-  /** Empty state message */
   emptyMessage?: string
 }
 
-/**
- * ClinicalDataTable — Reusable TanStack Table wrapper for clinical data listings.
- * Provides sorting, column filtering, and pagination out of the box.
- */
+/** Reusable TanStack table wrapper for clinical listings and server-side pagination. */
 export function ClinicalDataTable<TData>({
   columns,
   data,
@@ -61,24 +49,13 @@ export function ClinicalDataTable<TData>({
 }: ClinicalDataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: initialPageSize,
-  })
-
-  const pageCount = manualPagination && totalRows != null
-    ? Math.ceil(totalRows / pagination.pageSize)
-    : undefined
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: initialPageSize })
+  const pageCount = manualPagination && totalRows != null ? Math.ceil(totalRows / pagination.pageSize) : undefined
 
   const table = useReactTable({
     data,
     columns,
-    state: {
-      sorting,
-      columnFilters,
-      pagination,
-      globalFilter,
-    },
+    state: { sorting, columnFilters, pagination, globalFilter },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onPaginationChange: (updater) => {
@@ -96,108 +73,46 @@ export function ClinicalDataTable<TData>({
   })
 
   return (
-    <div className={cn('space-y-4', className)}>
-      {/* Table */}
-      <div className="rounded-md border overflow-x-auto">
-        <table className="w-full text-sm" role="table">
-          <thead className="bg-gray-50 border-b">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className={cn(
-                      'px-4 py-3 text-left font-medium text-gray-700',
-                      header.column.getCanSort() && 'cursor-pointer select-none hover:bg-gray-100',
-                    )}
-                    onClick={header.column.getToggleSortingHandler()}
-                    aria-sort={
-                      header.column.getIsSorted() === 'asc'
-                        ? 'ascending'
-                        : header.column.getIsSorted() === 'desc'
-                          ? 'descending'
-                          : 'none'
-                    }
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                    {header.column.getIsSorted() === 'asc' && ' ↑'}
-                    {header.column.getIsSorted() === 'desc' && ' ↓'}
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {isLoading ? (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-gray-500">
-                  Loading…
-                </td>
-              </tr>
-            ) : table.getRowModel().rows.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-gray-500">
-                  {emptyMessage}
-                </td>
-              </tr>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50">
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 text-gray-900">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+    <div className={className ?? 'space-y-4'}>
+      <Table>
+        <caption className="sr-only">Clinical data</caption>
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <TableHead
+                  key={header.id}
+                  className={header.column.getCanSort() ? 'cursor-pointer select-none hover:bg-muted' : undefined}
+                  onClick={header.column.getToggleSortingHandler()}
+                  aria-sort={header.column.getIsSorted() === 'asc' ? 'ascending' : header.column.getIsSorted() === 'desc' ? 'descending' : 'none'}
+                >
+                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                  {header.column.getIsSorted() === 'asc' && ' ↑'}
+                  {header.column.getIsSorted() === 'desc' && ' ↓'}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {isLoading ? <TableRow><TableCell colSpan={columns.length} className="py-8 text-center text-muted-foreground">Loading…</TableCell></TableRow> : null}
+          {!isLoading && table.getRowModel().rows.length === 0 ? <TableRow><TableCell colSpan={columns.length} className="py-8 text-center text-muted-foreground">{emptyMessage}</TableCell></TableRow> : null}
+          {!isLoading ? table.getRowModel().rows.map((row) => <TableRow key={row.id}>{row.getVisibleCells().map((cell) => <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}</TableRow>) : null}
+        </TableBody>
+      </Table>
 
-      {/* Pagination Controls */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>Rows per page:</span>
-          <select
-            className="rounded border px-2 py-1 text-sm"
-            value={pagination.pageSize}
-            onChange={(e) => {
-              table.setPageSize(Number(e.target.value))
-            }}
-            aria-label="Rows per page"
-          >
-            {pageSizeOptions.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
+          <Select value={String(pagination.pageSize)} onValueChange={(value) => table.setPageSize(Number(value))}>
+            <SelectTrigger aria-label="Rows per page" className="h-9 w-20"><SelectValue /></SelectTrigger>
+            <SelectContent>{pageSizeOptions.map((size) => <SelectItem key={size} value={String(size)}>{size}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
-
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">
-            Page {table.getState().pagination.pageIndex + 1} of{' '}
-            {table.getPageCount() || 1}
-          </span>
-          <button
-            className="rounded border px-3 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-            aria-label="Previous page"
-          >
-            Previous
-          </button>
-          <button
-            className="rounded border px-3 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-            aria-label="Next page"
-          >
-            Next
-          </button>
+          <span className="text-sm text-muted-foreground">Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}</span>
+          <Button type="button" variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} aria-label="Previous page">Previous</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} aria-label="Next page">Next</Button>
         </div>
       </div>
     </div>

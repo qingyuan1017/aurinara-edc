@@ -26,6 +26,7 @@ from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.models.query import Query, QueryMessage, QueryStatus, QueryType
 from app.schemas.base import PaginatedResponse
 from app.schemas.query import QueryFilters
+from app.services.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ class QueryService:
         site_id: UUID | None = None,
         subject_id: UUID | None = None,
         query_type: str = QueryType.manual,
+        assigned_role: str | None = None,
     ) -> Query:
         """Create a new Query with status Open, linked to exactly one affected object.
 
@@ -69,6 +71,7 @@ class QueryService:
             site_id: Optional site context.
             subject_id: Optional subject context.
             query_type: Origin of the query (manual or system).
+            assigned_role: Optional role whose in-scope users are notified.
 
         Returns:
             The created Query instance with status Open.
@@ -81,6 +84,7 @@ class QueryService:
             target_id=target_id,
             text=text,
             query_type=query_type,
+            assigned_role=assigned_role,
             status=QueryStatus.open,
             created_by=actor_id,
         )
@@ -99,6 +103,8 @@ class QueryService:
             actor_id=actor_id,
             new_value=f"target_type={target_type}, target_id={target_id}, status=Open",
         )
+
+        await notification_service.on_query_assigned(session, query)
 
         logger.info(
             "Query created: id=%s study_id=%s target=%s:%s actor=%s",

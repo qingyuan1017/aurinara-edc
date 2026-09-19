@@ -105,6 +105,12 @@ class Query(Base):
         String(10), nullable=False, default=QueryType.manual
     )
 
+    # Optional notification assignment target (Requirement 28.1)
+    assigned_role: Mapped[str | None] = mapped_column(
+        String(100), nullable=True,
+        comment="Role whose in-scope active users receive assignment notifications",
+    )
+
     # Lifecycle status
     status: Mapped[QueryStatus] = mapped_column(
         String(20), nullable=False, default=QueryStatus.open

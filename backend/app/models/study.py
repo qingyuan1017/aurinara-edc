@@ -139,6 +139,12 @@ class StudyVersion(Base):
 
     # Amendment info (Phase 3)
     amendment_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    amended_from_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("study_versions.id", ondelete="RESTRICT"),
+        nullable=True,
+        comment="Published source version for an amendment",
+    )
 
     # Publication
     published_at: Mapped[datetime | None] = mapped_column(
@@ -155,11 +161,23 @@ class StudyVersion(Base):
 
     # Relationships
     study: Mapped["Study"] = relationship("Study", back_populates="versions")
+    amended_from: Mapped["StudyVersion | None"] = relationship(
+        "StudyVersion",
+        remote_side="StudyVersion.id",
+        foreign_keys=[amended_from_version_id],
+        back_populates="amendments",
+    )
+    amendments: Mapped[list["StudyVersion"]] = relationship(
+        "StudyVersion",
+        foreign_keys=[amended_from_version_id],
+        back_populates="amended_from",
+    )
 
     __table_args__ = (
         UniqueConstraint("study_id", "version_number", name="uq_study_version_number"),
         Index("ix_study_versions_study_id", "study_id"),
         Index("ix_study_versions_status", "status"),
+        Index("ix_study_versions_amended_from_version_id", "amended_from_version_id"),
     )
 
     def __repr__(self) -> str:

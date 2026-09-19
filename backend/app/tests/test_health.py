@@ -52,7 +52,9 @@ async def test_readiness_endpoint_unhealthy(client):
     assert response.status_code == 503
     data = response.json()
     assert data["status"] == "not_ready"
-    assert "DB down" in data["detail"]
+    assert data["error"]["category"] == "ConnectionError"
+    assert data["error"]["message"] == "dependency unavailable"
+    assert "DB down" not in str(data)
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/*
+ * The @theme names are the stable Tailwind-facing token names used by the
+ * existing application. Runtime values live in :root/.dark below so a theme
+ * change only changes presentation and never application state.
+ */
 @theme {
   --color-background: hsl(0 0% 100%);
   --color-foreground: hsl(222.2 84% 4.9%);
@@ -20,16 +25,212 @@
   --color-border: hsl(214.3 31.8% 91.4%);
   --color-input: hsl(214.3 31.8% 91.4%);
   --color-ring: hsl(222.2 84% 4.9%);
+
+  --color-sidebar: hsl(0 0% 98%);
+  --color-sidebar-foreground: hsl(222.2 47.4% 11.2%);
+  --color-sidebar-primary: hsl(222.2 47.4% 11.2%);
+  --color-sidebar-primary-foreground: hsl(210 40% 98%);
+  --color-sidebar-accent: hsl(210 40% 96.1%);
+  --color-sidebar-accent-foreground: hsl(222.2 47.4% 11.2%);
+  --color-sidebar-border: hsl(214.3 31.8% 91.4%);
+  --color-sidebar-ring: hsl(222.2 84% 4.9%);
+  --color-elevated: hsl(0 0% 100%);
+  --color-elevated-foreground: hsl(222.2 84% 4.9%);
+  --color-success: hsl(142.1 76.2% 36.3%);
+  --color-success-foreground: hsl(0 0% 100%);
+  --color-warning: hsl(38 92% 50%);
+  --color-warning-foreground: hsl(24 10% 10%);
+  --color-info: hsl(199 89% 48%);
+  --color-info-foreground: hsl(0 0% 100%);
+  --color-focus: hsl(221.2 83.2% 53.3%);
+
   --radius: 0.5rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --shadow-xs: 0 1px 2px 0 hsl(222.2 47.4% 11.2% / 0.04);
+  --shadow-sm: 0 1px 2px 0 hsl(222.2 47.4% 11.2% / 0.06), 0 1px 3px 0 hsl(222.2 47.4% 11.2% / 0.04);
+  --shadow-md: 0 4px 6px -1px hsl(222.2 47.4% 11.2% / 0.08), 0 2px 4px -2px hsl(222.2 47.4% 11.2% / 0.08);
+  --shadow-lg: 0 10px 15px -3px hsl(222.2 47.4% 11.2% / 0.08), 0 4px 6px -4px hsl(222.2 47.4% 11.2% / 0.08);
+  --shadow-xl: 0 20px 25px -5px hsl(222.2 47.4% 11.2% / 0.1), 0 8px 10px -6px hsl(222.2 47.4% 11.2% / 0.1);
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --font-display: ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+
+  /* Light theme surfaces and content hierarchy. */
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(222.2 84% 4.9%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(222.2 84% 4.9%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(222.2 84% 4.9%);
+  --color-primary: hsl(222.2 47.4% 11.2%);
+  --color-primary-foreground: hsl(210 40% 98%);
+  --color-secondary: hsl(210 40% 96.1%);
+  --color-secondary-foreground: hsl(222.2 47.4% 11.2%);
+  --color-muted: hsl(210 40% 96.1%);
+  --color-muted-foreground: hsl(215.4 16.3% 46.9%);
+  --color-accent: hsl(210 40% 96.1%);
+  --color-accent-foreground: hsl(222.2 47.4% 11.2%);
+  --color-destructive: hsl(0 84.2% 60.2%);
+  --color-destructive-foreground: hsl(210 40% 98%);
+  --color-border: hsl(214.3 31.8% 91.4%);
+  --color-input: hsl(214.3 31.8% 91.4%);
+  --color-ring: hsl(222.2 84% 4.9%);
+
+  --color-sidebar: hsl(0 0% 98%);
+  --color-sidebar-foreground: hsl(222.2 47.4% 11.2%);
+  --color-sidebar-primary: hsl(222.2 47.4% 11.2%);
+  --color-sidebar-primary-foreground: hsl(210 40% 98%);
+  --color-sidebar-accent: hsl(210 40% 96.1%);
+  --color-sidebar-accent-foreground: hsl(222.2 47.4% 11.2%);
+  --color-sidebar-border: hsl(214.3 31.8% 91.4%);
+  --color-sidebar-ring: hsl(222.2 84% 4.9%);
+  --color-elevated: hsl(0 0% 100%);
+  --color-elevated-foreground: hsl(222.2 84% 4.9%);
+  --color-success: hsl(142.1 76.2% 36.3%);
+  --color-success-foreground: hsl(0 0% 100%);
+  --color-warning: hsl(38 92% 50%);
+  --color-warning-foreground: hsl(24 10% 10%);
+  --color-info: hsl(199 89% 48%);
+  --color-info-foreground: hsl(0 0% 100%);
+  --color-focus: hsl(221.2 83.2% 53.3%);
+
+  --radius: 0.5rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --shadow-xs: 0 1px 2px 0 hsl(222.2 47.4% 11.2% / 0.04);
+  --shadow-sm: 0 1px 2px 0 hsl(222.2 47.4% 11.2% / 0.06), 0 1px 3px 0 hsl(222.2 47.4% 11.2% / 0.04);
+  --shadow-md: 0 4px 6px -1px hsl(222.2 47.4% 11.2% / 0.08), 0 2px 4px -2px hsl(222.2 47.4% 11.2% / 0.08);
+  --shadow-lg: 0 10px 15px -3px hsl(222.2 47.4% 11.2% / 0.08), 0 4px 6px -4px hsl(222.2 47.4% 11.2% / 0.08);
+  --shadow-xl: 0 20px 25px -5px hsl(222.2 47.4% 11.2% / 0.1), 0 8px 10px -6px hsl(222.2 47.4% 11.2% / 0.1);
+
+  /* Typography, layout, and motion are presentation-only tokens. */
+  --text-display: 2.25rem;
+  --text-display-line-height: 2.5rem;
+  --text-heading: 1.5rem;
+  --text-heading-line-height: 2rem;
+  --text-body: 0.875rem;
+  --text-body-line-height: 1.25rem;
+  --text-label: 0.75rem;
+  --text-label-line-height: 1rem;
+  --text-caption: 0.6875rem;
+  --text-caption-line-height: 0.875rem;
+  --font-weight-display: 700;
+  --font-weight-heading: 600;
+  --font-weight-label: 500;
+  --sidebar-width: 16rem;
+  --sidebar-width-collapsed: 4rem;
+  --header-height: 4rem;
+  --content-max-width: 90rem;
+  --content-gutter: 1rem;
+  --section-gap: 1.5rem;
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --duration-slow: 240ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-background: hsl(222.2 84% 4.9%);
+  --color-foreground: hsl(210 40% 98%);
+  --color-card: hsl(222.2 47.4% 11.2%);
+  --color-card-foreground: hsl(210 40% 98%);
+  --color-popover: hsl(222.2 47.4% 11.2%);
+  --color-popover-foreground: hsl(210 40% 98%);
+  --color-primary: hsl(210 40% 98%);
+  --color-primary-foreground: hsl(222.2 47.4% 11.2%);
+  --color-secondary: hsl(217.2 32.6% 17.5%);
+  --color-secondary-foreground: hsl(210 40% 98%);
+  --color-muted: hsl(217.2 32.6% 17.5%);
+  --color-muted-foreground: hsl(215 20.2% 65.1%);
+  --color-accent: hsl(217.2 32.6% 17.5%);
+  --color-accent-foreground: hsl(210 40% 98%);
+  --color-destructive: hsl(0 62.8% 30.6%);
+  --color-destructive-foreground: hsl(210 40% 98%);
+  --color-border: hsl(217.2 32.6% 17.5%);
+  --color-input: hsl(217.2 32.6% 17.5%);
+  --color-ring: hsl(212.7 26.8% 83.9%);
+
+  --color-sidebar: hsl(222.2 47.4% 11.2%);
+  --color-sidebar-foreground: hsl(210 40% 98%);
+  --color-sidebar-primary: hsl(210 40% 98%);
+  --color-sidebar-primary-foreground: hsl(222.2 47.4% 11.2%);
+  --color-sidebar-accent: hsl(217.2 32.6% 17.5%);
+  --color-sidebar-accent-foreground: hsl(210 40% 98%);
+  --color-sidebar-border: hsl(217.2 32.6% 17.5%);
+  --color-sidebar-ring: hsl(212.7 26.8% 83.9%);
+  --color-elevated: hsl(217.2 32.6% 17.5%);
+  --color-elevated-foreground: hsl(210 40% 98%);
+  --color-success: hsl(142.1 70.6% 45.3%);
+  --color-success-foreground: hsl(144.9 80.4% 10%);
+  --color-warning: hsl(47.9 95.8% 53.1%);
+  --color-warning-foreground: hsl(24 10% 10%);
+  --color-info: hsl(198.6 88.7% 48.4%);
+  --color-info-foreground: hsl(204 80.2% 15.9%);
+  --color-focus: hsl(212.7 96.4% 78.4%);
+
+  --shadow-xs: 0 1px 2px 0 hsl(0 0% 0% / 0.2);
+  --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.24), 0 1px 3px 0 hsl(0 0% 0% / 0.18);
+  --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.28), 0 2px 4px -2px hsl(0 0% 0% / 0.2);
+  --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.32), 0 4px 6px -4px hsl(0 0% 0% / 0.24);
+  --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.36), 0 8px 10px -6px hsl(0 0% 0% / 0.28);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --content-gutter: 1.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+  }
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
   }
+
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
     font-feature-settings: "rlig" 1, "calt" 1;
+    transition: background-color var(--duration-normal) var(--ease-standard), color var(--duration-normal) var(--ease-standard);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

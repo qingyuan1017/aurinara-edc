@@ -22,7 +22,7 @@ export function StudySelector() {
       aria-label="Select study"
       value={selectedStudyId ?? ''}
       onChange={(e) => setStudy(e.target.value || null)}
-      className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+      className="h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <option value="">All Studies</option>
       {data?.items.map((study) => (

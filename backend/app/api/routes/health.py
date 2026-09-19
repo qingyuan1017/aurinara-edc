@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 from app.core.database import engine
 from app.core.metrics import get_metrics
+from app.core.observability import sanitize_error
 
 router = APIRouter(tags=["health"])
 
@@ -46,7 +47,7 @@ async def readiness() -> dict:
     except Exception as exc:
         return JSONResponse(
             status_code=503,
-            content={"status": "not_ready", "detail": str(exc)},
+            content={"status": "not_ready", "error": sanitize_error(exc)},
         )
 
 

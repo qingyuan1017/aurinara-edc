@@ -6,6 +6,11 @@ import { useAuthStore } from '@/lib/auth'
 import { useNavigate } from '@tanstack/react-router'
 import type { AxiosError } from 'axios'
 import type { ApiError } from '@/lib/api'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { FormField } from '@/components/patterns/FormField'
+import { AuthPageLayout } from './AuthPageLayout'
 
 const loginSchema = z.object({
   email: z.email('Please enter a valid email address'),
@@ -48,92 +53,68 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-md space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Sign In</h1>
-          <p className="text-sm text-gray-500 mt-1">Clinical EDC System</p>
-        </div>
+    <AuthPageLayout
+      title="Sign In"
+      description="Clinical EDC System"
+      footer={
+        <a href="/forgot-password" className="text-sm text-primary underline-offset-4 hover:underline">
+          Forgot your password?
+        </a>
+      }
+    >
+      {error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        {error && (
-          <div
-            role="alert"
-            className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md"
-          >
-            {error}
-          </div>
-        )}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          label="Email"
+          id="email"
+          name="email"
+          error={errors.email}
+          required
+        >
+          <Input
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            {...register('email')}
+          />
+        </FormField>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              {...register('email')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="you@example.com"
+        <FormField
+          label="Password"
+          id="password"
+          name="password"
+          error={errors.password}
+          required
+        >
+          <Input
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            {...register('password')}
+          />
+        </FormField>
+
+        {showMfa ? (
+          <FormField label="MFA Code" id="mfa_code" name="mfa_code">
+            <Input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="123456"
+              {...register('mfa_code')}
             />
-            {errors.email && (
-              <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-            )}
-          </div>
+          </FormField>
+        ) : null}
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              {...register('password')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="••••••••"
-            />
-            {errors.password && (
-              <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
-            )}
-          </div>
-
-          {showMfa && (
-            <div>
-              <label htmlFor="mfa_code" className="block text-sm font-medium text-gray-700 mb-1">
-                MFA Code
-              </label>
-              <input
-                id="mfa_code"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                {...register('mfa_code')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="123456"
-              />
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? 'Signing in…' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="text-center">
-          <a
-            href="/forgot-password"
-            className="text-sm text-blue-600 hover:underline"
-          >
-            Forgot your password?
-          </a>
-        </div>
-      </div>
-    </div>
+        <Button type="submit" className="w-full" pending={isLoading} loadingText="Signing in…">
+          Sign In
+        </Button>
+      </form>
+    </AuthPageLayout>
   )
 }

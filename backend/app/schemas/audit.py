@@ -31,6 +31,8 @@ class AuditSearchFilters(BaseModel):
     date_to: datetime | None = None
     request_id: UUID | None = None
     action: str | None = None
+    module: str | None = None
+    correlation_id: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -48,6 +50,12 @@ class AuditEventResponse(BaseSchema):
     site_id: UUID | None = None
     subject_id: UUID | None = None
     action: str
+    module: str = "EDC"
+    actor_kind: str = "user"
+    worker_id: str | None = None
+    correlation_id: str | None = None
+    scope_json: dict | None = None
+    changed_fields: list[str] | None = None
     field_name: str | None = None
     old_value: str | None = None
     new_value: str | None = None
@@ -66,6 +74,12 @@ class AuditEventExport(BaseModel):
     timestamp: str = Field(description="ISO-8601 UTC timestamp")
     entity_type: str
     entity_id: str
+    module: str = "EDC"
+    actor_kind: str = "user"
+    worker_id: str | None = None
+    correlation_id: str | None = None
+    scope_json: dict | None = None
+    changed_fields: list[str] | None = None
     study_id: str | None = None
     site_id: str | None = None
     subject_id: str | None = None

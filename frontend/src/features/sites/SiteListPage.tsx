@@ -6,6 +6,12 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DataTableShell, PageContainer, PageHeader, PageToolbar, StatusBadge } from '@/components/patterns'
 import { api } from '@/lib/api'
 import type { PaginatedResponse } from '@/lib/api'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
@@ -35,11 +41,7 @@ const columns = [
   columnHelper.accessor('country', { header: 'Country' }),
   columnHelper.accessor('status', {
     header: 'Status',
-    cell: (info) => (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-        {info.getValue()}
-      </span>
-    ),
+    cell: (info) => <StatusBadge status={info.getValue()} label="Site status" />,
   }),
 ]
 
@@ -56,7 +58,7 @@ export function SiteListPage({ studyId }: { studyId: string }) {
   })
   const [error, setError] = useState<string | null>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['sites', studyId, page],
     queryFn: async () => {
       const { data } = await api.get<PaginatedResponse<Site>>(`/studies/${studyId}/sites`, {
@@ -90,173 +92,80 @@ export function SiteListPage({ studyId }: { studyId: string }) {
   })
 
   const totalPages = data ? Math.ceil(data.total / data.page_size) : 0
+  const hasRows = Boolean(data && data.items.length > 0)
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Sites</h1>
-        {canManage && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
-          >
-            Create Site
-          </button>
-        )}
-      </div>
+    <PageContainer wide>
+      <PageHeader
+        title="Sites"
+        description="Review sites for the selected study and preserve server-provided ordering."
+        actions={canManage ? <Button type="button" onClick={() => setShowModal(true)}>Create Site</Button> : null}
+      />
 
-      {isLoading ? (
-        <p className="text-gray-500">Loading…</p>
-      ) : (
-        <>
-          <div className="overflow-x-auto border rounded-lg">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </th>
-                    ))}
-                  </tr>
+      <PageToolbar label="Site list controls">
+        <span className="text-sm text-muted-foreground">
+          {data ? `${data.total} total sites · server ordered` : `Sites for study ${studyId}`}
+        </span>
+      </PageToolbar>
+
+      <DataTableShell
+        label="Sites"
+        loading={isLoading}
+        error={isError}
+        errorMessage="Failed to load sites."
+        onRetry={() => void refetch()}
+        empty={!isLoading && !isError && Boolean(data) && !hasRows}
+        emptyTitle="No sites found."
+        emptyDescription="No sites are available for the selected study and permissions."
+      >
+        <Table>
+          <caption className="sr-only">Sites</caption>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
                 ))}
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-gray-50">
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3 text-sm text-gray-900">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </DataTableShell>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                Page {page} of {totalPages} ({data?.total ?? 0} total)
-              </p>
-              <div className="space-x-2">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="px-3 py-1 text-sm border rounded disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="px-3 py-1 text-sm border rounded disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Create Site Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Create Site</h2>
-            {error && (
-              <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>
-            )}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                createMutation.mutate(formData)
-              }}
-              className="space-y-3"
-            >
-              <div>
-                <label htmlFor="site-number" className="block text-sm font-medium text-gray-700">
-                  Site Number
-                </label>
-                <input
-                  id="site-number"
-                  type="text"
-                  value={formData.site_number}
-                  onChange={(e) => setFormData((d) => ({ ...d, site_number: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="site-name" className="block text-sm font-medium text-gray-700">
-                  Name
-                </label>
-                <input
-                  id="site-name"
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData((d) => ({ ...d, name: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="site-pi" className="block text-sm font-medium text-gray-700">
-                  Principal Investigator
-                </label>
-                <input
-                  id="site-pi"
-                  type="text"
-                  value={formData.principal_investigator}
-                  onChange={(e) =>
-                    setFormData((d) => ({ ...d, principal_investigator: e.target.value }))
-                  }
-                  className="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="site-country" className="block text-sm font-medium text-gray-700">
-                  Country
-                </label>
-                <input
-                  id="site-country"
-                  type="text"
-                  value={formData.country}
-                  onChange={(e) => setFormData((d) => ({ ...d, country: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div className="flex justify-end space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowModal(false)
-                    setError(null)
-                  }}
-                  className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {createMutation.isPending ? 'Creating…' : 'Create'}
-                </button>
-              </div>
-            </form>
+      {totalPages > 1 ? (
+        <PageToolbar label="Site pagination" className="mt-4 mb-0">
+          <p className="text-sm text-muted-foreground">Page {page} of {totalPages} ({data?.total ?? 0} total)</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</Button>
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next</Button>
           </div>
-        </div>
-      )}
-    </div>
+        </PageToolbar>
+      ) : null}
+
+      <Dialog open={showModal} onOpenChange={(open) => { setShowModal(open); if (!open) setError(null) }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create Site</DialogTitle><DialogDescription>Add a site to the selected study.</DialogDescription></DialogHeader>
+          {error ? <p className="rounded border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive" role="alert">{error}</p> : null}
+          <form onSubmit={(event) => { event.preventDefault(); createMutation.mutate(formData) }} className="space-y-3">
+            <div className="space-y-1.5"><Label htmlFor="site-number">Site Number</Label><Input id="site-number" type="text" value={formData.site_number} onChange={(event) => setFormData((current) => ({ ...current, site_number: event.target.value }))} required /></div>
+            <div className="space-y-1.5"><Label htmlFor="site-name">Name</Label><Input id="site-name" type="text" value={formData.name} onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))} required /></div>
+            <div className="space-y-1.5"><Label htmlFor="site-pi">Principal Investigator</Label><Input id="site-pi" type="text" value={formData.principal_investigator} onChange={(event) => setFormData((current) => ({ ...current, principal_investigator: event.target.value }))} required /></div>
+            <div className="space-y-1.5"><Label htmlFor="site-country">Country</Label><Input id="site-country" type="text" value={formData.country} onChange={(event) => setFormData((current) => ({ ...current, country: event.target.value }))} required /></div>
+            <DialogFooter><Button type="button" variant="outline" onClick={() => { setShowModal(false); setError(null) }}>Cancel</Button><Button type="submit" pending={createMutation.isPending} loadingText="Creating…">Create</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </PageContainer>
   )
 }

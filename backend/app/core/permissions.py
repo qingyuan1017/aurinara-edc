@@ -62,30 +62,39 @@ PERMISSION_CODES: set[str] = {
     "audit.read",
     "data.export",
     "file.upload",
+    # CTMS operational access (shared EDC/CTMS authorization namespace)
+    "ctms.operational_data_read",
+    "ctms.operational_study_management",
+    "ctms.operational_site_management",
+    "ctms.monitoring_activity_management",
+    "ctms.enrollment_management",
+    "ctms.conflict_management",
+    "ctms.coordination_replay",
 }
 
 # ---------------------------------------------------------------------------
 # Role definitions: name -> scope + permission codes
 # ---------------------------------------------------------------------------
 
+CTMS_PERMISSION_CODES: frozenset[str] = frozenset(
+    {
+        "ctms.operational_data_read",
+        "ctms.operational_study_management",
+        "ctms.operational_site_management",
+        "ctms.monitoring_activity_management",
+        "ctms.enrollment_management",
+        "ctms.conflict_management",
+        "ctms.coordination_replay",
+    }
+)
+
 ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
     "System Administrator": {
         "scope": "system",
-        "permissions": [
-            "user.list",
-            "user.create",
-            "user.update",
-            "user.deactivate",
-            "user.assign",
-            "role.list",
-            "role.create",
-            "role.update",
-            "study.create",
-            "study.configure",
-            "site.manage",
-            "audit.read",
-            "data.export",
-        ],
+        # System administrators have every capability at system scope.
+        # Keep this derived from PERMISSION_CODES so newly added permissions
+        # are included automatically when the seeder is rerun.
+        "permissions": sorted(PERMISSION_CODES),
     },
     "Study Administrator": {
         "scope": "study",
@@ -155,14 +164,25 @@ ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
             "audit.read",
         ],
     },
-    "Sponsor Viewer": {
+    "CTMS_Admin": {
+        "scope": "system",
+        "permissions": sorted(CTMS_PERMISSION_CODES),
+    },
+    "CTMS_Operations_User": {
         "scope": "study",
         "permissions": [
-            # Read-only per Requirement 3.6
-            "subject.read",
-            "form.read",
-            "audit.read",
+            "ctms.operational_data_read",
+            "ctms.operational_study_management",
+            "ctms.operational_site_management",
+            "ctms.monitoring_activity_management",
+            "ctms.enrollment_management",
         ],
+    },
+    "CTMS_Viewer": {
+        "scope": "study",
+        # Viewer is intentionally read-only: no CTMS mutation or remediation
+        # permission is included here.
+        "permissions": ["ctms.operational_data_read"],
     },
 }
 
@@ -200,27 +220,39 @@ async def seed_roles_and_permissions(session: AsyncSession) -> None:
     }
 
     # --- Seed roles and role-permission associations ---
-    existing_roles_result = await session.execute(select(Role.name))
-    existing_role_names: set[str] = set(existing_roles_result.scalars().all())
+    existing_roles_result = await session.execute(select(Role))
+    existing_roles: dict[str, Role] = {
+        role.name: role for role in existing_roles_result.scalars().all()
+    }
 
     for role_name, definition in ROLE_DEFINITIONS.items():
-        if role_name in existing_role_names:
-            continue
-
-        role = Role(
-            name=role_name,
-            scope_level=definition["scope"],  # type: ignore[arg-type]
-            description=f"Built-in {role_name} role",
-            is_system=True,
-        )
-        session.add(role)
-        await session.flush()
+        role = existing_roles.get(role_name)
+        if role is None:
+            role = Role(
+                name=role_name,
+                scope_level=definition["scope"],  # type: ignore[arg-type]
+                description=f"Built-in {role_name} role",
+                is_system=True,
+            )
+            session.add(role)
+            await session.flush()
 
         # Create role-permission associations
         permission_codes: list[str] = definition["permissions"]  # type: ignore[assignment]
+        existing_permission_ids = set(
+            (
+                await session.execute(
+                    select(RolePermission.permission_id).where(
+                        RolePermission.role_id == role.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
         for perm_code in permission_codes:
             perm = perm_by_code.get(perm_code)
-            if perm is not None:
+            if perm is not None and perm.id not in existing_permission_ids:
                 session.add(
                     RolePermission(role_id=role.id, permission_id=perm.id)
                 )

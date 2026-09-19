@@ -11,7 +11,8 @@ from uuid import UUID
 
 import pytest
 
-from app.core.exceptions import AuthorizationError
+from app.core.exceptions import AuthenticationError, AuthorizationError
+from app.core.permissions import CTMS_PERMISSION_CODES, ROLE_DEFINITIONS
 from app.schemas.permission import AuthorizationScope, PermissionGrant
 from app.services.permission_service import PermissionService
 
@@ -66,6 +67,7 @@ class StubUser:
     user_roles: list[StubUserRole] = field(default_factory=list)
     id: UUID = field(default_factory=uuid.uuid4)
     email: str = "test@example.com"
+    status: str = "active"
 
 
 @dataclass
@@ -258,6 +260,26 @@ class TestRequire:
         user = StubUser(user_roles=[])
         with pytest.raises(AuthorizationError):
             svc.require(user, "study.create")
+
+    def test_inactive_user_is_rejected_before_scope_resolution(self, svc: PermissionService):
+        """Deactivation invalidates new actions even when role grants remain attached."""
+        user = _make_system_admin()
+        user.status = "inactive"
+        with pytest.raises(AuthenticationError, match="Account is inactive"):
+            svc.require(user, "study.create")
+
+    def test_study_scope_filters_sites_when_parent_studies_are_known(self, svc: PermissionService):
+        """Study grants include mapped sites while site grants stay exact."""
+        user = _make_study_admin(STUDY_A)
+        site_studies = {SITE_1: STUDY_A, SITE_2: STUDY_B}
+        assert svc.filter_sites(user, [SITE_1, SITE_2], site_studies) == [SITE_1]
+
+    def test_removed_site_scope_denies_new_action(self, svc: PermissionService):
+        """Removing the current assignment immediately removes authorization."""
+        user = _make_site_coordinator(STUDY_A, SITE_1)
+        user.user_roles.clear()
+        with pytest.raises(AuthorizationError):
+            svc.require(user, "form.enter", study_id=STUDY_A, site_id=SITE_1)
 
     def test_error_details_contain_permission_info(self, svc: PermissionService):
         """AuthorizationError details include the required permission and scope."""
@@ -476,3 +498,35 @@ class TestAuthorizationScope:
             ]
         )
         assert scope.get_site_ids() == {SITE_1, SITE_2}
+
+    def test_ctms_requirement_alias_matches_canonical_permission(self):
+        """CTMS route terminology resolves to the stored shared code."""
+        scope = AuthorizationScope(
+            grants=[
+                PermissionGrant(
+                    permission_code="ctms.operational_study_management",
+                    study_id=STUDY_A,
+                )
+            ]
+        )
+        assert scope.has_permission(
+            "operational-study-management", study_id=STUDY_A
+        ) is True
+
+
+class TestCTMSRoleDefinitions:
+    """CTMS built-in roles expose the required read/write boundaries."""
+
+    def test_ctms_roles_are_seeded_with_expected_scopes(self):
+        assert ROLE_DEFINITIONS["CTMS_Admin"]["scope"] == "system"
+        assert ROLE_DEFINITIONS["CTMS_Operations_User"]["scope"] == "study"
+        assert ROLE_DEFINITIONS["CTMS_Viewer"]["scope"] == "study"
+
+    def test_viewer_has_only_read_permission(self):
+        viewer_permissions = set(ROLE_DEFINITIONS["CTMS_Viewer"]["permissions"])
+        assert viewer_permissions == {"ctms.operational_data_read"}
+        assert not viewer_permissions & (CTMS_PERMISSION_CODES - viewer_permissions)
+
+    def test_admin_contains_all_ctms_permissions(self):
+        admin_permissions = set(ROLE_DEFINITIONS["CTMS_Admin"]["permissions"])
+        assert admin_permissions >= CTMS_PERMISSION_CODES

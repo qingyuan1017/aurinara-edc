@@ -94,6 +94,20 @@ def test_reset(collector):
     assert snap["worker_failures"] == 0
 
 
+def test_ctms_queue_and_projection_counters_are_sanitized_operational_metadata(collector):
+    """CTMS metrics expose counts and lag, never event payloads."""
+    collector.record_ctms_event_accepted()
+    collector.record_ctms_projection(lag_seconds=12.5)
+    collector.record_ctms_conflict()
+    snapshot = collector.snapshot()["ctms"]
+
+    assert snapshot["events_accepted"] == 1
+    assert snapshot["pending_event_count"] == 0
+    assert snapshot["conflict_count"] == 1
+    assert snapshot["projection_lag_seconds"] == 12.5
+    assert "payload" not in snapshot
+
+
 def test_snapshot_empty(collector):
     """Empty collector returns zero values without error."""
     snap = collector.snapshot()

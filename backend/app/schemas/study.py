@@ -85,6 +85,12 @@ class StudyVersionCreate(BaseCreateSchema):
     amendment_reason: str | None = None
 
 
+class StudyAmendmentCreate(BaseCreateSchema):
+    """Request body for creating an amendment from a published version."""
+
+    reason: str = Field(..., min_length=1, max_length=10_000)
+
+
 class StudyVersionResponse(BaseSchema):
     """Response schema for a Study_Version."""
 
@@ -93,6 +99,7 @@ class StudyVersionResponse(BaseSchema):
     version_number: str
     status: str
     amendment_reason: str | None = None
+    amended_from_version_id: UUID | None = None
     published_at: datetime | None = None
     published_by: UUID | None = None
     created_at: datetime

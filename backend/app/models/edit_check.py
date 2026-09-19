@@ -125,6 +125,23 @@ class ValidationResult(Base):
         comment="One of: info, warning, error, query",
     )
 
+    # Evaluation outcome. Runtime persistence currently stores failed checks;
+    # retaining the outcome makes the result contract explicit and extensible.
+    outcome: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="failed",
+        comment="One of: passed, failed",
+    )
+
+    # Optional affected row/field context for future repeating-record checks.
+    record_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("form_records.id", ondelete="SET NULL"), nullable=True
+    )
+    field_definition_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("field_definitions.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Human-readable violation message
     message: Mapped[str] = mapped_column(Text, nullable=False)
 
@@ -148,6 +165,7 @@ class ValidationResult(Base):
         Index("ix_validation_results_edit_check_id", "edit_check_id"),
         Index("ix_validation_results_form_instance_id", "form_instance_id"),
         Index("ix_validation_results_is_resolved", "is_resolved"),
+        Index("ix_validation_results_outcome", "outcome"),
     )
 
     def __repr__(self) -> str:

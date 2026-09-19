@@ -46,9 +46,15 @@ class ExportStatus(enum.StrEnum):
 
 
 class ExportType(enum.StrEnum):
-    """Export format types (Requirements 19.1, 19.2)."""
+    """Export format types (Requirements 19.1, 19.2, 19.5)."""
 
     csv = "csv"
+    excel = "excel"
+    json = "json"
+    sas_xpt = "sas_xpt"
+    xpt = "xpt"  # API compatibility alias for SAS Transport exports.
+    odm_xml = "odm_xml"
+    odm = "odm"  # API compatibility alias for ODM XML exports.
     subject_list = "subject_list"
 
 
@@ -72,15 +78,21 @@ class Export(Base):
         Uuid, ForeignKey("studies.id", ondelete="CASCADE"), nullable=False
     )
 
-    # Export type (csv, subject_list, etc.)
-    export_type: Mapped[str] = mapped_column(
-        String(30), nullable=False, default=ExportType.csv
+    # Shared job infrastructure discriminator. Content ownership remains
+    # explicit so CTMS operational jobs cannot be mistaken for EDC exports.
+    module: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="EDC", server_default="EDC"
     )
+    content_owner: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="EDC", server_default="EDC"
+    )
+    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+
+    # Export type (csv, subject_list, etc.)
+    export_type: Mapped[str] = mapped_column(String(30), nullable=False, default=ExportType.csv)
 
     # Job status
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default=ExportStatus.queued
-    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=ExportStatus.queued)
 
     # Filter parameters (JSON): site, subject, visit, form, domain,
     # date_range, changed_since, locked_only, clean_only
@@ -108,12 +120,15 @@ class Export(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retention_state: Mapped[str] = mapped_column(String(30), nullable=False, default="active", server_default="active")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    retention_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    deletion_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     study: Mapped["Study"] = relationship("Study", lazy="selectin")  # noqa: F821

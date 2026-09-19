@@ -12,6 +12,7 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts: ['edc.qingyuan-zhang.com'],
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

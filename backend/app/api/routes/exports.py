@@ -21,7 +21,6 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PaginationParams, get_db, require_permission
-from app.core.audit import audit_service
 from app.core.exceptions import BusinessRuleError
 from app.models.export import ExportStatus
 from app.models.identity import User
@@ -150,15 +149,10 @@ async def download_export(
             details={"export_id": str(export_id)},
         )
 
-    # Record audit event for the download (Requirement 19.4)
-    await audit_service.record(
+    await export_service.record_download(
         session,
-        entity_type="export",
-        entity_id=export.id,
-        action="download",
-        study_id=export.study_id,
+        export,
         actor_id=current_user.id,
-        new_value=f"file_path={export.file_path}",
     )
 
     return {

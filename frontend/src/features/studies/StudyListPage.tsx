@@ -6,6 +6,13 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DataTableShell, PageContainer, PageHeader, PageToolbar, StatusBadge } from '@/components/patterns'
 import { api } from '@/lib/api'
 import type { PaginatedResponse } from '@/lib/api'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
@@ -28,16 +35,15 @@ interface CreateStudyPayload {
 const columnHelper = createColumnHelper<Study>()
 
 const columns = [
-  columnHelper.accessor('study_code', { header: 'Code', cell: (info) => <a href={`/studies/${info.row.original.id}`} className="font-medium text-blue-600 hover:underline">{info.getValue()}</a> }),
+  columnHelper.accessor('study_code', {
+    header: 'Code',
+    cell: (info) => <a href={`/studies/${info.row.original.id}`} className="font-medium text-primary hover:underline">{info.getValue()}</a>,
+  }),
   columnHelper.accessor('title', { header: 'Title' }),
   columnHelper.accessor('phase', { header: 'Phase' }),
   columnHelper.accessor('status', {
     header: 'Status',
-    cell: (info) => (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-        {info.getValue()}
-      </span>
-    ),
+    cell: (info) => <StatusBadge status={info.getValue()} label="Study status" />,
   }),
   columnHelper.accessor('created_at', {
     header: 'Created',
@@ -53,7 +59,7 @@ export function StudyListPage() {
   const [formData, setFormData] = useState<CreateStudyPayload>({ study_code: '', title: '', phase: '' })
   const [error, setError] = useState<string | null>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['studies', page],
     queryFn: async () => {
       const { data } = await api.get<PaginatedResponse<Study>>('/studies', {
@@ -87,163 +93,79 @@ export function StudyListPage() {
   })
 
   const totalPages = data ? Math.ceil(data.total / data.page_size) : 0
+  const hasRows = Boolean(data && data.items.length > 0)
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Studies</h1>
-        {canCreate && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
-          >
-            Create Study
-          </button>
-        )}
-      </div>
+    <PageContainer wide>
+      <PageHeader
+        title="Studies"
+        description="Review studies available in your authorized workspace."
+        actions={canCreate ? <Button type="button" onClick={() => setShowModal(true)}>Create Study</Button> : null}
+      />
 
-      {isLoading ? (
-        <p className="text-gray-500">Loading…</p>
-      ) : (
-        <>
-          <div className="overflow-x-auto border rounded-lg">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </th>
-                    ))}
-                  </tr>
+      <PageToolbar label="Study list controls">
+        <span className="text-sm text-muted-foreground">
+          {data ? `${data.total} total studies · server ordered` : 'Server-ordered study records'}
+        </span>
+      </PageToolbar>
+
+      <DataTableShell
+        label="Studies"
+        loading={isLoading}
+        error={isError}
+        errorMessage="Failed to load studies."
+        onRetry={() => void refetch()}
+        empty={!isLoading && !isError && Boolean(data) && !hasRows}
+        emptyTitle="No studies found."
+        emptyDescription="No studies are available for the current permissions."
+      >
+        <Table>
+          <caption className="sr-only">Studies</caption>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
                 ))}
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-gray-50">
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3 text-sm text-gray-900">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </DataTableShell>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                Page {page} of {totalPages} ({data?.total ?? 0} total)
-              </p>
-              <div className="space-x-2">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="px-3 py-1 text-sm border rounded disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="px-3 py-1 text-sm border rounded disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Create Study Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Create Study</h2>
-            {error && (
-              <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>
-            )}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                createMutation.mutate(formData)
-              }}
-              className="space-y-3"
-            >
-              <div>
-                <label htmlFor="study-code" className="block text-sm font-medium text-gray-700">
-                  Code
-                </label>
-                <input
-                  id="study-code"
-                  type="text"
-                  value={formData.study_code}
-                  onChange={(e) => setFormData((d) => ({ ...d, study_code: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="study-title" className="block text-sm font-medium text-gray-700">
-                  Title
-                </label>
-                <input
-                  id="study-title"
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData((d) => ({ ...d, title: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="study-phase" className="block text-sm font-medium text-gray-700">
-                  Phase
-                </label>
-                <select
-                  id="study-phase"
-                  value={formData.phase}
-                  onChange={(e) => setFormData((d) => ({ ...d, phase: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select phase…</option>
-                  <option value="I">Phase I</option>
-                  <option value="II">Phase II</option>
-                  <option value="III">Phase III</option>
-                  <option value="IV">Phase IV</option>
-                </select>
-              </div>
-              <div className="flex justify-end space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowModal(false)
-                    setError(null)
-                  }}
-                  className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {createMutation.isPending ? 'Creating…' : 'Create'}
-                </button>
-              </div>
-            </form>
+      {totalPages > 1 ? (
+        <PageToolbar label="Study pagination" className="mt-4 mb-0">
+          <p className="text-sm text-muted-foreground">Page {page} of {totalPages} ({data?.total ?? 0} total)</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</Button>
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>Next</Button>
           </div>
-        </div>
-      )}
-    </div>
+        </PageToolbar>
+      ) : null}
+
+      <Dialog open={showModal} onOpenChange={(open) => { setShowModal(open); if (!open) setError(null) }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create Study</DialogTitle><DialogDescription>Create a study in the current authorized workspace.</DialogDescription></DialogHeader>
+          {error ? <p className="rounded border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive" role="alert">{error}</p> : null}
+          <form onSubmit={(event) => { event.preventDefault(); createMutation.mutate(formData) }} className="space-y-3">
+            <div className="space-y-1.5"><Label htmlFor="study-code">Code</Label><Input id="study-code" type="text" value={formData.study_code} onChange={(event) => setFormData((current) => ({ ...current, study_code: event.target.value }))} required /></div>
+            <div className="space-y-1.5"><Label htmlFor="study-title">Title</Label><Input id="study-title" type="text" value={formData.title} onChange={(event) => setFormData((current) => ({ ...current, title: event.target.value }))} required /></div>
+            <div className="space-y-1.5"><Label htmlFor="study-phase">Phase</Label><Select value={formData.phase} onValueChange={(value) => setFormData((current) => ({ ...current, phase: value }))}><SelectTrigger id="study-phase" aria-label="Phase"><SelectValue placeholder="Select phase…" /></SelectTrigger><SelectContent><SelectItem value="I">Phase I</SelectItem><SelectItem value="II">Phase II</SelectItem><SelectItem value="III">Phase III</SelectItem><SelectItem value="IV">Phase IV</SelectItem></SelectContent></Select></div>
+            <DialogFooter><Button type="button" variant="outline" onClick={() => { setShowModal(false); setError(null) }}>Cancel</Button><Button type="submit" pending={createMutation.isPending} loadingText="Creating…">Create</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </PageContainer>
   )
 }

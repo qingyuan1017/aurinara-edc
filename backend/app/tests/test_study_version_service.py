@@ -11,8 +11,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.core.exceptions import BusinessRuleError, NotFoundError
-from app.models.study import StudyVersion, StudyVersionStatus
+from app.core.exceptions import (
+    BusinessRuleError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
+from app.models.study import Study, StudyVersion, StudyVersionStatus
 from app.services.study_version_service import StudyVersionService, study_version_service
 
 
@@ -224,3 +229,94 @@ class TestSingleton:
         """The module exports a singleton study_version_service instance."""
         assert study_version_service is not None
         assert isinstance(study_version_service, StudyVersionService)
+
+
+class TestCreateAmendment:
+    """Tests for amendment creation and retained published history."""
+
+    @pytest.fixture
+    def published_source(self):
+        source = StudyVersion(
+            id=uuid.uuid4(),
+            study_id=uuid.uuid4(),
+            version_number="1.0",
+            status=StudyVersionStatus.published,
+            published_at=datetime.now(UTC),
+            published_by=uuid.uuid4(),
+        )
+        return source
+
+    @pytest.fixture
+    def amendment_repository(self, published_source):
+        repository = MagicMock()
+        repository.latest_published = AsyncMock(return_value=published_source)
+        repository.draft_for_study = AsyncMock(return_value=None)
+        repository.add = AsyncMock(side_effect=lambda session, version: version)
+        return repository
+
+    async def test_create_amendment_creates_draft_with_reason_and_source(
+        self, mock_session, published_source, amendment_repository
+    ):
+        study = Study(
+            id=published_source.study_id,
+            study_code="STUDY-001",
+            title="Test Study",
+            created_by=uuid.uuid4(),
+        )
+        actor_id = uuid.uuid4()
+        service = StudyVersionService(amendment_repository)
+
+        with patch("app.services.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            result = await service.create_amendment(
+                mock_session, study, "Protocol amendment v2", actor_id
+            )
+
+        assert result.status == StudyVersionStatus.draft
+        assert result.version_number == "2.0"
+        assert result.amendment_reason == "Protocol amendment v2"
+        assert result.amended_from_version_id == published_source.id
+        amendment_repository.add.assert_awaited_once_with(mock_session, result)
+        mock_audit.record.assert_awaited_once()
+        assert mock_audit.record.call_args.kwargs["reason"] == "Protocol amendment v2"
+
+    async def test_create_amendment_rejects_blank_reason(
+        self, mock_session, published_source, amendment_repository
+    ):
+        study = Study(
+            id=published_source.study_id,
+            study_code="STUDY-001",
+            title="Test Study",
+            created_by=uuid.uuid4(),
+        )
+        service = StudyVersionService(amendment_repository)
+
+        with pytest.raises(ValidationError, match="Amendment reason is required"):
+            await service.create_amendment(mock_session, study, "  ", uuid.uuid4())
+
+        amendment_repository.latest_published.assert_not_awaited()
+
+    async def test_create_amendment_preserves_published_source_and_rejects_second_draft(
+        self, mock_session, published_source, amendment_repository
+    ):
+        study = Study(
+            id=published_source.study_id,
+            study_code="STUDY-001",
+            title="Test Study",
+            created_by=uuid.uuid4(),
+        )
+        existing_draft = StudyVersion(
+            id=uuid.uuid4(),
+            study_id=study.id,
+            version_number="2.0",
+            status=StudyVersionStatus.draft,
+        )
+        amendment_repository.draft_for_study.return_value = existing_draft
+        service = StudyVersionService(amendment_repository)
+
+        with pytest.raises(ConflictError, match="draft study version already exists"):
+            await service.create_amendment(mock_session, study, "Another change", uuid.uuid4())
+
+        assert published_source.status == StudyVersionStatus.published
+        assert published_source.published_by is not None
+        amendment_repository.add.assert_not_awaited()

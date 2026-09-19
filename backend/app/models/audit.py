@@ -11,11 +11,15 @@ Satisfies Requirements:
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
-from sqlalchemy import DateTime, Index, String, Text, Uuid
+from sqlalchemy import JSON, DateTime, Index, String, Text, Uuid, event
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+
+JSONBType = JSONB().with_variant(JSON(), "sqlite")
 
 
 class AuditEvent(Base):
@@ -62,12 +66,32 @@ class AuditEvent(Base):
     site_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     subject_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
 
+    # Shared module ownership and actor provenance. EDC is the default for
+    # existing rows and callers so the clinical contract remains compatible.
+    module: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="EDC", server_default="EDC"
+    )
+    actor_kind: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="user", server_default="user"
+    )
+    worker_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
     # Action
     action: Mapped[str] = mapped_column(
-        String(50),
+        String(80),
         nullable=False,
-        comment="e.g. create, update, delete, submit, sign",
+        comment="e.g. create, update, delete, submit, sign, projection_update",
     )
+
+    # Scope and traceability metadata. Values are identifiers and sanitized
+    # field names only; clinical payloads never belong in these columns.
+    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    scope_json: Mapped[dict | None] = mapped_column(JSONBType, nullable=True)
+    changed_fields: Mapped[list[str] | None] = mapped_column(JSONBType, nullable=True)
+    source_module: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    target_module: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    source_record_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    target_record_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
 
     # Field-level detail (for data changes)
     field_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -95,6 +119,7 @@ class AuditEvent(Base):
         Index("ix_audit_events_study_id", "study_id"),
         Index("ix_audit_events_subject_id", "subject_id"),
         Index("ix_audit_events_request_id", "request_id"),
+        Index("ix_audit_events_module_correlation", "module", "correlation_id"),
     )
 
     def __repr__(self) -> str:
@@ -103,3 +128,13 @@ class AuditEvent(Base):
             f"entity={self.entity_type}:{self.entity_id}, "
             f"actor={self.actor_email})>"
         )
+
+
+def _reject_audit_mutation(_mapper: Any, connection: Any, target: AuditEvent) -> None:
+    """Protect immutable audit history before a database trigger is reached."""
+    del connection, target
+    raise ValueError("Audit events are immutable")
+
+
+event.listen(AuditEvent, "before_update", _reject_audit_mutation)
+event.listen(AuditEvent, "before_delete", _reject_audit_mutation)

@@ -2,17 +2,17 @@
 
 ## Overview
 
-This plan converts the design into incremental coding and testing tasks, grouped under the three delivery phases of the design's Module-to-Phase Mapping (Requirement 26). Phase 1 ships the auditable MVP (auth, authorization, study/site/subject setup, eCRF metadata + data capture, immutable audit, manual queries, CSV export) with authorization scope and audit immutability independently verified. Phase 2 adds the edit-check engine, repeating records, SDV, review, freeze/lock, files, and notifications. Phase 3 adds electronic signatures, published-version amendments, advanced exports, and the optional AI assistant.
+This plan converts the current design into incremental coding and testing tasks, preserving the completed EDC clinical delivery phases while adding the revised unified-platform boundary work from Requirement 32. Phase 1 ships the auditable EDC MVP (auth, authorization, canonical clinical Study/Site/Subject setup, eCRF metadata + data capture, immutable audit, manual queries, CSV export) with authorization scope, audit immutability, and clinical ownership independently verified. Phase 2 adds the EDC edit-check engine, repeating records, SDV, review, freeze/lock, Clinical_Attachments, and clinical notifications. Phase 3 adds EDC electronic signatures, published-version amendments, advanced clinical exports, and the optional AI assistant. A cross-cutting boundary phase adds EDC-side canonical identity guards, ownership enforcement, minimized read-only CTMS projections, explicit coordination validation, shared module-owner discrimination, request/correlation propagation, boundary tests, and EDC resilience when CTMS is disabled or unavailable.
 
-Implementation follows the design's layering throughout: thin routes → services (transaction boundary) → repositories; the Audit_Service writes an append-only Audit_Event in the **same transaction** as every clinical/config mutation; the Permission_Service enforces route- and object-level access on every protected endpoint; deletions are soft only; edit checks are safe declarative DSL (no arbitrary code); all DB timestamps are UTC; the API is versioned under `/api/v1` with generated OpenAPI.
+Implementation follows the design's layering throughout: thin routes → services (transaction boundary) → repositories; the EDC Audit_Service writes an append-only, module-owned Audit_Event in the **same transaction** as every EDC clinical/config mutation; the Permission_Service enforces route- and object-level access on every protected endpoint; canonical identity and authoritative-module guards reject cross-module writes; deletions are soft only; edit checks are safe declarative DSL (no arbitrary code); all DB timestamps are UTC; the API is versioned under `/api/v1` with generated OpenAPI. Shared audit, notification, file, and export primitives carry explicit module-owner discriminators, while EDC consumes only approved minimized read-only CTMS projections and never owns CTMS operational records.
 
-Property-based tests (Hypothesis) cover all 37 correctness properties, each as an optional (`*`) sub-task tagged `# Feature: clinical-edc-system, Property {n}: ...` and run at 100+ iterations, placed next to the feature it protects. Optional (`*`) sub-tasks are not required for a working build and may be skipped for a faster MVP.
+Property-based tests (Hypothesis) cover all 44 correctness properties, each as an optional (`*`) sub-task tagged `# Feature: clinical-edc-system, Property {n}: ...` and run at 100+ iterations, placed next to the feature it protects. Optional (`*`) sub-tasks are not required for a working build and may be skipped for a faster MVP. The new boundary properties 38–44 use deterministic EDC/CTMS fakes and repository-level isolation tests; EDC tasks implement only shared primitives, EDC-side guards/consumers, and rejection/resilience behavior, while CTMS operational ownership remains in the separate CTMS task plan.
 
 ---
 
 ## Tasks
 
-### Phase 1 — MVP (Requirements 1, 2, 3, 4, 6, 7, 8, 9, 10, 13 manual, 18, 19 CSV, 21, 22, 23, 24, 25, 30)
+### Phase 1 — MVP (Requirements 1, 2, 3, 4, 6, 7, 8, 9, 10, 13 manual, 18, 19 CSV, 21, 22, 23, 24, 25, 26, 30, 32 boundary prerequisites)
 
 - [x] 1. Project bootstrap
   - [x] 1.1 Scaffold the backend project
@@ -302,187 +302,256 @@ Property-based tests (Hypothesis) cover all 37 correctness properties, each as a
 
 ### Phase 2 — Validation, SDV, Review, Lock, Files, Notifications (Requirements 5 draft, 11, 12, 14, 15, 16, 20, 27, 28)
 
-- [ ] 19. Edit_Check_Engine
+- [x] 19. Edit_Check_Engine
   - [x] 19.1 Create edit_checks and validation_results models and migration
     - Versioned with owning study version
     - _Requirements: 12.1, 12.6, 22.6_
-  - [ ] 19.2 Implement the safe JSON DSL parser, schema validator, and evaluator
+  - [x] 19.2 Implement the safe JSON DSL parser, schema validator, and evaluator
     - Boolean trees over conditions with the fixed operator set; validate against schema before persisting; never execute user-provided code; reuse the shared safe expression evaluator
     - _Requirements: 12.1, 12.2, 12.7_
-  - [ ] 19.3 Implement runtime evaluation, severities, lab pseudo-fields, and test-without-persist
+  - [x] 19.3 Implement runtime evaluation, severities, lab pseudo-fields, and test-without-persist
     - Severities info/warning/error/query; `<field>.normal_low/high` pseudo-fields; `test(rule, sample_data)` without writing clinical data; on query-severity match, request Query_Service to create a linked system Query
     - _Requirements: 12.3, 12.4, 12.5_
-  - [ ] 19.4 Seed example edit checks
+  - [x] 19.4 Seed example edit checks
     - AE start ≤ end; consent date ≤ first procedure; AE Serious=Yes ⇒ seriousness criteria; AE Outcome=Fatal ⇒ death date; visit date within window else warning
     - _Requirements: 12.2_
-  - [ ] 19.5 Implement edit-checks routes
+  - [x] 19.5 Implement edit-checks routes
     - `GET/POST /studies/{id}/edit-checks`, `GET/PATCH /edit-checks/{id}`, `POST /edit-checks/{id}/test`, `POST /studies/{id}/edit-checks/run`
     - _Requirements: 12.1, 12.4, 12.5, 21.1_
-  - [ ] 19.6 Write property test for DSL round-trip and safe evaluation
+  - [x] 19.6 Write property test for DSL round-trip and safe evaluation
     - **Property 23: Edit-check rule serialization round-trip and safe evaluation**
     - **Validates: Requirements 12.1, 12.7**
-  - [ ] 19.7 Write property test for test-without-persist
+  - [x] 19.7 Write property test for test-without-persist
     - **Property 24: Edit-check test does not persist clinical data**
     - **Validates: Requirements 12.4**
-  - [ ] 19.8 Write property test for system-query generation
+  - [x] 19.8 Write property test for system-query generation
     - **Property 25: Query-severity checks generate a linked system query**
     - **Validates: Requirements 12.5**
 
-- [ ] 20. Repeating records (Repeating_Record_Service)
+- [x] 20. Repeating records (Repeating_Record_Service)
   - [x] 20.1 Create form_records model and migration
     - Sequence number and soft-delete columns (deleted_at/by/reason)
     - _Requirements: 11.1, 11.3, 22.2, 22.6_
-  - [ ] 20.2 Implement Repeating_Record_Service
+  - [x] 20.2 Implement Repeating_Record_Service
     - `add_record` (monotonic sequence), `edit_record`, `soft_delete` (actor/timestamp/reason, retain), `restore`; write Audit_Events
     - _Requirements: 11.1, 11.2, 11.3, 11.4_
-  - [ ] 20.3 Implement records routes
+  - [x] 20.3 Implement records routes
     - `POST /form-instances/{id}/records`, `PATCH/DELETE /records/{id}`, `POST /records/{id}/restore`
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 21.1_
-  - [ ] 20.4 Write property test for repeating records
+  - [x] 20.4 Write property test for repeating records
     - **Property 21: Repeating-record sequence is monotonic and soft-delete round-trips**
     - **Validates: Requirements 11.1, 11.3, 11.4**
 
-- [ ] 21. Source data verification (SDV_Service)
+- [x] 21. Source data verification (SDV_Service)
   - [x] 21.1 Create sdv_status model and migration
     - _Requirements: 14.1, 22.6_
-  - [ ] 21.2 Implement SDV_Service
+  - [x] 21.2 Implement SDV_Service
     - `set_sdv`/`clear_sdv` at field/form/visit/subject scope (actor/timestamp), `progress` counts; write Audit_Events
     - _Requirements: 14.1, 14.2, 14.3, 14.4_
-  - [ ] 21.3 Implement SDV routes
+  - [x] 21.3 Implement SDV routes
     - `POST /fields/{id}/sdv|unsdv`, `POST /form-instances/{id}/sdv|unsdv`, `GET /studies/{id}/sdv-progress`
     - _Requirements: 14.1, 14.2, 14.3, 21.1_
 
-- [ ] 22. Clinical review (Review_Service)
+- [x] 22. Clinical review (Review_Service)
   - [x] 22.1 Create review_status model and migration
     - _Requirements: 15.1, 22.6_
-  - [ ] 22.2 Implement Review_Service
+  - [x] 22.2 Implement Review_Service
     - `mark_reviewed`/`clear_review` (actor/timestamp), `progress` counts; write Audit_Events
     - _Requirements: 15.1, 15.2, 15.3, 15.4_
-  - [ ] 22.3 Implement review routes
+  - [x] 22.3 Implement review routes
     - `POST /form-instances/{id}/review|unreview`, `GET /studies/{id}/review-progress`
     - _Requirements: 15.1, 15.2, 15.3, 21.1_
-  - [ ] 22.4 Write property test for SDV and review toggles
+  - [x] 22.4 Write property test for SDV and review toggles
     - **Property 27: SDV and review toggles round-trip and counts are accurate**
     - **Validates: Requirements 14.1, 14.2, 14.3, 15.1, 15.2, 15.3**
 
-- [ ] 23. Freeze, lock, and unlock (Lock_Service)
+- [x] 23. Freeze, lock, and unlock (Lock_Service)
   - [x] 23.1 Create freezes and locks models and migration
     - Unlock reason recorded; indexes on (object_type, object_id)
     - _Requirements: 16.1, 16.2, 16.4, 22.6_
-  - [ ] 23.2 Implement Lock_Service
+  - [x] 23.2 Implement Lock_Service
     - `freeze`/`lock`, `unlock` (reason required), `is_modification_blocked` (field or any ancestor frozen/locked across field→form→visit→subject→site→study); write Audit_Events
     - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5_
-  - [ ] 23.3 Wire lock checks into mutation paths
+  - [x] 23.3 Wire lock checks into mutation paths
     - Replace the Phase 1 lock hook in Data_Capture_Service with `Lock_Service.is_modification_blocked`; prepare the File_Attachment_Service block check
     - _Requirements: 10.7, 16.3, 27.5_
-  - [ ] 23.4 Implement freeze/lock routes
+  - [x] 23.4 Implement freeze/lock routes
     - `POST /form-instances/{id}/freeze|unfreeze|lock|unlock`, `POST /subjects/{id}/freeze|lock`, `POST /studies/{id}/lock`
     - _Requirements: 16.1, 16.2, 16.4, 21.1_
-  - [ ] 23.5 Write property test for ancestor lock blocking
+  - [x] 23.5 Write property test for ancestor lock blocking
     - **Property 28: Modification is blocked under any frozen or locked ancestor**
     - **Validates: Requirements 10.7, 16.1, 16.2, 16.3, 27.5**
-  - [ ] 23.6 Write property test for unlock reason
+  - [x] 23.6 Write property test for unlock reason
     - **Property 29: Unlock requires a reason and clears the lock**
     - **Validates: Requirements 16.4**
 
-- [ ] 24. File attachments (File_Attachment_Service)
-  - [ ] 24.1 Create file_attachments model and migration
+- [x] 24. File attachments (File_Attachment_Service)
+  - [x] 24.1 Create file_attachments model and migration
     - Storage key, metadata, soft-delete columns
     - _Requirements: 27.1, 27.3, 22.6_
-  - [ ] 24.2 Implement File_Attachment_Service
+  - [x] 24.2 Implement File_Attachment_Service
     - `upload` (reject when parent frozen/locked), `download` (only with parent read access), `soft_delete`; write Audit_Events for upload/download/deletion
     - _Requirements: 27.1, 27.2, 27.3, 27.4, 27.5, 18.4_
-  - [ ] 24.3 Implement files routes
+  - [x] 24.3 Implement files routes
     - `POST /objects/{type}/{id}/files`, `GET /files/{id}/download`, `DELETE /files/{id}`
     - _Requirements: 27.1, 27.2, 27.3, 21.1_
-  - [ ] 24.4 Write property test for file download access
+  - [x] 24.4 Write property test for file download access
     - **Property 35: File download requires parent read access**
     - **Validates: Requirements 27.1, 27.2**
 
-- [ ] 25. Notifications (Notification_Service)
-  - [ ] 25.1 Create notifications model and migration
+- [x] 25. Notifications (Notification_Service)
+  - [x] 25.1 Create notifications model and migration
     - _Requirements: 28.4, 22.6_
-  - [ ] 25.2 Implement Notification_Service and event wiring
+  - [x] 25.2 Implement Notification_Service and event wiring
     - `on_query_assigned`, `on_form_submitted`, `on_export_completed`, statuses Unread/Read/Archived, `list_unread`; wire into Query/Data-capture/Export flows
     - _Requirements: 28.1, 28.2, 28.3, 28.4, 28.5_
-  - [ ] 25.3 Implement notifications routes
+  - [x] 25.3 Implement notifications routes
     - `GET /notifications`, `POST /notifications/{id}/read|archive`
     - _Requirements: 28.4, 28.5, 21.1_
-  - [ ] 25.4 Write property test for workflow notifications
+  - [x] 25.4 Write property test for workflow notifications
     - **Property 36: Workflow events create notifications for the right recipients**
     - **Validates: Requirements 28.1, 28.2, 28.3**
 
-- [ ] 26. Full Dashboard and data-cleaning frontend
-  - [ ] 26.1 Build Phase 2 frontend views
+- [x] 26. Full Dashboard and data-cleaning frontend
+  - [x] 26.1 Build Phase 2 frontend views
     - Edit-check builder, query inbox/detail, SDV worklist, clinical review worklist, freeze/lock controls (disabled inputs when frozen/locked), file upload, notifications UI, and full data-cleaning dashboards
     - _Requirements: 24.1, 24.4, 20.1, 20.2, 20.3_
-  - [ ] 26.2 Write frontend tests for Phase 2 workflows
+  - [x] 26.2 Write frontend tests for Phase 2 workflows
     - Query thread, frozen/locked disabling, SDV/review actions
     - _Requirements: 24.1, 24.4_
 
-- [ ] 27. Checkpoint — Phase 2
+- [x] 27. Checkpoint — Phase 2
   - Ensure all tests pass, ask the user if questions arise.
 
 ---
 
 ### Phase 3 — Signatures, Amendments, Advanced Exports, AI (Requirements 5 amendments, 17, 19 advanced, 31)
 
-- [ ] 28. Electronic signatures (Signature_Service)
-  - [ ] 28.1 Create signatures model and migration
+- [x] 28. Electronic signatures (Signature_Service)
+  - [x] 28.1 Create signatures model and migration
     - Signer identity, timestamp, meaning, signed-object reference, data hash, valid/stale status, stale reason
     - _Requirements: 17.2, 22.6_
-  - [ ] 28.2 Implement Signature_Service
+  - [x] 28.2 Implement Signature_Service
     - `sign` (require re-authentication; persist identity/timestamp/meaning/reference/data hash), `invalidate_if_changed` (mark stale + reason); wire into Data_Capture post-signature changes; write Audit_Events
     - _Requirements: 17.1, 17.2, 17.3, 17.4_
-  - [ ] 28.3 Implement signatures routes and UI
+  - [x] 28.3 Implement signatures routes and UI
     - `POST /form-instances/{id}/sign`, `POST /subjects/{id}/sign`, `GET /subjects/{id}/signatures`; signature UI with re-auth
     - _Requirements: 17.1, 17.2, 21.1, 24.1_
-  - [ ] 28.4 Write property test for signatures
+  - [x] 28.4 Write property test for signatures
     - **Property 30: Signatures require re-authentication and bind to signed data**
     - **Validates: Requirements 17.1, 17.2, 17.3**
 
-- [ ] 29. Study-version amendments and immutability completion
-  - [ ] 29.1 Implement amendment creation and prior-version retention
+- [x] 29. Study-version amendments and immutability completion
+  - [x] 29.1 Implement amendment creation and prior-version retention
     - `create_amendment` (new draft + amendment reason), retain all prior published versions, each form bound to exactly one version; add `POST /studies/{id}/amend`
     - _Requirements: 5.3, 5.4, 5.5_
-  - [ ] 29.2 Build the amendment/versioning frontend
+  - [x] 29.2 Build the amendment/versioning frontend
     - Study configuration versioning and amendment workflow
     - _Requirements: 5.3, 24.1_
-  - [ ] 29.3 Write property test for amendments
+  - [x] 29.3 Write property test for amendments
     - **Property 11: Amendment preserves prior versions and binds forms to one version**
     - **Validates: Requirements 5.3, 5.4, 5.5**
 
-- [ ] 30. Advanced export formats
-  - [ ] 30.1 Implement Excel, JSON, SAS XPT, and ODM XML generation
+- [x] 30. Advanced export formats
+  - [x] 30.1 Implement Excel, JSON, SAS XPT, and ODM XML generation
     - Extend the export worker with advanced formats and the changed-since/locked-only/clean-only filters
     - _Requirements: 19.3, 19.5_
-  - [ ] 30.2 Write advanced export fidelity tests
+  - [x] 30.2 Write advanced export fidelity tests
     - JSON/ODM round-trip and Excel/XPT generation, extending Property 34 coverage
     - _Requirements: 19.5_
 
-- [ ] 31. Optional AI assistant (AI_Assistant_Service)
-  - [ ] 31.1 Implement AI endpoints with streaming
+- [x] 31. Optional AI assistant (AI_Assistant_Service)
+  - [x] 31.1 Implement AI endpoints with streaming
     - Chat, edit-check drafting, and query summarization backed by Bedrock AgentCore; stream via SSE or WebSocket
     - _Requirements: 31.1, 31.2_
-  - [ ] 31.2 Implement scoped context and human-confirmation gating
+  - [x] 31.2 Implement scoped context and human-confirmation gating
     - `build_context` restricts context to the requesting User's Authorization_Scope; `apply_suggestion` requires explicit human confirmation before any data change; audit AI-assisted regulated changes
     - _Requirements: 31.3, 31.4, 31.5_
-  - [ ] 31.3 Implement AI routes and UI
+  - [x] 31.3 Implement AI routes and UI
     - `POST /ai/chat`, `POST /ai/edit-check-draft`, `POST /ai/query-summary` (SSE/WS); assistant UI
     - _Requirements: 31.1, 31.2, 21.1_
-  - [ ] 31.4 Write property test for AI confirmation
+  - [x] 31.4 Write property test for AI confirmation
     - **Property 37: AI data changes require human confirmation**
     - **Validates: Requirements 31.4**
 
-- [ ] 32. Checkpoint — Phase 3
+- [x] 32. Checkpoint — Phase 3
   - Ensure all tests pass, ask the user if questions arise.
+
+### Cross-cutting boundary completion — Unified platform EDC side (Requirement 32 and revised cross-cutting controls)
+
+These tasks extend the completed EDC phases with the current unified-platform boundary. They implement only EDC-owned behavior, shared primitives, EDC-side consumers/guards, and rejection/resilience tests. CTMS operational study/site/enrollment/monitoring/work-management behavior, operational dashboards/reports, operational exports, and Operational_Attachments remain in the separate CTMS task plan.
+
+- [ ] 33. Harden EDC ownership, coordination, and CTMS isolation
+  - [ ] 33.1 Implement canonical identity and authoritative-module guard contracts
+    - Add typed identity/ownership policies and repository/service guards that resolve one stable canonical Study, Site, Subject, and Visit_Instance identifier, reject duplicate or ambiguous ownership, and prevent EDC services from accepting CTMS-owned operational fields
+    - _Requirements: 4.1, 4.2, 6.1, 6.2, 7.1, 7.2, 8.1, 32.1, 32.2_
+
+  - [ ] 33.2 Add explicit module-owner discriminators and persistence constraints to shared primitives
+    - Extend audit events, notifications, clinical file attachments, and clinical export jobs with an EDC/CTMS owner discriminator; add migrations, model constraints, repository filters, and route validation that keep EDC clinical content separate from CTMS operational content without creating CTMS-owned records
+    - _Requirements: 18.1, 18.7, 19.6, 19.7, 27.1, 27.6, 28.4, 28.6, 32.7_
+
+  - [ ] 33.3 Implement request and correlation propagation for EDC coordination
+    - Propagate request ID, correlation ID, source module, source identifier, source version, rule version, and idempotency key through request context, structured logs, Audit_Events, Coordination_Events, projection records, and sanitized failures
+    - _Requirements: 21.5, 30.4, 32.4, 32.5_
+
+  - [ ] 33.4 Implement the EDC-side minimized CTMS projection consumer
+    - Validate approved allowlisted projection schemas, source metadata, authorization scope, and freshness/order; persist or serve projections as read-only, CTMS-sourced views and prevent projected fields from changing EDC clinical metrics, status, or source records
+    - _Requirements: 4.6, 6.7, 7.8, 20.5, 20.6, 32.4, 32.7_
+
+  - [ ] 33.5 Implement explicit coordinated-transition validation and sanitized conflict handling
+    - Add a validator that permits a cross-module status change only when an active ownership rule names the source, target field, transition, authorization, identity, version, and allowlist; reject stale, unauthorized, ambiguous, or prohibited events before mutation and retain only sanitized conflict/failure metadata
+    - _Requirements: 21.3, 21.6, 23.4, 32.4, 32.5, 32.6_
+
+  - [ ] 33.6 Enforce CTMS route rejection for EDC-owned mutations
+    - Add shared route/dependency and service-level guards that reject CTMS attempts to create or mutate Study_Version, Clinical_Subject_Registry, Visit_Instance, Form_Instance, Field_Value, Query lifecycle/messages, SDV, review, freeze/lock, signatures, Clinical_Attachments, or clinical exports before either module's authoritative state or audit state changes
+    - _Requirements: 8.6, 18.7, 19.6, 19.7, 21.6, 23.4, 27.6, 32.3_
+
+  - [ ] 33.7 Implement EDC resilience when CTMS is disabled, empty, or unavailable
+    - Make EDC authentication, capture, audit, protocol visits, clinical lifecycle, and clinical exports operate from EDC-owned state without a CTMS dependency; keep accepted coordination events durable/pending and return explicit non-authoritative projection-unavailable results
+    - _Requirements: 26.1, 26.5, 30.1, 30.2, 32.8_
+
+  - [ ]* 33.8 Write boundary, security, ownership, and integration regression tests
+    - Test canonical identity stability, direct CTMS mutation rejection with no partial state or audit writes, projection minimization/read-only behavior, coordinated-transition validation, module-owner separation, request/correlation propagation, sanitized errors, and EDC operation while CTMS is disabled or unavailable
+    - _Requirements: 21.3, 21.5, 26.4, 26.5, 32.1, 32.2, 32.3, 32.4, 32.5, 32.6, 32.7, 32.8_
+
+  - [ ]* 33.9 Write property test for canonical identity ownership
+    - **Property 38: Canonical identity has one authoritative owner**
+    - **Validates: Requirements 4.1, 4.2, 6.1, 6.2, 7.1, 7.2, 7.7, 7.8, 7.9, 8.6, 32.1, 32.2, 32.3**
+
+  - [ ]* 33.10 Write property test for CTMS non-mutation of EDC clinical state
+    - **Property 39: CTMS operational writes cannot mutate EDC clinical state**
+    - **Validates: Requirements 32.3**
+
+  - [ ]* 33.11 Write property test for protocol-visit and monitoring separation
+    - **Property 40: Protocol visits and monitoring activities remain separate**
+    - **Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 16.3, 32.3**
+
+  - [ ]* 33.12 Write property test for minimized read-only projections
+    - **Property 41: Cross-module projections are minimized and read-only**
+    - **Validates: Requirements 4.6, 6.7, 7.8, 20.5, 21.5, 32.4, 32.6**
+
+  - [ ]* 33.13 Write property test for coordination idempotency and policy checks
+    - **Property 42: Coordination is idempotent, ordered, and policy-checked**
+    - **Validates: Requirements 21.3, 21.5, 23.3, 23.4, 25.1, 25.5, 30.4, 32.4, 32.5**
+
+  - [ ]* 33.14 Write property test for EDC resilience without CTMS
+    - **Property 43: EDC remains functional without CTMS**
+    - **Validates: Requirements 26.1, 26.4, 26.5, 30.1, 30.2, 30.3, 30.5, 32.8**
+
+  - [ ]* 33.15 Write property test for clinical and operational content separation
+    - **Property 44: Clinical and operational content remain separated**
+    - **Validates: Requirements 18.5, 18.6, 18.7, 19.6, 19.7, 20.4, 20.5, 20.6, 27.1, 27.2, 27.3, 27.4, 27.6, 28.6, 32.4, 32.7**
+
+- [ ] 34. Boundary completion checkpoint
+  - Ensure all boundary implementation and regression tests pass, verify no EDC task claims CTMS operational ownership, and ask the user if questions arise.
 
 ## Notes
 
 - Tasks marked with `*` are optional (property/unit/integration/e2e/compliance tests) and can be skipped for a faster MVP; core implementation tasks are never optional.
-- All 37 correctness properties are covered by exactly one Hypothesis property test each, tagged `# Feature: clinical-edc-system, Property {n}: ...` and run at 100+ iterations, placed next to the feature it protects.
-- The audit foundation is built in Phase 1 (Task 3) and audit atomicity (Property 17) is verified with data capture; immutability and request-id propagation (Properties 18, 19) with the audit foundation; authorization (Properties 1–3) with access control; lock-ancestor enforcement (Property 28) with freeze/lock.
-- Every task follows thin routes → services → repositories, writes audit in the same transaction as clinical changes, enforces permissions before mutating, uses soft deletion, and stores UTC timestamps.
+- All 44 design correctness properties are covered by exactly one Hypothesis property-test sub-task, tagged `# Feature: clinical-edc-system, Property {n}: ...` and run at 100+ iterations, placed next to the feature it protects. Properties 38–44 cover the unified EDC/CTMS boundary using deterministic fakes and repository isolation; they do not implement CTMS operational workflows.
+- The audit foundation is built in Phase 1 (Task 3) and audit atomicity (Property 17) is verified with data capture; immutability and request-id propagation (Properties 18, 19) with the audit foundation; authorization (Properties 1–3) with access control; lock-ancestor enforcement (Property 28) with freeze/lock; canonical identity, ownership, projections, coordination, resilience, and clinical/operational separation (Properties 38–44) with the cross-cutting boundary tasks.
+- Every task follows thin routes → services → repositories, writes EDC audit in the same transaction as EDC clinical/config changes, enforces permissions and ownership before mutating, uses soft deletion, and stores UTC timestamps. Shared primitives use explicit module-owner discrimination; EDC tasks do not create or mutate CTMS operational study/site/enrollment/monitoring/work-management records, operational dashboards/reports, operational exports, or Operational_Attachments.
+- Boundary tests verify CTMS mutation attempts are rejected before either module changes, approved projections are minimized/read-only, coordination is policy-checked and idempotent, request/correlation identifiers propagate, and EDC remains functional when CTMS is disabled or unavailable.
 - Checkpoints sit at phase boundaries for incremental validation.
 
 ## Task Dependency Graph
@@ -519,7 +588,12 @@ Property-based tests (Hypothesis) cover all 37 correctness properties, each as a
     { "id": 26, "tasks": ["28.1", "29.1", "30.1", "31.1"] },
     { "id": 27, "tasks": ["28.2", "29.2", "30.2", "31.2"] },
     { "id": 28, "tasks": ["28.3", "29.3", "31.3"] },
-    { "id": 29, "tasks": ["28.4", "31.4"] }
+    { "id": 29, "tasks": ["28.4", "31.4"] },
+    { "id": 30, "tasks": ["33.1", "33.2"] },
+    { "id": 31, "tasks": ["33.3", "33.4", "33.6"] },
+    { "id": 32, "tasks": ["33.5", "33.7"] },
+    { "id": 33, "tasks": ["33.8"] },
+    { "id": 34, "tasks": ["33.9", "33.10", "33.11", "33.12", "33.13", "33.14", "33.15"] }
   ]
 }
 ```
