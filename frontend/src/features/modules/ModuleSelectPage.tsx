@@ -69,7 +69,7 @@ export function ModuleSelectPage() {
     <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col justify-center gap-8 px-4 py-12">
       <div className="space-y-2 text-center">
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome, {displayName}</h1>
-        <p className="text-muted-foreground">Choose a module to get started. You can switch modules anytime from the header.</p>
+        <p className="text-muted-foreground">Choose a module to get started. You can switch modules anytime from the sidebar.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

@@ -14,6 +14,7 @@ import type {
   EDCNavigationItem,
   NavigationSection,
 } from '@/lib/navigation-model'
+import type { AppModule } from '@/lib/module-context'
 
 export interface AppSidebarProps {
   /** Whether the desktop sidebar is in its compact presentation. */
@@ -23,6 +24,10 @@ export interface AppSidebarProps {
   ctmsSections: readonly CTMSNavigationViewSection[]
   /** Keeps the existing capability gate visible even when no CTMS item is resolved. */
   showCTMS: boolean
+  /** The module whose navigation hierarchy should be displayed. */
+  activeModule?: AppModule
+  /** Changes the active product module and lets the shell perform navigation. */
+  onModuleChange?: (module: AppModule) => void
   /** Controlled state for the mobile navigation Sheet. */
   mobileOpen?: boolean
   /** Updates mobile Sheet state without changing route or search state. */
@@ -142,23 +147,27 @@ function NavigationSections({
   edcSections,
   ctmsSections,
   showCTMS,
+  activeModule,
   onNavigate,
 }: {
   collapsed: boolean
   edcSections: readonly NavigationSection[]
   ctmsSections: readonly CTMSNavigationViewSection[]
   showCTMS: boolean
+  activeModule?: AppModule
   onNavigate?: () => void
 }) {
   return (
     <>
-      <div className="space-y-1">
-        {edcSections.map((section) => (
-          <EDCSection key={section.id} section={section} collapsed={collapsed} onNavigate={onNavigate} />
-        ))}
-      </div>
+      {(activeModule === undefined || activeModule === 'edc') && (
+        <div className="space-y-1">
+          {edcSections.map((section) => (
+            <EDCSection key={section.id} section={section} collapsed={collapsed} onNavigate={onNavigate} />
+          ))}
+        </div>
+      )}
 
-      {showCTMS && (
+      {showCTMS && (activeModule === undefined || activeModule === 'ctms') && (
         <div className="mt-3 border-t border-sidebar-border pt-1" aria-label="CTMS navigation">
           <p
             className={cn(
@@ -189,9 +198,44 @@ export function AppSidebar({
   edcSections,
   ctmsSections,
   showCTMS,
+  activeModule,
+  onModuleChange = () => undefined,
   mobileOpen = false,
   onMobileOpenChange = () => undefined,
 }: AppSidebarProps) {
+  const moduleLabel = activeModule === 'ctms' ? 'CTMS' : 'EDC'
+
+  const moduleSwitcher = (mobile = false) => (
+    <div className={cn('border-b border-sidebar-border px-3 py-2', mobile && 'px-0')}>
+      {activeModule === undefined ? null : collapsed && !mobile ? (
+        <button
+          type="button"
+          className="flex min-h-9 w-full items-center justify-center rounded-md text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          onClick={() => onCollapsedChange(false)}
+          aria-label={`Current module: ${moduleLabel}. Expand sidebar to switch modules`}
+          title={`Current module: ${moduleLabel}. Expand sidebar to switch modules`}
+        >
+          {moduleLabel}
+        </button>
+      ) : (
+        <label className="block space-y-1">
+          <span className="px-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
+            Module
+          </span>
+          <select
+            aria-label="Select module"
+            value={activeModule}
+            onChange={(event) => onModuleChange(event.target.value as AppModule)}
+            className="h-9 w-full rounded-md border border-sidebar-border bg-sidebar-accent px-2 text-sm font-medium text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          >
+            <option value="edc">EDC</option>
+            <option value="ctms" disabled={!showCTMS}>CTMS{!showCTMS ? ' (Unavailable)' : ''}</option>
+          </select>
+        </label>
+      )}
+    </div>
+  )
+
   return (
     <>
       <aside
@@ -204,9 +248,9 @@ export function AppSidebar({
       >
         <div className="flex h-[var(--header-height)] shrink-0 items-center justify-between border-b border-sidebar-border px-3">
           <span className={cn('truncate text-sm font-semibold', collapsed && 'sr-only')}>
-            Clinical EDC
+            Clinical {moduleLabel}
           </span>
-          {collapsed && <span className="text-sm font-semibold" aria-hidden="true">EDC</span>}
+          {collapsed && <span className="text-sm font-semibold" aria-hidden="true">{moduleLabel}</span>}
           <Button
             type="button"
             variant="ghost"
@@ -221,6 +265,8 @@ export function AppSidebar({
           </Button>
         </div>
 
+        {moduleSwitcher()}
+
         <nav
           id="authenticated-navigation"
           aria-label="Primary navigation"
@@ -231,6 +277,7 @@ export function AppSidebar({
             edcSections={edcSections}
             ctmsSections={ctmsSections}
             showCTMS={showCTMS}
+            activeModule={activeModule}
           />
         </nav>
       </aside>
@@ -242,11 +289,12 @@ export function AppSidebar({
           className="w-[min(18rem,calc(100vw-1rem))] overflow-y-auto bg-sidebar p-4 text-sidebar-foreground md:hidden"
         >
           <SheetHeader className="pr-8 text-left">
-            <SheetTitle className="text-sidebar-foreground">Clinical EDC</SheetTitle>
+            <SheetTitle className="text-sidebar-foreground">Clinical {moduleLabel}</SheetTitle>
             <SheetDescription className="text-sidebar-foreground/70">
               Navigate the authenticated workspace.
             </SheetDescription>
           </SheetHeader>
+          {moduleSwitcher(true)}
           <nav
             id="mobile-navigation-links"
             aria-label="Mobile primary navigation"
@@ -257,6 +305,7 @@ export function AppSidebar({
               edcSections={edcSections}
               ctmsSections={ctmsSections}
               showCTMS={showCTMS}
+              activeModule={activeModule}
               onNavigate={() => onMobileOpenChange(false)}
             />
           </nav>

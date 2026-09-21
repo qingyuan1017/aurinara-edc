@@ -15,6 +15,7 @@ import {
 import { PERMISSIONS } from '@/lib/permissions'
 import { useAuthStore } from '@/lib/auth'
 import { ThemeProvider } from '@/lib/theme'
+import type { AppModule } from '@/lib/module-context'
 
 const mockUseCTMSCapabilityState = vi.hoisted(() => vi.fn())
 const mockUsePermission = vi.hoisted(() => vi.fn())
@@ -89,6 +90,7 @@ function renderResolvedSidebar(
   state: typeof readyState,
   permissions: readonly string[],
   scope = { studyId: 'study-1', siteId: 'site-1' },
+  activeModule?: AppModule,
 ) {
   const model = resolveNavigationModel(state, permissions, scope)
   return render(
@@ -98,6 +100,7 @@ function renderResolvedSidebar(
       edcSections={model.edcSections}
       ctmsSections={model.ctmsSections}
       showCTMS={state.status === 'ready' && permissions.includes(PERMISSIONS.CTMS_OPERATIONAL_DATA_READ)}
+      activeModule={activeModule}
     />,
   )
 }
@@ -121,6 +124,46 @@ describe('AppSidebar', () => {
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
     expect(screen.queryByText('CTMS')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument()
+  })
+
+  it('shows only the selected module hierarchy', () => {
+    renderResolvedSidebar(readyState, allPermissions, undefined, 'edc')
+
+    expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('edc')
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('CTMS navigation')).not.toBeInTheDocument()
+  })
+
+  it('shows only CTMS navigation when CTMS is selected', () => {
+    renderResolvedSidebar(readyState, allPermissions, undefined, 'ctms')
+
+    expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('ctms')
+    expect(screen.getByRole('link', { name: 'Overview' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Workspace')).not.toBeInTheDocument()
+  })
+
+  it('reports module changes from the selector', async () => {
+    const user = userEvent.setup()
+    const onModuleChange = vi.fn()
+    const model = resolveNavigationModel(readyState, allPermissions, { studyId: 'study-1', siteId: 'site-1' })
+
+    render(
+      <AppSidebar
+        collapsed={false}
+        onCollapsedChange={vi.fn()}
+        edcSections={model.edcSections}
+        ctmsSections={model.ctmsSections}
+        showCTMS
+        activeModule="edc"
+        onModuleChange={onModuleChange}
+      />,
+    )
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Select module' }), 'ctms')
+
+    expect(onModuleChange).toHaveBeenCalledWith('ctms')
   })
 
   it.each([
