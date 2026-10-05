@@ -195,3 +195,7 @@ A typical AWS deployment:
 - Secrets and environment via task definitions / Secrets Manager (never commit `.env`).
 - Logs and metrics shipped to CloudWatch (`LOG_JSON=true`).
 - Optional: S3 for file/export storage, Cognito for authentication, Redis for background jobs.
+
+### Cognito authentication (optional)
+
+Set the backend `COGNITO_USER_POOL_ID`, `COGNITO_REGION`, `COGNITO_APP_CLIENT_ID`, `COGNITO_DOMAIN`, and `COGNITO_REDIRECT_URI` variables, plus matching frontend `VITE_COGNITO_DOMAIN`, `VITE_COGNITO_CLIENT_ID`, and `VITE_COGNITO_REDIRECT_URI`, to enable Hosted UI authorization-code + PKCE login. Use a public Cognito app client without a secret and register the exact `/auth/callback` URL. Cognito validates identity only; application-database users, status, roles, permissions, and study/site scopes remain authoritative. See `docs/local-development.md` for details.

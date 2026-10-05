@@ -22,6 +22,12 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+export function getRefreshEndpoint(): string {
+  return localStorage.getItem('auth_provider') === 'cognito'
+    ? '/api/v1/auth/cognito/refresh'
+    : '/api/v1/auth/refresh'
+}
+
 // Handle 401 responses globally — attempt token refresh or redirect to login
 api.interceptors.response.use(
   (response) => response,
@@ -37,17 +43,22 @@ api.interceptors.response.use(
           throw new Error('No refresh token')
         }
 
-        const { data } = await axios.post('/api/v1/auth/refresh', {
+        const endpoint = getRefreshEndpoint()
+        const { data } = await axios.post(endpoint, {
           refresh_token: refreshToken,
         })
 
         localStorage.setItem('access_token', data.access_token)
+        if (data.refresh_token) {
+          localStorage.setItem('refresh_token', data.refresh_token)
+        }
         originalRequest.headers.Authorization = `Bearer ${data.access_token}`
         return api(originalRequest)
       } catch {
         // Refresh failed — clear tokens and redirect to login
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
+        localStorage.removeItem('auth_provider')
         window.location.href = '/login'
         return Promise.reject(error)
       }

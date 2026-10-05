@@ -21,6 +21,9 @@ from app.core.exceptions import AuthenticationError
 from app.core.security import InvalidTokenError
 from app.schemas.auth import (
     AccessTokenResponse,
+    CognitoCodeExchangeRequest,
+    CognitoRefreshRequest,
+    CognitoTokenResponse,
     CurrentUserResponse,
     LoginRequest,
     LogoutRequest,
@@ -38,6 +41,30 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Reusable annotated dependency for DB session in route handlers
 DbSession = Annotated[AsyncSession, Depends(get_db)]
+
+
+@router.post("/cognito/exchange", response_model=CognitoTokenResponse)
+async def cognito_exchange(body: CognitoCodeExchangeRequest) -> CognitoTokenResponse:
+    """Exchange a Cognito authorization code using PKCE (no client secret)."""
+    try:
+        result = await auth_service.exchange_cognito_code(
+            code=body.code,
+            code_verifier=body.code_verifier,
+            redirect_uri=body.redirect_uri,
+        )
+        return CognitoTokenResponse(**result)
+    except InvalidTokenError as exc:
+        raise AuthenticationError(str(exc)) from None
+
+
+@router.post("/cognito/refresh", response_model=CognitoTokenResponse)
+async def cognito_refresh(body: CognitoRefreshRequest) -> CognitoTokenResponse:
+    """Proxy Cognito refresh without exposing a client secret to the SPA."""
+    try:
+        result = await auth_service.refresh_cognito(body.refresh_token)
+        return CognitoTokenResponse(**result)
+    except InvalidTokenError as exc:
+        raise AuthenticationError(str(exc)) from None
 
 
 @router.post("/login", response_model=TokenPair)
@@ -65,9 +92,7 @@ async def refresh(body: RefreshRequest, session: DbSession) -> AccessTokenRespon
     Requirement 1.3: Issue a new access token for a valid, unrevoked refresh token.
     """
     try:
-        access_token = await auth_service.refresh(
-            session=session, refresh_token=body.refresh_token
-        )
+        access_token = await auth_service.refresh(session=session, refresh_token=body.refresh_token)
         return AccessTokenResponse(access_token=access_token)
     except InvalidTokenError as exc:
         raise AuthenticationError(str(exc)) from None

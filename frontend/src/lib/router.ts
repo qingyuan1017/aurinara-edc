@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { AuthGuard } from '@/components/guards/AuthGuard'
 import { LoginPage } from '@/features/auth/LoginPage'
+import { CognitoCallbackPage } from '@/features/auth/CognitoCallbackPage'
 import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage'
 import { AcceptInvitationPage } from '@/features/auth/AcceptInvitationPage'
@@ -40,6 +41,12 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
   component: () => createElement(LoginPage),
+})
+
+const cognitoCallbackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/auth/callback',
+  component: () => createElement(CognitoCallbackPage),
 })
 
 /**
@@ -440,6 +447,7 @@ const auditRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  cognitoCallbackRoute,
   forgotPasswordRoute,
   resetPasswordRoute,
   acceptInvitationRoute,

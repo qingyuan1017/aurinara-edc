@@ -190,3 +190,10 @@ curl -i http://localhost:8000/api/v1/health/ready
 ```
 
 A `503` response means the API process is running but cannot reach PostgreSQL. Inspect `docker compose ps`, verify the database container is healthy, confirm `backend/.env` points to `postgresql+asyncpg://edetek:edetekpassword@localhost:5432/edc`, and rerun the migration after the database becomes ready. A successful response contains `{"status":"ready"}`.
+## Optional AWS Cognito browser authentication
+
+Cognito is disabled unless all required values are configured. The backend uses these non-secret variables: `COGNITO_USER_POOL_ID`, `COGNITO_REGION`, `COGNITO_APP_CLIENT_ID`, `COGNITO_DOMAIN`, and `COGNITO_REDIRECT_URI`; `COGNITO_SCOPES` defaults to `openid email`, and `COGNITO_JWKS_CACHE_TTL_SECONDS` defaults to 3600. The frontend uses matching `VITE_COGNITO_DOMAIN`, `VITE_COGNITO_CLIENT_ID`, `VITE_COGNITO_REDIRECT_URI`, and optional `VITE_COGNITO_SCOPES` values.
+
+Use a Cognito **public app client with no client secret** for the SPA. Register the exact callback URL (for local development, typically `http://localhost:5173/auth/callback`) in the user pool app client. The SPA stores only short-lived OAuth state/PKCE verifier material in session storage and sends the authorization code to the backend exchange endpoint; it never handles a client secret. Do not put tokens or secrets in URLs.
+
+Cognito authenticates the person, but the application database remains authoritative for `users`, active/inactive status, roles, permissions, and study/site scopes. The API maps the verified immutable Cognito `sub` to a nullable `users.external_identity_provider`/`users.external_subject` pair. A legacy local user can be linked once from a verified Cognito ID token when the email is present and verified and no external mapping exists; access tokens without an email cannot perform that link. Cognito groups and claims are never used to grant application permissions.

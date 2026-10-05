@@ -67,6 +67,12 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="Nullable for Cognito/OIDC users"
     )
+    external_identity_provider: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="External identity provider, e.g. cognito"
+    )
+    external_subject: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="Immutable provider subject (Cognito sub)"
+    )
     first_name: Mapped[str] = mapped_column(String(150), nullable=False)
     last_name: Mapped[str] = mapped_column(String(150), nullable=False)
     status: Mapped[UserStatus] = mapped_column(
@@ -76,9 +82,7 @@ class User(Base):
     mfa_secret: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="TOTP secret; nullable when MFA disabled"
     )
-    last_activity: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_activity: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reset_token: Mapped[str | None] = mapped_column(
         String(255), nullable=True, unique=True, comment="Single-use password reset token"
     )
@@ -88,8 +92,19 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "external_identity_provider",
+            "external_subject",
+            name="uq_users_external_identity",
+        ),
+        Index(
+            "ix_users_external_identity",
+            "external_identity_provider",
+            "external_subject",
+        ),
     )
 
     # Relationships
@@ -161,9 +176,7 @@ class RolePermission(Base):
 
     # Relationships
     role: Mapped["Role"] = relationship("Role", back_populates="role_permissions")
-    permission: Mapped["Permission"] = relationship(
-        "Permission", back_populates="role_permissions"
-    )
+    permission: Mapped["Permission"] = relationship("Permission", back_populates="role_permissions")
 
     def __repr__(self) -> str:
         return f"<RolePermission(role_id={self.role_id}, permission_id={self.permission_id})>"
@@ -195,9 +208,7 @@ class UserRole(Base):
     )
 
     # Relationships
-    user: Mapped["User"] = relationship(
-        "User", back_populates="user_roles", foreign_keys=[user_id]
-    )
+    user: Mapped["User"] = relationship("User", back_populates="user_roles", foreign_keys=[user_id])
     role: Mapped["Role"] = relationship("Role", back_populates="user_roles")
 
     __table_args__ = (
@@ -235,9 +246,7 @@ class Invitation(Base):
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    accepted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     role: Mapped["Role"] = relationship("Role")

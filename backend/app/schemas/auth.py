@@ -51,6 +51,30 @@ class LogoutRequest(BaseModel):
     refresh_token: str
 
 
+class CognitoCodeExchangeRequest(BaseModel):
+    """PKCE authorization code exchange submitted by the public SPA."""
+
+    code: str = Field(..., min_length=1, max_length=4096)
+    code_verifier: str = Field(..., min_length=43, max_length=128)
+    redirect_uri: str | None = None
+
+
+class CognitoRefreshRequest(BaseModel):
+    """Cognito refresh token submitted to the backend proxy."""
+
+    refresh_token: str = Field(..., min_length=1, max_length=8192)
+
+
+class CognitoTokenResponse(BaseModel):
+    """Cognito tokens returned by the safe backend OAuth proxy."""
+
+    access_token: str
+    refresh_token: str | None = None
+    id_token: str | None = None
+    token_type: str = "bearer"
+    expires_in: int | None = None
+
+
 class RoleAssignment(BaseModel):
     """A single role assignment with scope context."""
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api } from './api'
+import type { CognitoTokenResponse } from './cognito'
 
 /**
  * Represents the current authenticated user and their authorization scope.
@@ -43,6 +44,7 @@ interface AuthState {
   isLoading: boolean
 
   login: (email: string, password: string, mfaCode?: string) => Promise<void>
+  completeCognitoLogin: (tokens: CognitoTokenResponse) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   setUser: (user: CurrentUser | null) => void
@@ -67,6 +69,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       })
       localStorage.setItem('access_token', data.access_token)
       localStorage.setItem('refresh_token', data.refresh_token)
+      localStorage.setItem('auth_provider', 'local')
       set({ isAuthenticated: true })
 
       // Fetch full user profile after login
@@ -77,15 +80,29 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
+  completeCognitoLogin: async (tokens) => {
+    if (!tokens.refresh_token) {
+      throw new Error('Cognito did not return a refresh token')
+    }
+    localStorage.setItem('access_token', tokens.access_token)
+    localStorage.setItem('refresh_token', tokens.refresh_token)
+    localStorage.setItem('auth_provider', 'cognito')
+    set({ isAuthenticated: true })
+    const { data: user } = await api.get<CurrentUser>('/auth/me')
+    set({ user: normalizeCurrentUser(user) })
+  },
+
   logout: async () => {
     try {
       const refreshToken = localStorage.getItem('refresh_token')
-      if (refreshToken) {
+      const provider = localStorage.getItem('auth_provider')
+      if (refreshToken && provider !== 'cognito') {
         await api.post('/auth/logout', { refresh_token: refreshToken })
       }
     } finally {
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
+      localStorage.removeItem('auth_provider')
       set({ user: null, isAuthenticated: false })
     }
   },

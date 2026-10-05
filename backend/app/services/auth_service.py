@@ -31,7 +31,9 @@ from app.core.security import (
     create_refresh_token,
     create_reset_token,
     decode_token,
+    exchange_cognito_code,
     hash_password,
+    refresh_cognito_token,
     validate_cognito_token,
     verify_mfa_code,
     verify_password,
@@ -298,9 +300,7 @@ class AuthService:
 
         logger.info("Password reset token generated for user: %s", user.id)
 
-    async def reset_password(
-        self, session: AsyncSession, token: str, new_password: str
-    ) -> None:
+    async def reset_password(self, session: AsyncSession, token: str, new_password: str) -> None:
         """Verify a reset token and update the user's password.
 
         Args:
@@ -311,9 +311,7 @@ class AuthService:
         Raises:
             InvalidTokenError: If the token is invalid or expired.
         """
-        result = await session.execute(
-            select(User).where(User.reset_token == token)
-        )
+        result = await session.execute(select(User).where(User.reset_token == token))
         user = result.scalars().first()
 
         if user is None:
@@ -339,13 +337,21 @@ class AuthService:
 
         logger.info("Password reset completed for user: %s", user.id)
 
+    async def exchange_cognito_code(
+        self, *, code: str, code_verifier: str, redirect_uri: str | None = None
+    ) -> dict:
+        return exchange_cognito_code(
+            code=code, code_verifier=code_verifier, redirect_uri=redirect_uri
+        )
+
+    async def refresh_cognito(self, refresh_token: str) -> dict:
+        return refresh_cognito_token(refresh_token)
+
     # ------------------------------------------------------------------
     # External token validation (Req 1.7)
     # ------------------------------------------------------------------
 
-    async def validate_external_token(
-        self, session: AsyncSession, token: str
-    ) -> User | None:
+    async def validate_external_token(self, session: AsyncSession, token: str) -> User | None:
         """Validate a Cognito/OIDC token and map to an internal user.
 
         Args:
@@ -364,14 +370,25 @@ class AuthService:
         if payload is None:
             return None
 
-        # Map Cognito sub (or email) to internal user
-        # Prefer email mapping if available, fall back to sub matching
-        user: User | None = None
-        if payload.email:
-            result = await session.execute(
-                select(User).where(User.email == payload.email)
+        # Immutable provider subject is authoritative. Email is only a one-time
+        # migration aid for a verified ID token and never a permanent key.
+        result = await session.execute(
+            select(User).where(
+                User.external_identity_provider == "cognito",
+                User.external_subject == payload.sub,
             )
-            user = result.scalars().first()
+        )
+        user = result.scalars().first()
+        if user is None and payload.token_use == "id" and payload.email and payload.email_verified:
+            result = await session.execute(select(User).where(User.email == payload.email))
+            candidate = result.scalars().first()
+            if candidate is not None:
+                if candidate.external_identity_provider or candidate.external_subject:
+                    raise AuthenticationError("External identity is already mapped")
+                candidate.external_identity_provider = "cognito"
+                candidate.external_subject = payload.sub
+                await session.flush()
+                user = candidate
 
         if user is None:
             raise AuthenticationError(

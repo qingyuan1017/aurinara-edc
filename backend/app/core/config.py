@@ -114,6 +114,10 @@ class Settings(BaseSettings):
     cognito_user_pool_id: str | None = None
     cognito_region: str | None = None
     cognito_app_client_id: str | None = None
+    cognito_domain: str | None = None
+    cognito_redirect_uri: str | None = None
+    cognito_scopes: str = "openid email"
+    cognito_jwks_cache_ttl_seconds: int = 3600
 
     # --- Object storage (local by default; S3-compatible when configured) ---
     object_storage_backend: str = "local"
@@ -272,6 +276,7 @@ class Settings(BaseSettings):
         "pv_backup_interval_hours",
         "pv_restore_target_hours",
         "pv_clock_skew_tolerance_seconds",
+        "cognito_jwks_cache_ttl_seconds",
     )
     @classmethod
     def validate_positive_settings(cls, value: int | None) -> int | None:

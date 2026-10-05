@@ -118,7 +118,7 @@ describe('frontend source migration checks', () => {
   it('keeps every protected route connected to AppShell and leaves public routes at the root', () => {
     const routerText = read(routerPath)
     const routeDeclarations = [...routerText.matchAll(/const\s+(\w+)\s*=\s*createRoute\(\{\s*getParentRoute:\s*\(\)\s*=>\s*(\w+)/g)]
-    const publicRoutes = new Set(['loginRoute', 'forgotPasswordRoute', 'resetPasswordRoute', 'acceptInvitationRoute', 'accessDeniedRoute'])
+    const publicRoutes = new Set(['loginRoute', 'cognitoCallbackRoute', 'forgotPasswordRoute', 'resetPasswordRoute', 'acceptInvitationRoute', 'accessDeniedRoute'])
     const parentMismatches = routeDeclarations
       .filter(([, name]) => name !== 'authenticatedLayout' && name !== 'appShellLayout')
       .filter(([, name, parent]) => parent !== (publicRoutes.has(name) || name === 'authenticatedLayout' ? 'rootRoute' : 'appShellLayout'))

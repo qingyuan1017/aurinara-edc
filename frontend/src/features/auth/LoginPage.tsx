@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useAuthStore } from '@/lib/auth'
+import { buildCognitoAuthorizeUrl, isCognitoConfigured } from '@/lib/cognito'
 import { useNavigate } from '@tanstack/react-router'
 import type { AxiosError } from 'axios'
 import type { ApiError } from '@/lib/api'
@@ -26,6 +27,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
   const [showMfa, setShowMfa] = useState(false)
+  const cognitoConfigured = isCognitoConfigured()
 
   const {
     register,
@@ -34,6 +36,15 @@ export function LoginPage() {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   })
+
+  const startCognitoLogin = async () => {
+    setError(null)
+    try {
+      window.location.assign(await buildCognitoAuthorizeUrl())
+    } catch {
+      setError('Hosted sign-in is not available.')
+    }
+  }
 
   const onSubmit = async (data: LoginFormData) => {
     setError(null)
@@ -115,6 +126,11 @@ export function LoginPage() {
           Sign In
         </Button>
       </form>
+      {cognitoConfigured ? (
+        <Button type="button" variant="outline" className="w-full" onClick={() => void startCognitoLogin()}>
+          Sign in with Cognito
+        </Button>
+      ) : null}
     </AuthPageLayout>
   )
 }

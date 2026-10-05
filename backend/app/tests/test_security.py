@@ -316,3 +316,95 @@ class TestCognitoValidation:
 
         with pytest.raises(InvalidTokenError):
             validate_cognito_token("invalid.jwt.token")
+
+    @patch("app.core.security.jwt.decode")
+    @patch(
+        "app.core.security.jwt.get_unverified_header", return_value={"alg": "RS256", "kid": "key-1"}
+    )
+    @patch("app.core.security._fetch_cognito_jwks", return_value={"keys": [{"kid": "key-1"}]})
+    @patch("app.core.security.get_settings")
+    def test_access_token_uses_client_id_and_token_use(self, settings, jwks, header, decode):
+        settings.return_value.cognito_user_pool_id = "us-east-1_pool"
+        settings.return_value.cognito_region = "us-east-1"
+        settings.return_value.cognito_app_client_id = "client123"
+        decode.return_value = {
+            "sub": "subject-1",
+            "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_pool",
+            "exp": datetime.now(UTC).timestamp() + 300,
+            "token_use": "access",
+            "client_id": "client123",
+        }
+        result = validate_cognito_token("token")
+        assert result is not None
+        assert result.token_use == "access"
+        assert result.client_id == "client123"
+
+    @patch("app.core.security.jwt.decode")
+    @patch(
+        "app.core.security.jwt.get_unverified_header", return_value={"alg": "RS256", "kid": "key-1"}
+    )
+    @patch("app.core.security._fetch_cognito_jwks", return_value={"keys": [{"kid": "key-1"}]})
+    @patch("app.core.security.get_settings")
+    def test_id_token_uses_audience(self, settings, jwks, header, decode):
+        settings.return_value.cognito_user_pool_id = "pool"
+        settings.return_value.cognito_region = "region"
+        settings.return_value.cognito_app_client_id = "client"
+        decode.return_value = {
+            "sub": "subject-1",
+            "iss": "https://cognito-idp.region.amazonaws.com/pool",
+            "exp": datetime.now(UTC).timestamp() + 300,
+            "token_use": "id",
+            "aud": "client",
+        }
+        assert validate_cognito_token("token").token_use == "id"
+
+    @pytest.mark.parametrize(
+        "claims, message",
+        [
+            ({"token_use": "access", "client_id": "other"}, "client"),
+            ({"token_use": "id", "aud": "other"}, "audience"),
+            ({"token_use": "refresh", "client_id": "client"}, "Unsupported"),
+        ],
+    )
+    @patch("app.core.security.jwt.decode")
+    @patch(
+        "app.core.security.jwt.get_unverified_header", return_value={"alg": "RS256", "kid": "key-1"}
+    )
+    @patch("app.core.security._fetch_cognito_jwks", return_value={"keys": [{"kid": "key-1"}]})
+    @patch("app.core.security.get_settings")
+    def test_rejects_wrong_cognito_claims(self, settings, jwks, header, decode, claims, message):
+        settings.return_value.cognito_user_pool_id = "pool"
+        settings.return_value.cognito_region = "region"
+        settings.return_value.cognito_app_client_id = "client"
+        decode.return_value = {
+            "sub": "subject-1",
+            "iss": "https://cognito-idp.region.amazonaws.com/pool",
+            "exp": datetime.now(UTC).timestamp() + 300,
+            **claims,
+        }
+        with pytest.raises(InvalidTokenError, match=message):
+            validate_cognito_token("token")
+
+    @patch("app.core.security.jwt.decode")
+    @patch(
+        "app.core.security.jwt.get_unverified_header",
+        return_value={"alg": "RS256", "kid": "rotated-key"},
+    )
+    @patch(
+        "app.core.security._fetch_cognito_jwks",
+        side_effect=[{"keys": [{"kid": "old-key"}]}, {"keys": [{"kid": "rotated-key"}]}],
+    )
+    @patch("app.core.security.get_settings")
+    def test_unknown_key_id_refreshes_jwks(self, settings, fetch_jwks, header, decode):
+        settings.return_value.cognito_user_pool_id = "pool"
+        settings.return_value.cognito_region = "region"
+        settings.return_value.cognito_app_client_id = "client"
+        decode.return_value = {
+            "sub": "subject-1",
+            "iss": "https://cognito-idp.region.amazonaws.com/pool",
+            "exp": datetime.now(UTC).timestamp() + 300,
+            "token_use": "access",
+            "client_id": "client",
+        }
+        assert validate_cognito_token("token").sub == "subject-1"
+        assert fetch_jwks.call_count == 2

@@ -23,12 +23,9 @@ from sqlalchemy.orm import selectinload
 from app.core.database import async_session_factory
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.core.request_context import set_actor
-from app.core.security import (
-    InvalidTokenError,
-    decode_token,
-    validate_cognito_token,
-)
+from app.core.security import InvalidTokenError, decode_token
 from app.models.identity import Role, RolePermission, User, UserRole, UserStatus
+from app.services.auth_service import auth_service
 from app.services.permission_service import PermissionService
 
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -48,9 +45,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def get_current_user(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
-    ] = None,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)] = None,
 ) -> User:
     """Resolve the authenticated user from the Authorization header.
 
@@ -80,28 +75,15 @@ async def get_current_user(
         user_id = UUID(payload.sub)
     except InvalidTokenError:
         # --- Attempt 2: Cognito/OIDC validation (if configured) ---
-        cognito_payload = validate_cognito_token(token)
-        if cognito_payload is None:
-            # Cognito not configured and local decode failed
-            raise AuthenticationError(
-                "Invalid or expired token"
-            ) from None
-
-        # Map Cognito subject to internal user via email
-        if cognito_payload.email:
-            result = await session.execute(
-                select(User).where(User.email == cognito_payload.email)
-            )
-            user = result.scalars().first()
-            if user is None:
-                raise AuthenticationError(
-                    f"No internal user mapped to external identity: {cognito_payload.sub}"
-                ) from None
-            user_id = user.id
-        else:
-            raise AuthenticationError(
-                "Cognito token missing email claim for user mapping"
-            ) from None
+        # AuthService validates the signature/claims and resolves by immutable
+        # provider subject, including the constrained legacy-link path.
+        try:
+            user = await auth_service.validate_external_token(session, token)
+        except InvalidTokenError:
+            raise AuthenticationError("Invalid or expired token") from None
+        if user is None:
+            raise AuthenticationError("Invalid or expired token") from None
+        user_id = user.id
 
     # --- Load user with role relationships ---
     result = await session.execute(
@@ -203,9 +185,7 @@ def require_permission(permission: str) -> Callable:
         site_id = _extract_uuid(request, "site_id")
 
         try:
-            permission_service.require(
-                current_user, permission, study_id=study_id, site_id=site_id
-            )
+            permission_service.require(current_user, permission, study_id=study_id, site_id=site_id)
         except AuthorizationError:
             raise AuthorizationError(
                 message="Insufficient permissions",
@@ -261,9 +241,7 @@ def require_pv_permission(permission: str) -> Callable:
         site_id = _extract_uuid(request, "site_id")
 
         try:
-            permission_service.require(
-                current_user, permission, study_id=study_id, site_id=site_id
-            )
+            permission_service.require(current_user, permission, study_id=study_id, site_id=site_id)
         except AuthorizationError:
             # Non-disclosing: do not reveal whether the object exists or which of
             # the study/site scopes was missing beyond the requested permission.
@@ -383,9 +361,7 @@ class PaginationParams:
     """
 
     page: int = Query(default=1, ge=1, description="Page number (1-indexed)")
-    page_size: int = Query(
-        default=25, ge=1, le=100, description="Items per page (max 100)"
-    )
+    page_size: int = Query(default=25, ge=1, le=100, description="Items per page (max 100)")
 
     @property
     def offset(self) -> int:

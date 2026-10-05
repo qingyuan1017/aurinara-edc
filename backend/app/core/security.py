@@ -14,7 +14,11 @@ Satisfies Requirements:
 
 from __future__ import annotations
 
+import json
 import secrets
+import time
+import urllib.parse
+import urllib.request
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -144,17 +148,16 @@ def decode_token(token: str) -> TokenPayload:
     settings = get_settings()
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[_ALGORITHM])
-    except JWTError as exc:
-        raise InvalidTokenError(f"Token validation failed: {exc}") from exc
-
-    return TokenPayload(
-        sub=payload["sub"],
-        exp=datetime.fromtimestamp(payload["exp"], tz=UTC),
-        iat=datetime.fromtimestamp(payload["iat"], tz=UTC),
-        type=payload.get("type", "access"),
-        jti=payload.get("jti"),
-        extra=payload.get("extra", {}),
-    )
+        return TokenPayload(
+            sub=payload["sub"],
+            exp=datetime.fromtimestamp(payload["exp"], tz=UTC),
+            iat=datetime.fromtimestamp(payload["iat"], tz=UTC),
+            type=payload.get("type", "access"),
+            jti=payload.get("jti"),
+            extra=payload.get("extra", {}),
+        )
+    except (JWTError, KeyError, TypeError, ValueError) as exc:
+        raise InvalidTokenError("Token validation failed") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +261,9 @@ def check_inactivity(last_activity: datetime | None, timeout_minutes: int | None
         return True
 
     settings = get_settings()
-    timeout = timeout_minutes if timeout_minutes is not None else settings.inactivity_timeout_minutes
+    timeout = (
+        timeout_minutes if timeout_minutes is not None else settings.inactivity_timeout_minutes
+    )
     threshold = datetime.now(UTC) - timedelta(minutes=timeout)
     return last_activity < threshold
 
@@ -269,17 +274,21 @@ def check_inactivity(last_activity: datetime | None, timeout_minutes: int | None
 
 
 class CognitoTokenPayload(BaseModel):
-    """Claims extracted from a validated Cognito/OIDC JWT."""
+    """Claims extracted from a validated Cognito JWT."""
 
-    sub: str  # Cognito user pool subject (UUID)
+    sub: str
     email: str | None = None
-    token_use: str | None = None  # "access" or "id"
-    iss: str | None = None
-    exp: datetime | None = None
+    email_verified: bool = False
+    token_use: str
+    iss: str
+    exp: datetime
+    client_id: str | None = None
+    audience: str | list[str] | None = None
 
 
-# In-memory JWKS cache (populated on first call when Cognito is configured)
+# Bounded process-local cache. A key miss forces one refresh for Cognito rotation.
 _jwks_cache: dict[str, Any] | None = None
+_jwks_cache_expires_at = 0.0
 
 
 def _get_cognito_jwks_url() -> str | None:
@@ -293,97 +302,167 @@ def _get_cognito_jwks_url() -> str | None:
     )
 
 
-def _fetch_cognito_jwks() -> dict[str, Any] | None:
-    """Fetch JWKS from Cognito. Returns None if not configured or fetch fails.
-
-    Uses a simple in-memory cache to avoid repeated network calls.
-    In production, this would use async HTTP with TTL-based refresh.
-    """
-    global _jwks_cache
-    if _jwks_cache is not None:
+def _fetch_cognito_jwks(*, force_refresh: bool = False) -> dict[str, Any] | None:
+    global _jwks_cache, _jwks_cache_expires_at
+    now = time.monotonic()
+    if not force_refresh and _jwks_cache is not None and now < _jwks_cache_expires_at:
         return _jwks_cache
-
     url = _get_cognito_jwks_url()
     if url is None:
         return None
-
     try:
-        import urllib.request
-
         with urllib.request.urlopen(url, timeout=5) as resp:
-            import json
-
-            _jwks_cache = json.loads(resp.read())
-            return _jwks_cache
+            result = json.loads(resp.read())
+        if not isinstance(result, dict) or not isinstance(result.get("keys"), list):
+            return None
+        _jwks_cache = result
+        _jwks_cache_expires_at = now + max(60, int(get_settings().cognito_jwks_cache_ttl_seconds))
+        return result
     except Exception:
         return None
 
 
 def validate_cognito_token(token: str) -> CognitoTokenPayload | None:
-    """Validate a Cognito-issued JWT against the configured JWKS.
-
-    If Cognito is not configured (pool ID / region not set), returns None immediately.
-    On successful validation, returns the decoded claims. On failure, raises
-    InvalidTokenError.
-
-    Args:
-        token: The raw JWT string from the Authorization header.
-
-    Returns:
-        CognitoTokenPayload with decoded claims, or None if Cognito is not configured.
-
-    Raises:
-        InvalidTokenError: If the token is invalid, expired, or from an untrusted issuer.
-    """
+    """Validate Cognito signature and token-use-specific claims."""
     settings = get_settings()
     if not settings.cognito_user_pool_id or not settings.cognito_region:
         return None
-
     expected_issuer = (
         f"https://cognito-idp.{settings.cognito_region}.amazonaws.com/"
         f"{settings.cognito_user_pool_id}"
     )
-
     jwks = _fetch_cognito_jwks()
     if jwks is None:
         raise InvalidTokenError("Unable to fetch Cognito JWKS for token validation")
-
     try:
-        # Decode the token header to find the key ID
-        unverified_header = jwt.get_unverified_header(token)
-        kid = unverified_header.get("kid")
+        header = jwt.get_unverified_header(token)
+        if header.get("alg") != "RS256":
+            raise InvalidTokenError("Unsupported Cognito token algorithm")
+        kid = header.get("kid")
         if not kid:
             raise InvalidTokenError("Token header missing 'kid'")
-
-        # Find the matching key in JWKS
-        rsa_key: dict[str, Any] = {}
-        for key in jwks.get("keys", []):
-            if key.get("kid") == kid:
-                rsa_key = key
-                break
-
-        if not rsa_key:
+        rsa_key = next((key for key in jwks.get("keys", []) if key.get("kid") == kid), None)
+        if rsa_key is None:
+            refreshed = _fetch_cognito_jwks(force_refresh=True)
+            if refreshed is None:
+                raise InvalidTokenError("Unable to refresh Cognito JWKS")
+            rsa_key = next(
+                (key for key in refreshed.get("keys", []) if key.get("kid") == kid), None
+            )
+        if rsa_key is None:
             raise InvalidTokenError("Token key ID not found in Cognito JWKS")
-
-        # Verify and decode
         payload = jwt.decode(
             token,
             rsa_key,
             algorithms=["RS256"],
-            audience=settings.cognito_app_client_id,
             issuer=expected_issuer,
+            options={"verify_aud": False},
         )
-
+        token_use = payload.get("token_use")
+        if token_use not in {"access", "id"}:
+            raise InvalidTokenError("Unsupported Cognito token type")
+        if not isinstance(payload.get("sub"), str) or not payload["sub"]:
+            raise InvalidTokenError("Cognito token has an invalid subject")
+        if not isinstance(payload.get("exp"), (int, float)):
+            raise InvalidTokenError("Cognito token has an invalid expiry")
+        client_id = settings.cognito_app_client_id
+        if not client_id:
+            raise InvalidTokenError("Cognito app client is not configured")
+        audience = payload.get("aud")
+        if token_use == "access" and payload.get("client_id") != client_id:
+            raise InvalidTokenError("Cognito access token client is not trusted")
+        if (
+            token_use == "id"
+            and audience != client_id
+            and not (isinstance(audience, list) and client_id in audience)
+        ):
+            raise InvalidTokenError("Cognito ID token audience is not trusted")
         return CognitoTokenPayload(
             sub=payload["sub"],
             email=payload.get("email"),
-            token_use=payload.get("token_use"),
-            iss=payload.get("iss"),
-            exp=datetime.fromtimestamp(payload["exp"], tz=UTC) if "exp" in payload else None,
+            email_verified=payload.get("email_verified") is True,
+            token_use=token_use,
+            iss=payload["iss"],
+            exp=datetime.fromtimestamp(payload["exp"], tz=UTC),
+            client_id=payload.get("client_id"),
+            audience=audience,
         )
+    except InvalidTokenError:
+        raise
+    except (JWTError, KeyError, TypeError, ValueError) as exc:
+        raise InvalidTokenError("Cognito token validation failed") from exc
 
-    except JWTError as exc:
-        raise InvalidTokenError(f"Cognito token validation failed: {exc}") from exc
+
+def _cognito_token_endpoint() -> str | None:
+    domain = get_settings().cognito_domain
+    if not domain:
+        return None
+    domain = domain.rstrip("/")
+    if domain.startswith("http://"):
+        domain = "https://" + domain[len("http://") :]
+    elif not domain.startswith("https://"):
+        domain = f"https://{domain}"
+    return f"{domain}/oauth2/token"
+
+
+def _post_cognito_token(values: dict[str, str]) -> dict[str, Any]:
+    settings = get_settings()
+    endpoint = _cognito_token_endpoint()
+    if endpoint is None or not settings.cognito_app_client_id:
+        raise InvalidTokenError("Cognito OAuth is not configured")
+    request = urllib.request.Request(
+        endpoint,
+        data=urllib.parse.urlencode(values).encode("ascii"),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            result = json.loads(response.read())
+    except Exception as exc:
+        raise InvalidTokenError("Cognito OAuth request failed") from exc
+    if not isinstance(result, dict) or not isinstance(result.get("access_token"), str):
+        raise InvalidTokenError("Cognito OAuth response is invalid")
+    return result
+
+
+def exchange_cognito_code(
+    *, code: str, code_verifier: str, redirect_uri: str | None = None
+) -> dict[str, Any]:
+    """Exchange a short-lived authorization code using public-client PKCE."""
+    settings = get_settings()
+    configured_redirect = settings.cognito_redirect_uri
+    effective_redirect = redirect_uri or configured_redirect
+    if (
+        not code
+        or not code_verifier
+        or not configured_redirect
+        or effective_redirect != configured_redirect
+    ):
+        raise InvalidTokenError("Cognito redirect URI is not allowed")
+    return _post_cognito_token(
+        {
+            "grant_type": "authorization_code",
+            "client_id": settings.cognito_app_client_id or "",
+            "code": code,
+            "redirect_uri": effective_redirect,
+            "code_verifier": code_verifier,
+        }
+    )
+
+
+def refresh_cognito_token(refresh_token: str) -> dict[str, Any]:
+    """Refresh Cognito tokens through Cognito's token endpoint."""
+    if not refresh_token:
+        raise InvalidTokenError("Cognito refresh token is missing")
+    settings = get_settings()
+    return _post_cognito_token(
+        {
+            "grant_type": "refresh_token",
+            "client_id": settings.cognito_app_client_id or "",
+            "refresh_token": refresh_token,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------

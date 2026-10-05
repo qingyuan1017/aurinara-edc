@@ -6,6 +6,7 @@ Uses an in-memory SQLite database to test real DB interactions without external 
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import pyotp
 import pytest
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import Base
 from app.core.security import (
+    CognitoTokenPayload,
     InvalidTokenError,
     create_refresh_token,
     decode_token,
@@ -198,9 +200,7 @@ class TestLogin:
         with pytest.raises(AuthenticationError, match="Account is inactive"):
             await auth_service.login(db_session, "inactive@example.com", "password123")
 
-    async def test_login_mfa_required_but_not_provided(
-        self, auth_service, db_session, mfa_user
-    ):
+    async def test_login_mfa_required_but_not_provided(self, auth_service, db_session, mfa_user):
         with pytest.raises(AuthenticationError, match="MFA code required"):
             await auth_service.login(db_session, "mfa@example.com", "mfa-password")
 
@@ -238,9 +238,7 @@ class TestLogin:
 class TestRefresh:
     """Test AuthService.refresh."""
 
-    async def test_refresh_issues_new_access_token(
-        self, auth_service, db_session, active_user
-    ):
+    async def test_refresh_issues_new_access_token(self, auth_service, db_session, active_user):
         refresh = create_refresh_token(active_user.id)
         new_access = await auth_service.refresh(db_session, refresh)
         assert isinstance(new_access, str)
@@ -369,9 +367,7 @@ class TestPasswordReset:
         result = await auth_service.login(db_session, "alice@example.com", "new-secure-password")
         assert result.access_token
 
-    async def test_reset_password_invalidates_token(
-        self, auth_service, db_session, active_user
-    ):
+    async def test_reset_password_invalidates_token(self, auth_service, db_session, active_user):
         await auth_service.request_password_reset(db_session, "alice@example.com")
         await db_session.refresh(active_user)
         token = active_user.reset_token
@@ -407,9 +403,57 @@ class TestPasswordReset:
 class TestValidateExternalToken:
     """Test AuthService.validate_external_token."""
 
-    async def test_returns_none_when_cognito_not_configured(
-        self, auth_service, db_session
-    ):
+    async def test_returns_none_when_cognito_not_configured(self, auth_service, db_session):
         # Default settings have no Cognito configured
         result = await auth_service.validate_external_token(db_session, "any-token")
         assert result is None
+
+    @patch("app.services.auth_service.validate_cognito_token")
+    async def test_external_subject_mapping_does_not_use_email(
+        self, validate, auth_service, db_session, active_user
+    ):
+        validate.return_value = CognitoTokenPayload(
+            sub="cognito-subject",
+            email=active_user.email,
+            token_use="access",
+            iss="https://issuer",
+            exp=datetime.now(UTC) + timedelta(minutes=5),
+            client_id="client",
+        )
+        with pytest.raises(AuthenticationError, match="No internal user mapped"):
+            await auth_service.validate_external_token(db_session, "access-token")
+
+    @patch("app.services.auth_service.validate_cognito_token")
+    async def test_verified_id_token_links_legacy_user_once(
+        self, validate, auth_service, db_session, active_user
+    ):
+        validate.return_value = CognitoTokenPayload(
+            sub="cognito-subject",
+            email=active_user.email,
+            token_use="id",
+            iss="https://issuer",
+            exp=datetime.now(UTC) + timedelta(minutes=5),
+            audience="client",
+            email_verified=True,
+        )
+        mapped = await auth_service.validate_external_token(db_session, "id-token")
+        assert mapped is active_user
+        assert active_user.external_identity_provider == "cognito"
+        assert active_user.external_subject == "cognito-subject"
+
+    @patch("app.services.auth_service.validate_cognito_token")
+    async def test_external_mapping_rejects_inactive_user(
+        self, validate, auth_service, db_session, inactive_user
+    ):
+        inactive_user.external_identity_provider = "cognito"
+        inactive_user.external_subject = "inactive-subject"
+        await db_session.flush()
+        validate.return_value = CognitoTokenPayload(
+            sub="inactive-subject",
+            token_use="access",
+            iss="https://issuer",
+            exp=datetime.now(UTC) + timedelta(minutes=5),
+            client_id="client",
+        )
+        with pytest.raises(AuthenticationError, match="Account is inactive"):
+            await auth_service.validate_external_token(db_session, "access-token")
