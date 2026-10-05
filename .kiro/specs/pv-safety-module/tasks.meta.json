@@ -1,0 +1,671 @@
+{
+  "pbtResults": {
+    "1.5 Write the safety authorization scope property test": {
+      "status": "passed",
+      "lastRunTimestamp": 1790782417450
+    },
+    "2.3 Write the safety identity and reference integrity property test": {
+      "status": "passed",
+      "lastRunTimestamp": 1790782677158
+    },
+    "2.5 Write the safety lifecycle transition validity property test": {
+      "status": "passed",
+      "lastRunTimestamp": 1790783045322
+    },
+    "3.4 Write the safety data validation and preservation property test": {
+      "status": "passed",
+      "lastRunTimestamp": 1790784168982
+    },
+    "4.2 Write the regulatory clock correctness property test": {
+      "status": "passed",
+      "lastRunTimestamp": 1790786102313
+    },
+    "4.4 Write the ICSR round-trip serialization property test": {
+      "status": "passed",
+      "lastRunTimestamp": 1790786122415
+    }
+  },
+  "executionHistory": {
+    "1.1 Scaffold the PV backend package, frontend feature boundaries, and phase capability manifest": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778626830
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778637262
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790781024257
+      }
+    ],
+    "1.2 Create additive PV migrations and base persistence conventions": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778626905
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778642474
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790781025242
+      }
+    ],
+    "1.3 Implement shared request context and PV API contracts": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778626931
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790781028870
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782266011
+      }
+    ],
+    "1.4 Extend shared authentication and authorization for PV safety roles": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778626970
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790781029807
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782266837
+      }
+    ],
+    "1.5 Write the safety authorization scope property test": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627007
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782274997
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782577283
+      }
+    ],
+    "1.6 Integrate shared audit, notification, file, export, and coordination primitives with atomic writes": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627038
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790781031206
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782268244
+      }
+    ],
+    "1.7 Write the safety audit atomicity and immutability property test": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627073
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782275898
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782578179
+      }
+    ],
+    "2.1 Implement canonical identity resolution and cross-module ownership guards for PV": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627106
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790781032117
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782271019
+      }
+    ],
+    "2.2 Implement `Safety_Case_Service` intake and Adverse_Event_Record capture": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627137
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782276822
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782579108
+      }
+    ],
+    "2.3 Write the safety identity and reference integrity property test": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627165
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782583674
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782879345
+      }
+    ],
+    "2.4 Implement the safety case lifecycle and Case_Version state machine": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627213
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782584483
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782877744
+      }
+    ],
+    "2.5 Write the safety lifecycle transition validity property test": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627246
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782883362
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790783675017
+      }
+    ],
+    "3.1 Implement `Assessment_Service` for seriousness, causality, expectedness, and severity": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627279
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782884711
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790783671688
+      }
+    ],
+    "3.2 Implement `Coding_Service` for MedDRA and WHODrug with dictionary versions": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627306
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782885678
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790783672988
+      }
+    ],
+    "3.3 Implement `Narrative_Service` versioned Case_Narratives": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627339
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790782886779
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790783673962
+      }
+    ],
+    "3.4 Write the safety data validation and preservation property test": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627372
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790783683950
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786003935
+      }
+    ],
+    "4.1 Implement `Regulatory_Reporting_Service` reportability, clocks, and report state machine": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627397
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790783680564
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786005286
+      }
+    ],
+    "4.2 Write the regulatory clock correctness property test": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627441
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786015509
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786712556
+      }
+    ],
+    "4.3 Implement ICSR/E2B(R3) produce and parse": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627498
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790783681914
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786001713
+      }
+    ],
+    "4.4 Write the ICSR round-trip serialization property test": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627527
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786016417
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786710761
+      }
+    ],
+    "5.1 Implement the read-only `Safety_Operational_Projection` consumption and projection worker": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627557
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790783682866
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786002964
+      }
+    ],
+    "5.2 Implement `Reconciliation_Service` one-way read-only diffing": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627591
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786010143
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786711472
+      }
+    ],
+    "5.3 Write the safety and cross-module content separation property test": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627620
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790787552636
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790788682772
+      }
+    ],
+    "6.1 Implement PV safety exports on shared export-job infrastructure": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627644
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786011121
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786711821
+      }
+    ],
+    "6.2 Implement PV safety dashboards and reports": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627673
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786014512
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786708437
+      }
+    ],
+    "6.3 Implement PV safety notifications": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627703
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786717628
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790787538556
+      }
+    ],
+    "6.4 Implement Safety_Attachments using shared file primitives": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627738
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790786716864
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790787539502
+      }
+    ],
+    "7.1 Implement authenticated PV API schemas, routes, and service wiring": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627772
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790787550311
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790788683530
+      }
+    ],
+    "7.2 Implement PV audit search/export endpoints and contract publication": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627797
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790788688068
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789206238
+      }
+    ],
+    "7.3 Build the frontend PV workspace and permission-aware routes": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627830
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790787551562
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790788684359
+      }
+    ],
+    "7.4 Implement PV status presentation, Closed-case controls, and history dialogs": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627862
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789212662
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789926582
+      }
+    ],
+    "7.5 Write frontend component and route tests": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627895
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789934891
+      },
+      {
+        "executionId": "2b3c8f8d-ca23-4e61-b2f3-0e3928ec3c0d",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790995440290
+      }
+    ],
+    "8.1 Implement environment isolation, retention, and compliance controls": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627922
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789213575
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789925527
+      }
+    ],
+    "8.2 Implement PV observability and performance handling": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627947
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789214994
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789925759
+      }
+    ],
+    "8.3 Implement the optional PV-scoped AI assistant": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778627985
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789215790
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789923351
+      }
+    ],
+    "8.4 Write PV database, migration, and boundary integration tests": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778628012
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789933047
+      }
+    ],
+    "8.5 Write PV API contract, security, and permission tests": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778628048
+      },
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790789933949
+      },
+      {
+        "executionId": "2b3c8f8d-ca23-4e61-b2f3-0e3928ec3c0d",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790995440371
+      }
+    ],
+    "8.6 Write the unified-platform resilience and phased-qualification tests": [
+      {
+        "executionId": "382f6800-f4af-4a0f-b948-ce99eb1a9886",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790778628081
+      },
+      {
+        "executionId": "2b3c8f8d-ca23-4e61-b2f3-0e3928ec3c0d",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790991457268
+      },
+      {
+        "executionId": "2b3c8f8d-ca23-4e61-b2f3-0e3928ec3c0d",
+        "chatSessionId": "sess_83326bb6-e508-44a4-92b5-313014f5adb9",
+        "timestamp": 1790991782621
+      }
+    ]
+  }
+}

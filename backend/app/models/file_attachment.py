@@ -32,6 +32,9 @@ class FileAttachmentObjectType(enum.StrEnum):
     site = "site"
     study = "study"
     operational = "operational"
+    # PV-owned safety objects (Safety_Case or safety source record). The bytes
+    # and metadata reuse this shared primitive; PV owns the access semantics.
+    safety = "safety"
 
 
 class FileAttachmentModule(enum.StrEnum):
@@ -39,6 +42,7 @@ class FileAttachmentModule(enum.StrEnum):
 
     EDC = "EDC"
     CTMS = "CTMS"
+    PV = "PV"
 
 
 class FileAttachment(Base):

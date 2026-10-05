@@ -231,6 +231,92 @@ def require_ctms_permission(permission: str) -> Callable:
     return require_permission(permission)
 
 
+def require_pv_permission(permission: str) -> Callable:
+    """Return the shared server-side guard for a PV/Safety operation.
+
+    PV routes use the same shared ``Auth_Service``/``Permission_Service`` and
+    error envelope as EDC and CTMS routes; there is no separate PV identity or
+    authorization model. The guard:
+
+      - rejects unauthenticated/inactive users at ``get_current_user`` and again
+        inside ``PermissionService`` before any mutation (Requirements 1.4, 2.x),
+      - resolves the required PV Permission against the target study/site scope
+        drawn from path/query params before the route runs (Requirement 18.4),
+      - denies site-scope actions after a role/scope removal because the scope
+        is resolved live from the user's current role assignments,
+      - returns a non-disclosing ``PV_SCOPE_DENIED`` access-denied indication
+        that does not reveal whether the target object exists (Requirement 2.4).
+
+    PV roles resolve through the same shared Permission_Service and cannot
+    mutate EDC clinical or CTMS operational records because no PV role is granted
+    an EDC/CTMS mutation permission code.
+    """
+
+    async def _guard(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_user)],
+        permission_service: Annotated[PermissionService, Depends(get_permission_service)],
+    ) -> User:
+        study_id = _extract_uuid(request, "study_id")
+        site_id = _extract_uuid(request, "site_id")
+
+        try:
+            permission_service.require(
+                current_user, permission, study_id=study_id, site_id=site_id
+            )
+        except AuthorizationError:
+            # Non-disclosing: do not reveal whether the object exists or which of
+            # the study/site scopes was missing beyond the requested permission.
+            raise AuthorizationError(
+                message="Access denied",
+                details={
+                    "reason": "PV_SCOPE_DENIED",
+                    "required_permission": permission,
+                },
+            ) from None
+
+        return current_user
+
+    return _guard
+
+
+def require_pv_object_access(permission: str, obj_getter: Callable) -> Callable:
+    """Return a PV guard that enforces object-level scope (Requirements 2.4, 2.5).
+
+    ``obj_getter`` is an async dependency that loads the target PV object (for
+    example a Safety_Case) using the shared session. The guard first requires
+    the PV ``permission`` at the object's resolved study/site scope, then asserts
+    object-level access so a caller cannot reach a record outside their
+    Authorization_Scope. Both failures return the same non-disclosing
+    ``PV_SCOPE_DENIED`` indication that does not disclose object existence.
+    """
+
+    async def _guard(
+        current_user: Annotated[User, Depends(get_current_user)],
+        permission_service: Annotated[PermissionService, Depends(get_permission_service)],
+        obj: Annotated[object, Depends(obj_getter)],
+    ) -> User:
+        obj_study_id = getattr(obj, "study_id", None)
+        obj_site_id = getattr(obj, "site_id", None)
+        try:
+            permission_service.require(
+                current_user, permission, study_id=obj_study_id, site_id=obj_site_id
+            )
+            permission_service.assert_object_access(current_user, obj)
+        except AuthorizationError:
+            raise AuthorizationError(
+                message="Access denied",
+                details={
+                    "reason": "PV_SCOPE_DENIED",
+                    "required_permission": permission,
+                },
+            ) from None
+
+        return current_user
+
+    return _guard
+
+
 class PermissionGuard:
     """A flexible, parameterizable permission guard dependency.
 

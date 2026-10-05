@@ -70,6 +70,20 @@ PERMISSION_CODES: set[str] = {
     "ctms.enrollment_management",
     "ctms.conflict_management",
     "ctms.coordination_replay",
+    # PV/Safety access (shared authorization namespace; no EDC/CTMS authority)
+    # Requirements 1.x, 2.x, 18.4. Phase 1 seeds (safety_case.enter/read/
+    # lifecycle, safety_assessment.record, safety_audit.read) are also written
+    # by migration 0038; the remaining PV codes are additive (migration 0039).
+    "safety_case.enter",
+    "safety_case.read",
+    "safety_case.lifecycle",
+    "safety_assessment.record",
+    "safety_coding.assign",
+    "safety_narrative.write",
+    "safety_report.manage",
+    "safety_reconciliation.run",
+    "safety_export.create",
+    "safety_audit.read",
 }
 
 # ---------------------------------------------------------------------------
@@ -85,6 +99,24 @@ CTMS_PERMISSION_CODES: frozenset[str] = frozenset(
         "ctms.enrollment_management",
         "ctms.conflict_management",
         "ctms.coordination_replay",
+    }
+)
+
+# The complete PV/Safety permission namespace. PV roles are composed only from
+# these codes so a PV role can never be granted an EDC clinical or CTMS
+# operational mutation permission (Requirements 2.6, 18.4).
+PV_PERMISSION_CODES: frozenset[str] = frozenset(
+    {
+        "safety_case.enter",
+        "safety_case.read",
+        "safety_case.lifecycle",
+        "safety_assessment.record",
+        "safety_coding.assign",
+        "safety_narrative.write",
+        "safety_report.manage",
+        "safety_reconciliation.run",
+        "safety_export.create",
+        "safety_audit.read",
     }
 )
 
@@ -183,6 +215,76 @@ ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
         # Viewer is intentionally read-only: no CTMS mutation or remediation
         # permission is included here.
         "permissions": ["ctms.operational_data_read"],
+    },
+    # --- PV/Safety roles -----------------------------------------------------
+    # Every PV role is composed only from PV_PERMISSION_CODES, so no PV role can
+    # mutate an EDC clinical or CTMS operational record (Requirements 2.6, 18.4).
+    "Safety_Admin": {
+        "scope": "system",
+        "permissions": sorted(PV_PERMISSION_CODES),
+    },
+    "Safety_Manager": {
+        "scope": "study",
+        # Full safety case workflow across a study: intake, lifecycle,
+        # assessment, coding, narratives, reporting, reconciliation, export.
+        "permissions": [
+            "safety_case.enter",
+            "safety_case.read",
+            "safety_case.lifecycle",
+            "safety_assessment.record",
+            "safety_coding.assign",
+            "safety_narrative.write",
+            "safety_report.manage",
+            "safety_reconciliation.run",
+            "safety_export.create",
+            "safety_audit.read",
+        ],
+    },
+    "Safety_Associate": {
+        "scope": "site",
+        # Intake and capture at site scope; no reporting or reconciliation.
+        "permissions": [
+            "safety_case.enter",
+            "safety_case.read",
+            "safety_case.lifecycle",
+            "safety_narrative.write",
+        ],
+    },
+    "Safety_Physician": {
+        "scope": "study",
+        # Medical assessment and coding of captured cases.
+        "permissions": [
+            "safety_case.read",
+            "safety_assessment.record",
+            "safety_coding.assign",
+            "safety_narrative.write",
+        ],
+    },
+    "Safety_Coder": {
+        "scope": "study",
+        # MedDRA/WHODrug coding specialist.
+        "permissions": [
+            "safety_case.read",
+            "safety_coding.assign",
+        ],
+    },
+    "Regulatory_Reporter": {
+        "scope": "study",
+        # Reportability, regulatory clocks, ICSR/E2B submissions, and exports.
+        "permissions": [
+            "safety_case.read",
+            "safety_report.manage",
+            "safety_export.create",
+            "safety_audit.read",
+        ],
+    },
+    "Safety_Viewer": {
+        "scope": "study",
+        # Read-only: safety case read and safety audit read only.
+        "permissions": [
+            "safety_case.read",
+            "safety_audit.read",
+        ],
     },
 }
 

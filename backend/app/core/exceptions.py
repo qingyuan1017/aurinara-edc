@@ -201,7 +201,7 @@ async def domain_exception_handler(request: Request, exc: DomainError) -> JSONRe
         # CTMS and coordination reasons are stable public codes.  Only promote
         # the allowlisted namespaces; arbitrary detail values remain details.
         if isinstance(reason, str) and (
-            reason.startswith(("CTMS_", "COORDINATION_"))
+            reason.startswith(("CTMS_", "COORDINATION_", "PV_"))
             or reason in {
                 "RECORD_NOT_FOUND",
                 "AMBIGUOUS_REFERENCE",

@@ -30,6 +30,7 @@ from app.schemas.permission import AuthorizationScope
 from app.services.ai_platform_service import ai_platform_service
 from app.services.data_capture_service import data_capture_service
 from app.services.permission_service import PermissionService
+from app.services.pv_atomicity_service import pv_atomicity_service
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,19 @@ _CTMS_WRITE_PERMISSIONS = (
     "ctms.operational-site-management",
     "ctms.monitoring-activity-management",
     "ctms.enrollment-management",
+)
+# PV-scoped write permissions. A confirmed AI-assisted change to PV Safety_Data
+# requires the user to already hold one of these safety write grants at the
+# target scope (Requirements 22.3, 22.4). No PV role carries an EDC clinical or
+# CTMS operational mutation permission, so a PV AI change can never mutate an
+# EDC clinical or CTMS operational record.
+_PV_WRITE_PERMISSIONS = (
+    "safety_narrative.write",
+    "safety_case.enter",
+    "safety_case.lifecycle",
+    "safety_assessment.record",
+    "safety_coding.assign",
+    "safety_report.manage",
 )
 
 
@@ -165,8 +179,14 @@ class AIAssistantService:
         )
 
     def ensure_enabled(self) -> None:
-        """Reject requests unless the optional assistant is enabled."""
-        if self.module is Module.CTMS:
+        """Reject requests unless the optional assistant is enabled.
+
+        EDC uses the base ``ai_assistant_enabled`` flag. CTMS and PV each carry
+        an additional module flag routed through the shared platform gate so a
+        module-scoped assistant can be enabled or disabled independently; when
+        disabled no operation is exposed (Requirement 22.1).
+        """
+        if self.module in (Module.CTMS, Module.PV):
             ai_platform_service.ensure_enabled(self.module)
         elif not get_settings().ai_assistant_enabled:
             raise ServiceUnavailableError(
@@ -283,10 +303,17 @@ class AIAssistantService:
             )
         self._require_write_scope(user, study_id, site_id)
 
-        if self.module is Module.CTMS and apply_change is None:
+        # CTMS and PV never mutate their authoritative records through the AI
+        # boundary directly; the owning module supplies the confirmed-change
+        # callback so the AI platform holds no mutation authority for those
+        # modules (Requirements 22.4, 23.4, 23.5).
+        if self.module in (Module.CTMS, Module.PV) and apply_change is None:
             raise ValidationError(
-                message="The AI platform cannot mutate CTMS records without an owning-service callback",
-                details={"module": "CTMS", "requires_owner_service": True},
+                message=(
+                    f"The AI platform cannot mutate {self.module.value} records "
+                    "without an owning-service callback"
+                ),
+                details={"module": self.module.value, "requires_owner_service": True},
             )
 
         if apply_change is not None:
@@ -311,21 +338,42 @@ class AIAssistantService:
                 message="AI suggestion target must identify a persisted object",
                 details={"required": "target.id or target_id"},
             )
-        await audit_service.record(
-            session,
-            entity_type=target_details["entity_type"],
-            entity_id=entity_id,
-            action="ai_assisted_change",
-            study_id=study_id,
-            site_id=site_id,
-            subject_id=target_details["subject_id"],
-            reason=str(
-                suggestion.get("reason")
-                or "AI-assisted change explicitly confirmed by a human"
-            ),
-            actor_id=self._user_id(user),
-            new_value=json.dumps(changes, default=str, sort_keys=True),
+        reason = str(
+            suggestion.get("reason")
+            or "AI-assisted change explicitly confirmed by a human"
         )
+        if self.module is Module.PV:
+            # Record exactly one PV safety Audit_Event (module="PV") identifying
+            # the user, the changed safety object, the action, and the
+            # AI-assisted origin, on the caller's transaction so the confirmed
+            # change and its audit event commit or roll back together
+            # (Requirements 22.5, 11.7, 18.3).
+            await pv_atomicity_service.record_mutation(
+                session,
+                entity_type=target_details["entity_type"],
+                entity_id=entity_id,
+                action="ai_assisted_change",
+                actor_id=self._user_id(user),
+                study_id=study_id,
+                site_id=site_id,
+                subject_id=target_details["subject_id"],
+                changed_fields=tuple(changes) if isinstance(changes, Mapping) else (),
+                reason=reason,
+                new_value="ai_assisted",
+            )
+        else:
+            await audit_service.record(
+                session,
+                entity_type=target_details["entity_type"],
+                entity_id=entity_id,
+                action="ai_assisted_change",
+                study_id=study_id,
+                site_id=site_id,
+                subject_id=target_details["subject_id"],
+                reason=reason,
+                actor_id=self._user_id(user),
+                new_value=json.dumps(changes, default=str, sort_keys=True),
+            )
         return {"status": "applied", "suggestion": dict(suggestion), "result": result}
 
     def stream(
@@ -408,7 +456,12 @@ class AIAssistantService:
 
     def _require_write_scope(self, user: Any, study_id: Any, site_id: Any) -> None:
         scope = self._resolve_scope(user)
-        permissions = _CTMS_WRITE_PERMISSIONS if self.module is Module.CTMS else _WRITE_PERMISSIONS
+        if self.module is Module.CTMS:
+            permissions = _CTMS_WRITE_PERMISSIONS
+        elif self.module is Module.PV:
+            permissions = _PV_WRITE_PERMISSIONS
+        else:
+            permissions = _WRITE_PERMISSIONS
         if not any(scope.has_permission(permission, study_id=study_id, site_id=site_id) for permission in permissions):
             raise AuthorizationError(
                 message="The user lacks a module write permission for the AI suggestion target",
@@ -572,6 +625,10 @@ class AIAssistantService:
 
 
 ai_assistant_service = AIAssistantService()
+# PV-scoped assistant. It reuses the same provider transport and shared controls
+# but is bound to the PV module so enablement (``pv_ai_enabled``), context
+# minimization, write-permission checks, and audit content are all PV-scoped.
+pv_ai_assistant_service = AIAssistantService(module=Module.PV)
 
 __all__ = [
     "AIAssistantService",
@@ -579,4 +636,5 @@ __all__ = [
     "AIStreamProvider",
     "BedrockAgentCoreProvider",
     "ai_assistant_service",
+    "pv_ai_assistant_service",
 ]

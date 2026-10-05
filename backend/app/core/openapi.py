@@ -5,6 +5,7 @@ from typing import Final
 from pydantic import TypeAdapter
 
 from app.core.ctms import CTMSPhase, Module, OwnershipState
+from app.core.pv import CaseState, PVPhase, ReportStatus
 from app.models.ctms.enrollment import (
     EnrollmentTargetStatus,
     EnrollmentTargetType,
@@ -35,6 +36,7 @@ from app.models.ctms.work import (
     OperationalTaskPriority,
     OperationalTaskStatus,
 )
+from app.schemas.base import ErrorEnvelope
 from app.schemas.ctms.contracts import (
     CoordinationConflictCode,
     CoordinationEventStatus,
@@ -45,6 +47,7 @@ from app.schemas.ctms.contracts import (
     CTMSOwnershipContract,
     CTMSPaginationContract,
 )
+from app.schemas.pv.contracts import PVErrorCode, PVPaginationContract
 
 API_TAGS: Final[list[dict[str, str]]] = [
     {
@@ -64,6 +67,21 @@ API_TAGS: Final[list[dict[str, str]]] = [
     {"name": "ctms-reports", "description": "Scoped CTMS operational reports."},
     {"name": "ctms-exports", "description": "CTMS operational export jobs."},
     {"name": "ctms-health", "description": "Sanitized CTMS worker and projection health."},
+    {
+        "name": "pv",
+        "description": "PV/Safety capability and health metadata. PV owns safety data only.",
+    },
+    {"name": "pv-cases", "description": "Safety case intake, capture, lifecycle, and versions."},
+    {"name": "pv-assessments", "description": "Seriousness, causality, expectedness, and severity."},
+    {"name": "pv-coding", "description": "MedDRA and WHODrug coding with dictionary versions."},
+    {"name": "pv-narratives", "description": "Versioned case narratives and history."},
+    {"name": "pv-reports", "description": "Regulatory reporting, clocks, and ICSR/E2B."},
+    {"name": "pv-reconciliation", "description": "One-way, read-only EDC adverse-event reconciliation."},
+    {"name": "pv-attachments", "description": "Safety attachments on shared file primitives."},
+    {"name": "pv-exports", "description": "PV-owned safety export jobs."},
+    {"name": "pv-dashboards", "description": "Scoped PV safety dashboards and reports."},
+    {"name": "pv-audit", "description": "Scoped, deterministically ordered PV safety audit."},
+    {"name": "pv-health", "description": "Sanitized PV worker, export, and overdue-report health."},
 ]
 
 
@@ -80,6 +98,19 @@ CTMS_ERROR_RESPONSES: Final[dict[int, dict[str, object]]] = {
     422: {"model": CTMSErrorEnvelope, "description": "The CTMS request failed schema validation."},
     500: {"model": CTMSErrorEnvelope, "description": "The request failed without exposing internal details."},
     503: {"model": CTMSErrorEnvelope, "description": "A CTMS dependency is temporarily unavailable."},
+}
+
+
+# PV uses the baseline platform error envelope shared by EDC.
+PV_ERROR_RESPONSES: Final[dict[int, dict[str, object]]] = {
+    400: {"model": ErrorEnvelope, "description": "Invalid PV/Safety operation or business rule."},
+    401: {"model": ErrorEnvelope, "description": "Authentication is required."},
+    403: {"model": ErrorEnvelope, "description": "The requested PV scope or operation is not permitted."},
+    404: {"model": ErrorEnvelope, "description": "The PV safety resource or canonical reference was not found."},
+    409: {"model": ErrorEnvelope, "description": "Ownership, lifecycle, versioning, or coordination conflict."},
+    422: {"model": ErrorEnvelope, "description": "The PV request failed schema or safety-data validation."},
+    500: {"model": ErrorEnvelope, "description": "The request failed without exposing internal details."},
+    503: {"model": ErrorEnvelope, "description": "A PV dependency is temporarily unavailable."},
 }
 
 
@@ -149,6 +180,35 @@ CTMS_OPENAPI_EXTENSIONS: Final[dict[str, object]] = {
         str(status): {"code": response["description"]}
         for status, response in CTMS_ERROR_RESPONSES.items()
     },
+    "x-pv-module-ownership": {
+        "PV": "safety cases, adverse-event records, assessments, coding, narratives, "
+        "regulatory reports/clocks, reconciliation, safety notifications, safety "
+        "attachments, safety dashboards/reports, and safety exports",
+        "EDC": "clinical configuration, subjects, visits, clinical data, quality, "
+        "signatures, and clinical exports",
+        "CTMS": "operational study/site, enrollment, monitoring, work, and operational exports",
+    },
+    "x-pv-error-codes": _values(PVErrorCode),
+    "x-pv-enums": {
+        "module": _values(Module),
+        "pv_phase": _values(PVPhase),
+        "case_state": _values(CaseState),
+        "report_status": _values(ReportStatus),
+        "pv_error_code": _values(PVErrorCode),
+    },
+    "x-pv-pagination": {
+        "schema": "PVPaginationContract",
+        "properties": {
+            "items": {"type": "array"},
+            "page": {"type": "integer", "minimum": 1},
+            "page_size": {"type": "integer", "minimum": 1, "maximum": 1000},
+            "total": {"type": "integer", "minimum": 0},
+        },
+    },
+    "x-pv-error-responses": {
+        str(status): {"code": response["description"]}
+        for status, response in PV_ERROR_RESPONSES.items()
+    },
 }
 
 
@@ -183,6 +243,17 @@ def install_openapi_metadata(app: object) -> None:
             "CoordinationFailureCode": CoordinationFailureCode,
         }.items():
             component_schemas.setdefault(name, TypeAdapter(enum_type).json_schema())
+        # PV publishes its pagination envelope and error-code vocabulary so
+        # clients can generate against a stable PV contract even when PV routes
+        # are phase-gated off. PV reuses the baseline ErrorEnvelope, so no
+        # separate PV error body schema is registered here.
+        pv_pagination_schema = PVPaginationContract.model_json_schema(
+            ref_template="#/components/schemas/{model}"
+        )
+        component_schemas.setdefault("PVPaginationContract", pv_pagination_schema)
+        for definition_name, definition in pv_pagination_schema.pop("$defs", {}).items():
+            component_schemas.setdefault(definition_name, definition)
+        component_schemas.setdefault("PVErrorCode", TypeAdapter(PVErrorCode).json_schema())
         return schema
 
     app.openapi = custom_openapi  # type: ignore[attr-defined]

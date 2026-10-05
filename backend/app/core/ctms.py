@@ -20,6 +20,12 @@ class Module(StrEnum):
 
     EDC = "EDC"
     CTMS = "CTMS"
+    # PV is a third co-equal module. It is listed here so the shared platform
+    # primitives (audit content owner, optional AI controls) can name the PV
+    # module without forking a second enum. PV-owned safety records still live
+    # under ``app.models.pv`` and never carry EDC clinical or CTMS operational
+    # authority.
+    PV = "PV"
 
 
 class OwnershipState(StrEnum):

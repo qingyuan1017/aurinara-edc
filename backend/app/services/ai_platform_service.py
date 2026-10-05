@@ -45,12 +45,22 @@ class AIPlatformService:
     """Apply shared module scope, minimization, confirmation, and audit hooks."""
 
     def ensure_enabled(self, module: Module | str) -> None:
-        """Reject disabled AI or CTMS AI without changing module state."""
+        """Reject a disabled AI capability without changing module state.
+
+        The shared assistant is gated by ``ai_assistant_enabled``. Each module
+        that opts into the assistant carries its own additional flag so a
+        module can enable or disable its scoped assistant independently:
+        CTMS uses ``ctms_ai_enabled`` and PV uses ``pv_ai_enabled``. When the
+        gate is closed no operation is exposed and no module state changes
+        (Requirement 22.1).
+        """
         settings = get_settings()
         normalized = Module(str(module).upper())
-        if not settings.ai_assistant_enabled or (
-            normalized is Module.CTMS and not settings.ctms_ai_enabled
-        ):
+        disabled = not settings.ai_assistant_enabled or (
+            (normalized is Module.CTMS and not settings.ctms_ai_enabled)
+            or (normalized is Module.PV and not settings.pv_ai_enabled)
+        )
+        if disabled:
             raise ServiceUnavailableError(
                 message="The optional AI capability is disabled",
                 details={"module": normalized.value, "service": "ai_platform"},
@@ -72,6 +82,26 @@ class AIPlatformService:
                 if normalized is Module.CTMS and (
                     key_normalized.startswith("clinical_")
                     or key_normalized in {"field_values", "form_values", "source_data"}
+                ):
+                    continue
+                # PV AI receives PV safety content only. EDC clinical and CTMS
+                # operational payloads are excluded by semantic key so no
+                # prohibited safety data, EDC clinical content, or CTMS
+                # operational content can be sent to the model (Requirement 22.3).
+                if normalized is Module.PV and (
+                    key_normalized.startswith("clinical_")
+                    or key_normalized.startswith("operational_")
+                    or key_normalized.startswith("ctms_")
+                    or key_normalized.startswith("edc_")
+                    or key_normalized
+                    in {
+                        "field_values",
+                        "form_values",
+                        "source_data",
+                        "form_instance_id",
+                        "visit_instance_id",
+                        "field_value_id",
+                    }
                 ):
                     continue
                 result[key] = cls.minimize_context(value, module=normalized)

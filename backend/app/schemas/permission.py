@@ -21,10 +21,30 @@ CTMS_PERMISSION_ALIASES: dict[str, str] = {
     "coordination-replay": "ctms.coordination_replay",
 }
 
+# Human-readable PV/Safety route names resolve to the stored dot-notation codes,
+# mirroring the CTMS alias convention so PV routes may declare either form.
+PV_PERMISSION_ALIASES: dict[str, str] = {
+    "safety-case-enter": "safety_case.enter",
+    "safety-case-read": "safety_case.read",
+    "safety-case-lifecycle": "safety_case.lifecycle",
+    "safety-assessment-record": "safety_assessment.record",
+    "safety-coding-assign": "safety_coding.assign",
+    "safety-narrative-write": "safety_narrative.write",
+    "safety-report-manage": "safety_report.manage",
+    "safety-reconciliation-run": "safety_reconciliation.run",
+    "safety-export-create": "safety_export.create",
+    "safety-audit-read": "safety_audit.read",
+}
+
+_PERMISSION_ALIASES: dict[str, str] = {
+    **CTMS_PERMISSION_ALIASES,
+    **PV_PERMISSION_ALIASES,
+}
+
 
 def normalize_permission_code(permission: str) -> str:
-    """Normalize human-readable CTMS permission names to stored codes."""
-    return CTMS_PERMISSION_ALIASES.get(permission, permission)
+    """Normalize human-readable CTMS/PV permission names to stored codes."""
+    return _PERMISSION_ALIASES.get(permission, permission)
 
 
 class PermissionGrant(BaseModel):

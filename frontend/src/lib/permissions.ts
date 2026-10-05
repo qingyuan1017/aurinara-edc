@@ -78,6 +78,18 @@ export const PERMISSIONS = {
   CTMS_ENROLLMENT_MANAGEMENT: 'ctms.enrollment_management',
   CTMS_CONFLICT_MANAGEMENT: 'ctms.conflict_management',
   CTMS_COORDINATION_REPLAY: 'ctms.coordination_replay',
+
+  // PV/Safety permissions (must match server permission codes)
+  PV_SAFETY_CASE_READ: 'safety_case.read',
+  PV_SAFETY_CASE_ENTER: 'safety_case.enter',
+  PV_SAFETY_CASE_LIFECYCLE: 'safety_case.lifecycle',
+  PV_SAFETY_ASSESSMENT_RECORD: 'safety_assessment.record',
+  PV_SAFETY_CODING_ASSIGN: 'safety_coding.assign',
+  PV_SAFETY_NARRATIVE_WRITE: 'safety_narrative.write',
+  PV_SAFETY_REPORT_MANAGE: 'safety_report.manage',
+  PV_SAFETY_RECONCILIATION_RUN: 'safety_reconciliation.run',
+  PV_SAFETY_EXPORT_CREATE: 'safety_export.create',
+  PV_SAFETY_AUDIT_READ: 'safety_audit.read',
 } as const
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]

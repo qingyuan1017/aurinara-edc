@@ -77,6 +77,33 @@ class Settings(BaseSettings):
     restore_enabled: bool = False
     backup_schedule: str | None = None
 
+    # --- PV/Safety retention, backup, and restore controls ---
+    # PV safety records are retained for at least 7 years (Requirement 20.3);
+    # 2,555 days is the regulatory floor.  Each PV-owned/shared resource may
+    # override the floor, and a missing override inherits ``pv_retention_days``.
+    pv_retention_days: int = 2555
+    pv_safety_case_retention_days: int | None = None
+    pv_assessment_retention_days: int | None = None
+    pv_coding_retention_days: int | None = None
+    pv_narrative_retention_days: int | None = None
+    pv_regulatory_retention_days: int | None = None
+    pv_reconciliation_retention_days: int | None = None
+    pv_projection_retention_days: int | None = None
+    pv_attachment_retention_days: int | None = None
+    pv_notification_retention_days: int | None = None
+    pv_export_retention_days: int | None = None
+    pv_audit_retention_days: int | None = None
+    pv_retention_batch_size: int = 500
+    # Backup cadence: at least one backup every 24 hours, restore within 4 hours
+    # (Requirement 20.3).  These are policy targets surfaced to compliance APIs.
+    pv_backup_enabled: bool = False
+    pv_backup_storage_uri: str | None = None
+    pv_backup_interval_hours: int = 24
+    pv_restore_enabled: bool = False
+    pv_restore_target_hours: int = 4
+    # Allowed server-clock drift for PV safety Audit_Event timestamps (Req 20.2).
+    pv_clock_skew_tolerance_seconds: int = 5
+
     # --- Security ---
     secret_key: str = "CHANGE-ME-IN-PRODUCTION"
     access_token_expire_minutes: int = 30
@@ -121,6 +148,22 @@ class Settings(BaseSettings):
             raise ValueError("CTMS_PHASE must be 0, 1, 2, or 3")
         return value
 
+    # --- PV/Safety phased capability rollout ---
+    # Disabling PV only hides PV navigation and operations; it never deletes PV
+    # safety data or changes EDC/CTMS routes and workflows.
+    pv_enabled: bool = True
+    pv_phase: int = 1
+    pv_worker_enabled: bool = True
+    pv_ai_enabled: bool = False
+
+    @field_validator("pv_phase")
+    @classmethod
+    def validate_pv_phase(cls, value: int) -> int:
+        """Accept only the published PV delivery phases (0 means disabled)."""
+        if value not in (0, 1, 2, 3):
+            raise ValueError("PV_PHASE must be 0, 1, 2, or 3")
+        return value
+
     # --- Optional: Redis ---
     redis_url: str | None = None
     ctms_worker_enabled: bool = True
@@ -160,6 +203,41 @@ class Settings(BaseSettings):
             "restore_enabled": self.restore_enabled,
         }
 
+    @property
+    def pv_retention_floor_days(self) -> int:
+        """Effective minimum PV retention period in days (>= 7 years)."""
+        return int(self.pv_retention_days)
+
+    @property
+    def pv_environment_metadata(self) -> dict[str, object]:
+        """Return safe, non-secret PV environment/compliance metadata.
+
+        PV reuses the shared, per-Environment isolation of database, object
+        storage, secrets, authentication configuration, and logging
+        (Requirement 20.1) and never reads another Environment's namespaces.
+        Only PV feature flags and safety settings are PV-owned here; no secret
+        value is exposed.
+        """
+        return {
+            "environment": self.environment.value,
+            "namespace": self.environment_namespace,
+            "database_isolated": True,
+            "object_storage_namespace": self.object_storage_namespace,
+            "secrets_namespace": self.secrets_namespace,
+            "logging_namespace": self.logging_namespace,
+            "auth_configured": bool(self.auth_issuer or self.cognito_user_pool_id),
+            "pv_enabled": self.pv_enabled,
+            "pv_phase": self.pv_phase,
+            "pv_worker_enabled": self.pv_worker_enabled,
+            "pv_ai_enabled": self.pv_ai_enabled,
+            "pv_retention_days": self.pv_retention_floor_days,
+            "pv_backup_enabled": self.pv_backup_enabled,
+            "pv_backup_interval_hours": self.pv_backup_interval_hours,
+            "pv_restore_enabled": self.pv_restore_enabled,
+            "pv_restore_target_hours": self.pv_restore_target_hours,
+            "pv_clock_skew_tolerance_seconds": self.pv_clock_skew_tolerance_seconds,
+        }
+
     @field_validator(
         "retention_days",
         "ctms_operational_retention_days",
@@ -178,6 +256,22 @@ class Settings(BaseSettings):
         "ctms_coordination_backoff_max_seconds",
         "ctms_projection_lag_warning_seconds",
         "ctms_retention_batch_size",
+        "pv_retention_days",
+        "pv_safety_case_retention_days",
+        "pv_assessment_retention_days",
+        "pv_coding_retention_days",
+        "pv_narrative_retention_days",
+        "pv_regulatory_retention_days",
+        "pv_reconciliation_retention_days",
+        "pv_projection_retention_days",
+        "pv_attachment_retention_days",
+        "pv_notification_retention_days",
+        "pv_export_retention_days",
+        "pv_audit_retention_days",
+        "pv_retention_batch_size",
+        "pv_backup_interval_hours",
+        "pv_restore_target_hours",
+        "pv_clock_skew_tolerance_seconds",
     )
     @classmethod
     def validate_positive_settings(cls, value: int | None) -> int | None:

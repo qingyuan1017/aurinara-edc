@@ -10,6 +10,7 @@ import { AccessDeniedPage } from '@/features/auth/AccessDeniedPage'
 import { AuditViewerPage, UserListPage } from '@/features/admin'
 import { AIAssistantPage } from '@/features/ai'
 import { CTMSHomePage, CTMSWorkspacePage, type CTMSView } from '@/features/ctms'
+import { PVHomePage, PVWorkspacePage, type PVView } from '@/features/pv'
 import { ExportCenterPage } from '@/features/exports'
 import { SiteListPage } from '@/features/sites'
 import { StudyDashboardPage, DataCleaningDashboardPage } from '@/features/dashboards'
@@ -370,6 +371,35 @@ const ctmsHealthRoute = createRoute({ getParentRoute: () => appShellLayout, path
 const ctmsSiteWorkspaceRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/sites/$siteId/ctms', component: () => createElement(CTMSSiteWorkspaceRoute) })
 const ctmsSiteActivationRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/sites/$siteId/ctms/activation', component: () => createElement(CTMSSiteActivationRoute) })
 
+// PV/Safety routes. These are additive and never alter EDC or CTMS routes.
+const pvRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/pv', component: () => createElement(PVHomePage) })
+const pvDashboardRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/pv/dashboard', component: () => createElement(PVStudyRoute, { view: 'dashboard' }) })
+const pvCasesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/pv/cases', component: () => createElement(PVStudyRoute, { view: 'cases' }) })
+const pvCaseDetailRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/pv/cases/$caseId', component: () => createElement(PVCaseRoute, { view: 'case-detail' }) })
+const pvCaseAssessmentsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/pv/cases/$caseId/assessments', component: () => createElement(PVCaseRoute, { view: 'assessments' }) })
+const pvCaseCodingRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/pv/cases/$caseId/coding', component: () => createElement(PVCaseRoute, { view: 'coding' }) })
+const pvCaseNarrativesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/pv/cases/$caseId/narratives', component: () => createElement(PVCaseRoute, { view: 'narratives' }) })
+const pvCaseReportsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/pv/cases/$caseId/reports', component: () => createElement(PVCaseRoute, { view: 'reports' }) })
+const pvReconciliationRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/pv/reconciliation', component: () => createElement(PVStudyRoute, { view: 'reconciliation' }) })
+const pvExportsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/pv/exports', component: () => createElement(PVStudyRoute, { view: 'exports' }) })
+const pvAuditRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/pv/audit', component: () => createElement(PVStudyRoute, { view: 'audit' }) })
+const pvSiteDashboardRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/sites/$siteId/pv/dashboard', component: () => createElement(PVSiteRoute) })
+
+function PVStudyRoute({ view }: { view: PVView }) {
+  const params = useParams({ strict: false })
+  return createElement(PVWorkspacePage, { view, studyId: params.studyId })
+}
+
+function PVCaseRoute({ view }: { view: PVView }) {
+  const params = useParams({ strict: false })
+  return createElement(PVWorkspacePage, { view, studyId: params.studyId, caseId: params.caseId })
+}
+
+function PVSiteRoute() {
+  const params = useParams({ strict: false })
+  return createElement(PVWorkspacePage, { view: 'site-dashboard', siteId: params.siteId })
+}
+
 function CTMSStudyWorkspaceRoute({ view }: { view: CTMSView }) {
   const params = useParams({ strict: false })
   return createElement(CTMSWorkspacePage, { view, studyId: params.studyId })
@@ -457,6 +487,18 @@ const routeTree = rootRoute.addChildren([
       ctmsHealthRoute,
       ctmsSiteWorkspaceRoute,
       ctmsSiteActivationRoute,
+      pvRoute,
+      pvDashboardRoute,
+      pvCasesRoute,
+      pvCaseDetailRoute,
+      pvCaseAssessmentsRoute,
+      pvCaseCodingRoute,
+      pvCaseNarrativesRoute,
+      pvCaseReportsRoute,
+      pvReconciliationRoute,
+      pvExportsRoute,
+      pvAuditRoute,
+      pvSiteDashboardRoute,
       adminRoute,
       auditRoute,
     ]),

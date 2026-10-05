@@ -5,7 +5,9 @@ Configures structured logging and request-ID middleware (Requirements 21.5, 30.4
 Registers metrics middleware (Requirement 30.2).
 """
 
+import logging
 import time
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -27,6 +29,8 @@ from app.api.routes.forms import router as forms_router
 from app.api.routes.health import router as health_router
 from app.api.routes.locks import router as locks_router
 from app.api.routes.notifications import router as notifications_router
+from app.api.routes.pv import router as pv_router
+from app.api.routes.pv.ai import router as pv_ai_router
 from app.api.routes.queries import router as queries_router
 from app.api.routes.queries import study_queries_router
 from app.api.routes.records import form_instance_records_router
@@ -49,17 +53,55 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import setup_logging
 from app.core.metrics import get_metrics
 from app.core.middleware import RequestIDMiddleware
+from app.core.observability import sanitized_log_extra
 from app.core.openapi import API_TAGS, install_openapi_metadata
+from app.services.pv_observability_service import pv_observability_service
+
+pv_request_logger = logging.getLogger("app.pv.request")
+
+# PV routes are mounted below this prefix; PV observability signals are scoped
+# to requests under it so PV metrics reflect only PV API behavior.
+_PV_PATH_PREFIX = "/api/v1/pv"
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):
-    """Records API request latency and status code in the metrics collector."""
+    """Records API request latency and status code in the metrics collector.
+
+    Requests under the PV route prefix are additionally recorded in the PV
+    observability window and produce exactly one sanitized structured log entry
+    carrying the request identifier, a UTC timestamp, the operation outcome, and
+    the duration in milliseconds (Requirements 25.3, 25.4). The log entry never
+    includes safety content, projected fields, request bodies, or raw
+    coordination payloads (Requirements 24.2, 16.3, 16.5).
+    """
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         start = time.perf_counter()
         response = await call_next(request)
         latency = time.perf_counter() - start
         get_metrics().record_request(latency, response.status_code)
+
+        if request.url.path.startswith(_PV_PATH_PREFIX):
+            duration_ms = latency * 1000
+            pv_observability_service.record_request(
+                latency_ms=duration_ms, status_code=response.status_code
+            )
+            outcome = "success" if response.status_code < 400 else "error"
+            pv_request_logger.info(
+                "pv request completed",
+                extra={
+                    "extra_fields": sanitized_log_extra(
+                        module="PV",
+                        request_id=getattr(request.state, "request_id", None),
+                        timestamp=datetime.now(UTC).isoformat(),
+                        method=request.method,
+                        path=request.url.path,
+                        status_code=response.status_code,
+                        outcome=outcome,
+                        duration_ms=round(duration_ms, 3),
+                    )
+                },
+            )
         return response
 
 
@@ -96,6 +138,14 @@ def create_app() -> FastAPI:
     # --- Mount routers under /api/v1 ---
     app.include_router(health_router, prefix=settings.api_v1_prefix)
     app.include_router(ctms_router, prefix=settings.api_v1_prefix)
+    app.include_router(pv_router, prefix=settings.api_v1_prefix)
+    # The optional PV-scoped AI assistant is mounted only while enabled so that
+    # disabling it exposes none of its operations (Requirement 22.1). It is
+    # nested under the PV prefix (``/api/v1/pv/ai``).
+    if settings.ai_assistant_enabled and settings.pv_ai_enabled:
+        app.include_router(
+            pv_ai_router, prefix=f"{settings.api_v1_prefix}/pv"
+        )
     app.include_router(ai_assistant_router, prefix=settings.api_v1_prefix)
     app.include_router(auth_router, prefix=settings.api_v1_prefix)
     app.include_router(users_router, prefix=settings.api_v1_prefix)
