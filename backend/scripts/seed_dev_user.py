@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import async_session_factory, engine
 from app.core.permissions import seed_roles_and_permissions
 from app.core.security import hash_password
-from app.models.identity import (
+from app.models.shared.identity import (
     Role,
     User,
     UserRole,
