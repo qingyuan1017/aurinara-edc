@@ -30,10 +30,10 @@ from app.models.ctms.monitoring import (
     MonitoringPlanVersion,
     MonitoringPlanVersionStatus,
 )
-from app.models.site import Site
-from app.models.study import Study
-from app.services.ctms_atomicity_service import ctms_atomicity_service
-from app.services.monitoring_service import MonitoringService
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.services.ctms.ctms_atomicity_service import ctms_atomicity_service
+from app.services.ctms.monitoring_service import MonitoringService
 
 
 @dataclass(frozen=True)

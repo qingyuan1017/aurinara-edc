@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from app.core.pv import ActorContext
 from app.core.request_context import get_correlation_id, get_request_id
-from app.models.identity import User
+from app.models.shared.identity import User
 
 
 def build_actor(current_user: User) -> ActorContext:

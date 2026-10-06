@@ -11,11 +11,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.core.exceptions import AuthorizationError, BusinessRuleError
-from app.models.export import Export, ExportStatus, ExportType
-from app.models.form_data import FormInstance, FormInstanceStatus
-from app.models.notification import Notification, NotificationStatus
-from app.models.query import Query, QueryTargetType, QueryType
-from app.services.notification_service import NotificationService
+from app.models.edc.form_data import FormInstance, FormInstanceStatus
+from app.models.edc.query import Query, QueryTargetType, QueryType
+from app.models.shared.export import Export, ExportStatus, ExportType
+from app.models.shared.notification import Notification, NotificationStatus
+from app.services.shared.notification_service import NotificationService
 
 
 @pytest.fixture

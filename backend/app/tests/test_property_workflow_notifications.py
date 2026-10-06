@@ -23,16 +23,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.database import Base
-from app.models.export import Export, ExportStatus, ExportType
-from app.models.form_data import FormInstance, FormInstanceStatus
-from app.models.form_metadata import FormDefinition
-from app.models.identity import Role, ScopeLevel, User, UserRole, UserStatus
-from app.models.notification import Notification, NotificationStatus
-from app.models.query import Query, QueryTargetType, QueryType
-from app.models.site import Site, SiteStatus
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.services.notification_service import NotificationService
+from app.models.edc.form_data import FormInstance, FormInstanceStatus
+from app.models.edc.form_metadata import FormDefinition
+from app.models.edc.query import Query, QueryTargetType, QueryType
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.shared.export import Export, ExportStatus, ExportType
+from app.models.shared.identity import Role, ScopeLevel, User, UserRole, UserStatus
+from app.models.shared.notification import Notification, NotificationStatus
+from app.services.shared.notification_service import NotificationService
 
 ROLE_SCOPE = st.sampled_from([
     ScopeLevel.system,

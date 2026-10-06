@@ -19,9 +19,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.exceptions import BusinessRuleError, NotFoundError, ValidationError
-from app.models.form_data import FieldValue, FormInstance, FormInstanceStatus
-from app.models.form_metadata import FieldDefinition
-from app.services.data_capture_service import DataCaptureService, data_capture_service
+from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
+from app.models.edc.form_metadata import FieldDefinition
+from app.services.edc.data_capture_service import DataCaptureService, data_capture_service
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def service():
 def lock_check():
     """Keep existing unit-test sessions focused on data-capture behavior."""
     with patch(
-        "app.services.data_capture_service.lock_service.is_modification_blocked",
+        "app.services.edc.data_capture_service.lock_service.is_modification_blocked",
         new_callable=AsyncMock,
         return_value=False,
     ) as check:
@@ -153,7 +153,7 @@ class TestSaveDraft:
         )
 
         with patch(
-            "app.services.data_capture_service.audit_service"
+            "app.services.edc.data_capture_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.save_draft(
@@ -199,7 +199,7 @@ class TestSaveDraft:
         )
 
         with patch(
-            "app.services.data_capture_service.audit_service"
+            "app.services.edc.data_capture_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
             await service.save_draft(
@@ -241,7 +241,7 @@ class TestSubmit:
                 )
             },
         ), patch(
-            "app.services.data_capture_service.audit_service"
+            "app.services.edc.data_capture_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.submit(mock_session, fi, actor_id)
@@ -265,7 +265,7 @@ class TestSubmit:
         ), patch.object(
             service, "_get_field_value_map", return_value={}
         ), patch(
-            "app.services.data_capture_service.audit_service"
+            "app.services.edc.data_capture_service.audit_service"
         ), pytest.raises(ValidationError) as exc_info:
             await service.submit(mock_session, fi, actor_id)
 
@@ -296,7 +296,7 @@ class TestSubmit:
                 )
             },
         ), patch(
-            "app.services.data_capture_service.audit_service"
+            "app.services.edc.data_capture_service.audit_service"
         ), pytest.raises(ValidationError) as exc_info:
             await service.submit(mock_session, fi, actor_id)
 
@@ -330,7 +330,7 @@ class TestSubmit:
                 )
             },
         ), patch(
-            "app.services.data_capture_service.audit_service"
+            "app.services.edc.data_capture_service.audit_service"
         ), pytest.raises(ValidationError) as exc_info:
             await service.submit(mock_session, fi, actor_id)
 
@@ -426,7 +426,7 @@ class TestChangeValue:
         )
 
         with patch(
-            "app.services.data_capture_service.audit_service"
+            "app.services.edc.data_capture_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.change_value(
@@ -480,7 +480,7 @@ class TestMarkNotApplicable:
         )
 
         with patch(
-            "app.services.data_capture_service.audit_service"
+            "app.services.edc.data_capture_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
             await service.mark_not_applicable(

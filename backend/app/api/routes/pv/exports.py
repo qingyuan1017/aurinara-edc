@@ -20,11 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, require_pv_permission
 from app.api.routes.pv._common import build_actor
 from app.core.pv import Module
-from app.models.export import Export
-from app.models.identity import User
+from app.models.shared.export import Export
+from app.models.shared.identity import User
 from app.schemas.pv.contracts import PVPaginatedResponse, PVPaginationParams
 from app.schemas.pv.export import PVExportCreate, PVExportResponse
-from app.services.pv_export_service import pv_export_service
+from app.services.pv.pv_export_service import pv_export_service
 
 router = APIRouter(tags=["pv-exports"])
 

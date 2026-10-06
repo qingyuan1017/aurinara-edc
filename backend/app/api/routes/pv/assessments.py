@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_pv_permission
 from app.api.routes.pv._common import build_actor
-from app.models.identity import User
+from app.models.shared.identity import User
 from app.schemas.pv.resources import (
     AssessmentResponse,
     CausalityRequest,
@@ -25,7 +25,7 @@ from app.schemas.pv.resources import (
     SeriousnessRequest,
     SeverityRequest,
 )
-from app.services.assessment_service import assessment_service
+from app.services.pv.assessment_service import assessment_service
 
 router = APIRouter(tags=["pv-assessments"])
 

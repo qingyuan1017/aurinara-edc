@@ -32,7 +32,7 @@ from app.core.exceptions import (
     register_exception_handlers,
 )
 from app.core.middleware import RequestIDMiddleware
-from app.schemas.base import PaginatedResponse
+from app.schemas.shared.base import PaginatedResponse
 
 _LIST_RESOURCES = st.sampled_from(
     (

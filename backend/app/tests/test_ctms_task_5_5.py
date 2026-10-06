@@ -9,10 +9,10 @@ import pytest
 
 from app.core.metrics import get_metrics
 from app.models.ctms.coordination import CTMSOutbox
-from app.models.notification import NotificationStatus
-from app.services.coordination_service import BoundedCoordinationQueue, CoordinationService
-from app.services.ctms_health_service import CTMSHealthService
-from app.services.notification_service import NotificationService
+from app.models.shared.notification import NotificationStatus
+from app.services.ctms.coordination_service import BoundedCoordinationQueue, CoordinationService
+from app.services.ctms.ctms_health_service import CTMSHealthService
+from app.services.shared.notification_service import NotificationService
 from app.workers.coordination_worker import CoordinationWorker
 
 

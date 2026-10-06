@@ -11,10 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import PaginationParams, get_db, require_ctms_permission
 from app.core.request_context import get_correlation_id
 from app.models.ctms.enrollment import OperationalSubjectStatus
-from app.models.identity import User
-from app.schemas.base import PaginatedResponse
+from app.models.shared.identity import User
 from app.schemas.ctms.enrollment import OperationalMilestoneCreate, OperationalMilestoneResponse
-from app.services.enrollment_service import enrollment_service
+from app.schemas.shared.base import PaginatedResponse
+from app.services.ctms.enrollment_service import enrollment_service
 
 router = APIRouter(tags=["ctms-milestones"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]

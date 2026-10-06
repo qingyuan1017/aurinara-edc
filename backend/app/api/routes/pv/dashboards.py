@@ -16,9 +16,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_pv_permission
-from app.models.identity import User
+from app.models.shared.identity import User
 from app.schemas.pv.dashboard import SafetySiteDashboard, SafetyStudyDashboard
-from app.services.pv_dashboard_service import PVDashboardService
+from app.services.pv.pv_dashboard_service import PVDashboardService
 
 router = APIRouter(tags=["pv-dashboards"])
 

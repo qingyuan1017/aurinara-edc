@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models.site import Site, SiteStatus, StudySiteUser
-from app.schemas.site import SiteCreate
-from app.services.site_service import SiteService, site_service
+from app.models.edc.site import Site, SiteStatus, StudySiteUser
+from app.schemas.edc.site import SiteCreate
+from app.services.edc.site_service import SiteService, site_service
 
 
 @pytest.fixture
@@ -104,7 +104,7 @@ class TestCreateSite:
         mock_result.scalars.return_value.first.return_value = None
         mock_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("app.services.site_service.audit_service") as mock_audit:
+        with patch("app.services.edc.site_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             site = await service.create_site(
                 mock_session, study_id, site_create_data, actor_id
@@ -127,7 +127,7 @@ class TestCreateSite:
         mock_result.scalars.return_value.first.return_value = None
         mock_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("app.services.site_service.audit_service") as mock_audit:
+        with patch("app.services.edc.site_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.create_site(mock_session, study_id, site_create_data, actor_id)
 
@@ -148,7 +148,7 @@ class TestDeactivateSite:
         """deactivate_site sets the site status to inactive (Req 6.4)."""
         site = _make_site()
 
-        with patch("app.services.site_service.audit_service") as mock_audit:
+        with patch("app.services.edc.site_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.deactivate_site(mock_session, site, actor_id)
 
@@ -159,7 +159,7 @@ class TestDeactivateSite:
         """deactivate_site does not set deleted_at — the record is retained (Req 6.4)."""
         site = _make_site()
 
-        with patch("app.services.site_service.audit_service") as mock_audit:
+        with patch("app.services.edc.site_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.deactivate_site(mock_session, site, actor_id)
 
@@ -171,7 +171,7 @@ class TestDeactivateSite:
         """deactivate_site writes an Audit_Event with old and new status."""
         site = _make_site(status=SiteStatus.active)
 
-        with patch("app.services.site_service.audit_service") as mock_audit:
+        with patch("app.services.edc.site_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.deactivate_site(mock_session, site, actor_id)
 
@@ -199,7 +199,7 @@ class TestAssignUser:
         mock_result.scalars.return_value.first.return_value = None
         mock_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("app.services.site_service.audit_service") as mock_audit:
+        with patch("app.services.edc.site_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             assignment = await service.assign_user(
                 mock_session, study_id, site_id, user_id, actor_id
@@ -245,7 +245,7 @@ class TestAssignUser:
         mock_result.scalars.return_value.first.return_value = None
         mock_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("app.services.site_service.audit_service") as mock_audit:
+        with patch("app.services.edc.site_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.assign_user(
                 mock_session, study_id, site_id, user_id, actor_id

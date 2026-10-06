@@ -6,8 +6,8 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from app.api.routes import ai_assistant as ai_routes
-from app.api.routes.ai_assistant import chat, draft_edit_check, summarize_query
+from app.api.routes.shared import ai_assistant as ai_routes
+from app.api.routes.shared.ai_assistant import chat, draft_edit_check, summarize_query
 from app.core.config import Settings
 from app.core.exceptions import (
     AuthorizationError,
@@ -17,13 +17,13 @@ from app.core.exceptions import (
     ValidationError as DomainValidationError,
 )
 from app.main import create_app
-from app.schemas.ai_assistant import (
+from app.schemas.shared.ai_assistant import (
     AIChatRequest,
     AIEditCheckDraftRequest,
     AIQuerySummaryRequest,
 )
-from app.schemas.permission import AuthorizationScope, PermissionGrant
-from app.services.ai_assistant_service import AIAssistantService
+from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
+from app.services.shared.ai_assistant_service import AIAssistantService
 
 
 class FakeProvider:
@@ -67,7 +67,7 @@ async def test_ai_routes_stream_sse_for_each_operation(monkeypatch, handler, bod
     service = AIAssistantService(provider=provider)
     monkeypatch.setattr(ai_routes, "ai_assistant_service", service)
     monkeypatch.setattr(
-        "app.services.ai_assistant_service.get_settings",
+        "app.services.shared.ai_assistant_service.get_settings",
         lambda: Settings(ai_assistant_enabled=True),
     )
 
@@ -85,7 +85,7 @@ async def test_ai_routes_stream_sse_for_each_operation(monkeypatch, handler, bod
 
 async def test_disabled_ai_assistant_fails_before_streaming(monkeypatch):
     monkeypatch.setattr(
-        "app.services.ai_assistant_service.get_settings",
+        "app.services.shared.ai_assistant_service.get_settings",
         lambda: Settings(ai_assistant_enabled=False),
     )
     service = AIAssistantService(provider=FakeProvider("never"))
@@ -202,7 +202,7 @@ async def test_confirmed_ai_change_is_scoped_applied_and_audited(monkeypatch):
         audit_calls.append((session, kwargs))
 
     monkeypatch.setattr(
-        "app.services.ai_assistant_service.audit_service.record", record_audit
+        "app.services.shared.ai_assistant_service.audit_service.record", record_audit
     )
 
     async def apply_change(suggestion):
@@ -236,7 +236,7 @@ async def test_confirmed_ai_change_is_scoped_applied_and_audited(monkeypatch):
 
 async def test_apply_suggestion_route_keeps_confirmation_server_side(monkeypatch):
     monkeypatch.setattr(
-        "app.services.ai_assistant_service.get_settings",
+        "app.services.shared.ai_assistant_service.get_settings",
         lambda: Settings(ai_assistant_enabled=True),
     )
     with pytest.raises(DomainValidationError, match="Explicit human confirmation"):

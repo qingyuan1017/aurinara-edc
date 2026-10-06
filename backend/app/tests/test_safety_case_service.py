@@ -19,18 +19,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.pv import ActorContext
-from app.models.audit import AuditEvent
-from app.models.identity import User, UserStatus
+from app.models.edc.site import Site
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject
 from app.models.pv.safety_case import (
     AdverseEventRecord,
     CaseState,
     SafetyCase,
 )
-from app.models.site import Site
-from app.models.study import Study, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject
-from app.services.pv_ownership_guard import PVOwnershipError
-from app.services.safety_case_service import SafetyCaseService
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
+from app.services.pv.pv_ownership_guard import PVOwnershipError
+from app.services.pv.safety_case_service import SafetyCaseService
 
 
 @pytest.fixture

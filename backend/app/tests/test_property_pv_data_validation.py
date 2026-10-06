@@ -42,8 +42,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.pv import ActorContext
-from app.models.audit import AuditEvent
-from app.models.identity import User, UserStatus
+from app.models.edc.site import Site
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject
 from app.models.pv.assessment import SeriousnessCriterion
 from app.models.pv.coding import CodingSystem
 from app.models.pv.narrative import (
@@ -56,15 +57,14 @@ from app.models.pv.safety_case import (
     CaseState,
     SafetyCase,
 )
-from app.models.site import Site
-from app.models.study import Study, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
 from app.repositories.pv.coding_repository import CodingRepository
-from app.services.assessment_service import AssessmentService
-from app.services.coding_service import CodingService
-from app.services.narrative_service import NarrativeService
-from app.services.pv_coding_dictionary import CodingDictionaryProvider
-from app.services.safety_case_service import SafetyCaseService
+from app.services.pv.assessment_service import AssessmentService
+from app.services.pv.coding_service import CodingService
+from app.services.pv.narrative_service import NarrativeService
+from app.services.pv.pv_coding_dictionary import CodingDictionaryProvider
+from app.services.pv.safety_case_service import SafetyCaseService
 
 pytestmark = pytest.mark.asyncio
 

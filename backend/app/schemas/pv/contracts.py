@@ -17,7 +17,7 @@ from typing import Any, Generic, TypeVar
 from fastapi import Query
 from pydantic import BaseModel, Field
 
-from app.schemas.base import ErrorBody, ErrorEnvelope
+from app.schemas.shared.base import ErrorBody, ErrorEnvelope
 
 T = TypeVar("T")
 

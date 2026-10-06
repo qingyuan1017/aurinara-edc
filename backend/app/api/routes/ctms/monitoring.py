@@ -16,8 +16,7 @@ from app.models.ctms.monitoring import (
     MonitoringActivityStatus,
     MonitoringPlan,
 )
-from app.models.identity import User
-from app.schemas.base import PaginatedResponse
+from app.models.shared.identity import User
 from app.schemas.ctms.monitoring import (
     MonitoringActivityAssign,
     MonitoringActivityCancel,
@@ -31,7 +30,8 @@ from app.schemas.ctms.monitoring import (
     MonitoringPlanUpdate,
     MonitoringPlanVersionResponse,
 )
-from app.services.monitoring_service import monitoring_service
+from app.schemas.shared.base import PaginatedResponse
+from app.services.ctms.monitoring_service import monitoring_service
 
 router = APIRouter(tags=["ctms-monitoring"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]

@@ -15,7 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.observability import sanitize_error
 from app.core.request_context import get_correlation_id, get_request_id
-from app.schemas.base import ErrorEnvelope
+from app.schemas.shared.base import ErrorEnvelope
 
 logger = logging.getLogger(__name__)
 

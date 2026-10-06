@@ -31,13 +31,13 @@ from app.core.pv_compliance import (
     case_states_are_distinct,
     clock_agreement_within_tolerance,
 )
-from app.models.audit import AuditEvent
-from app.models.export import Export
-from app.models.file_attachment import FileAttachment
-from app.models.notification import Notification
 from app.models.pv import AdverseEventRecord, SafetyCase
 from app.models.pv.retention import PVRetentionAction
-from app.services.pv_retention_service import PVRetentionService, RetentionMode
+from app.models.shared.audit import AuditEvent
+from app.models.shared.export import Export
+from app.models.shared.file_attachment import FileAttachment
+from app.models.shared.notification import Notification
+from app.services.pv.pv_retention_service import PVRetentionService, RetentionMode
 
 
 @pytest.fixture

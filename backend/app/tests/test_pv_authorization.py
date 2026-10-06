@@ -29,13 +29,13 @@ from app.core.permissions import (
     PV_PERMISSION_CODES,
     ROLE_DEFINITIONS,
 )
-from app.schemas.permission import (
+from app.schemas.shared.permission import (
     PV_PERMISSION_ALIASES,
     AuthorizationScope,
     PermissionGrant,
     normalize_permission_code,
 )
-from app.services.permission_service import PermissionService
+from app.services.shared.permission_service import PermissionService
 
 STUDY_A = uuid.uuid4()
 STUDY_B = uuid.uuid4()

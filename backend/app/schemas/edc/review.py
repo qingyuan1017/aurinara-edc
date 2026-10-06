@@ -1,6 +1,5 @@
 """Pydantic v2 schemas for clinical review endpoints."""
 
-from datetime import datetime
 from uuid import UUID
 
 from app.schemas.shared.base import BaseSchema, UtcDatetime

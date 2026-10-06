@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import Base
 from app.core.request_context import request_id_var
-from app.models.identity import (
+from app.models.shared.identity import (
     Invitation,
     InvitationStatus,
     Role,
@@ -32,8 +32,8 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.schemas.user import InvitationCreate
-from app.services.user_service import InvitationError, UserService
+from app.schemas.shared.user import InvitationCreate
+from app.services.shared.user_service import InvitationError, UserService
 
 # ---------------------------------------------------------------------------
 # Strategies

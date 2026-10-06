@@ -1,6 +1,5 @@
 """ORM models package — import all models here so Alembic autogenerate can discover them."""
 
-from app.models.audit import AuditEvent
 from app.models.ctms import (
     ActivationAction,
     ActivationActionStatus,
@@ -91,47 +90,62 @@ from app.models.ctms import (
     UUIDPrimaryKeyMixin,
     utc_now,
 )
-from app.models.edit_check import EditCheck, ValidationResult
-from app.models.export import (
-    Export,
-    ExportStatus,
-    ExportType,
-)
-from app.models.file_attachment import (
-    FileAttachment,
-    FileAttachmentModule,
-    FileAttachmentObjectType,
-)
-from app.models.form_data import (
+from app.models.edc.edit_check import EditCheck, ValidationResult
+from app.models.edc.form_data import (
     FieldValue,
     FormInstance,
     FormInstanceStatus,
 )
-from app.models.form_metadata import (
+from app.models.edc.form_metadata import (
     Codelist,
     CodelistItem,
     FieldDefinition,
     FormDefinition,
     FormSection,
 )
-from app.models.form_record import FormRecord
-from app.models.identity import (
-    Invitation,
-    InvitationStatus,
-    Permission,
-    Role,
-    RolePermission,
-    ScopeLevel,
-    User,
-    UserRole,
-    UserStatus,
-)
-from app.models.lock import (
+from app.models.edc.form_record import FormRecord
+from app.models.edc.lock import (
     FreezeLock,
     FreezeLockObjectType,
     FreezeLockType,
 )
-from app.models.notification import Notification, NotificationStatus
+from app.models.edc.query import (
+    Query,
+    QueryMessage,
+    QueryStatus,
+    QueryTargetType,
+    QueryType,
+)
+from app.models.edc.review import ReviewStatus
+from app.models.edc.sdv import (
+    SDVScopeType,
+    SDVStatus,
+)
+from app.models.edc.signature import (
+    Signature,
+    SignatureObjectType,
+    SignatureStatus,
+)
+from app.models.edc.site import (
+    Site,
+    SiteStatus,
+    StudySiteUser,
+)
+from app.models.edc.study import (
+    Study,
+    StudyStatus,
+    StudyVersion,
+    StudyVersionStatus,
+)
+from app.models.edc.subject import (
+    Subject,
+    SubjectStatus,
+)
+from app.models.edc.visit import (
+    VisitDefinition,
+    VisitInstance,
+    VisitInstanceStatus,
+)
 from app.models.pv import (
     AdverseEventRecord,
     CaseNarrative,
@@ -158,43 +172,30 @@ from app.models.pv import (
     SeverityGrade,
     WhoDrugCoding,
 )
-from app.models.query import (
-    Query,
-    QueryMessage,
-    QueryStatus,
-    QueryTargetType,
-    QueryType,
+from app.models.shared.audit import AuditEvent
+from app.models.shared.export import (
+    Export,
+    ExportStatus,
+    ExportType,
 )
-from app.models.review import ReviewStatus
-from app.models.sdv import (
-    SDVScopeType,
-    SDVStatus,
+from app.models.shared.file_attachment import (
+    FileAttachment,
+    FileAttachmentModule,
+    FileAttachmentObjectType,
 )
-from app.models.signature import (
-    Signature,
-    SignatureObjectType,
-    SignatureStatus,
+from app.models.shared.identity import (
+    Invitation,
+    InvitationStatus,
+    Permission,
+    Role,
+    RolePermission,
+    ScopeLevel,
+    User,
+    UserRole,
+    UserStatus,
 )
-from app.models.site import (
-    Site,
-    SiteStatus,
-    StudySiteUser,
-)
-from app.models.study import (
-    Study,
-    StudyStatus,
-    StudyVersion,
-    StudyVersionStatus,
-)
-from app.models.subject import (
-    Subject,
-    SubjectStatus,
-)
-from app.models.visit import (
-    VisitDefinition,
-    VisitInstance,
-    VisitInstanceStatus,
-)
+from app.models.shared.notification import Notification, NotificationStatus
+from app.models.shared.revoked_token import RevokedToken
 
 __all__ = [
     "ActivationAction",
@@ -322,6 +323,7 @@ __all__ = [
     "RetentionMixin",
     "RetentionState",
     "ReviewStatus",
+    "RevokedToken",
     "Role",
     "RolePermission",
     "SDVScopeType",

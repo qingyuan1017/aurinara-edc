@@ -22,8 +22,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import BusinessRuleError
-from app.models.form_data import FormInstance, FormInstanceStatus
-from app.services.data_capture_service import DataCaptureService
+from app.models.edc.form_data import FormInstance, FormInstanceStatus
+from app.services.edc.data_capture_service import DataCaptureService
 
 # ---------------------------------------------------------------------------
 # Strategies

@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, require_pv_permission
 from app.api.routes.pv._common import build_actor
 from app.core.exceptions import NotFoundError
-from app.models.identity import User
+from app.models.shared.identity import User
 from app.repositories.pv.narrative_repository import NarrativeRepository
 from app.schemas.pv.contracts import PVPaginatedResponse, PVPaginationParams
 from app.schemas.pv.resources import (
@@ -27,7 +27,7 @@ from app.schemas.pv.resources import (
     NarrativeRevise,
     NarrativeVersionResponse,
 )
-from app.services.narrative_service import narrative_service
+from app.services.pv.narrative_service import narrative_service
 
 router = APIRouter(tags=["pv-narratives"])
 

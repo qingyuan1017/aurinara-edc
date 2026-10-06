@@ -13,8 +13,9 @@ Uses Hypothesis to verify that:
 import uuid
 
 import pytest
-from hypothesis import given, settings, strategies as st
 from httpx import ASGITransport, AsyncClient
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from app.main import create_app
 

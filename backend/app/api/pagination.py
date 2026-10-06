@@ -12,7 +12,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PaginationParams
-from app.schemas.base import PaginatedResponse
+from app.schemas.shared.base import PaginatedResponse
 
 T = TypeVar("T")
 

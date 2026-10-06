@@ -25,9 +25,9 @@ import pytest
 from app.core.audit import AuditService
 from app.core.config import Environment, Settings
 from app.core.permissions import PERMISSION_CODES
-from app.models.audit import AuditEvent
-from app.services.data_capture_service import DataCaptureService
-from app.services.permission_service import PermissionService
+from app.models.shared.audit import AuditEvent
+from app.services.edc.data_capture_service import DataCaptureService
+from app.services.shared.permission_service import PermissionService
 
 # ===========================================================================
 # 1. Audit immutability (21 CFR Part 11)
@@ -127,7 +127,7 @@ class TestALCOAReasonForChange:
     @pytest.mark.asyncio
     async def test_change_value_requires_reason_post_submission(self):
         """DataCaptureService.change_value must reject edits without reason post-submission."""
-        from app.models.form_data import FormInstance, FormInstanceStatus
+        from app.models.edc.form_data import FormInstance, FormInstanceStatus
 
         service = DataCaptureService()
         mock_session = AsyncMock()
@@ -153,7 +153,7 @@ class TestALCOAReasonForChange:
     @pytest.mark.asyncio
     async def test_change_value_requires_reason_when_empty_string(self):
         """Empty-string reason must also be rejected for post-submission edits."""
-        from app.models.form_data import FormInstance, FormInstanceStatus
+        from app.models.edc.form_data import FormInstance, FormInstanceStatus
 
         service = DataCaptureService()
         mock_session = AsyncMock()
@@ -279,12 +279,12 @@ class TestUTCClockDerivation:
         """All DateTime columns across models must use timezone=True (UTC requirement)."""
         from sqlalchemy import inspect as sa_inspect
 
-        from app.models.audit import AuditEvent
-        from app.models.form_data import FieldValue, FormInstance
-        from app.models.identity import User
-        from app.models.site import Site
-        from app.models.study import Study
-        from app.models.subject import Subject
+        from app.models.edc.form_data import FieldValue, FormInstance
+        from app.models.edc.site import Site
+        from app.models.edc.study import Study
+        from app.models.edc.subject import Subject
+        from app.models.shared.audit import AuditEvent
+        from app.models.shared.identity import User
 
         models = [AuditEvent, FormInstance, FieldValue, User, Study, Subject, Site]
         violations = []
@@ -406,7 +406,14 @@ class TestScopeEnforcementVerification:
 
         violations = []
 
-        for route_file in sorted(routes_dir.glob("*.py")):
+        # EDC and shared clinical/platform resource routers live in their domain
+        # subfolders; scan both to cover the same resources this check always has.
+        route_files = sorted(
+            (routes_dir / "edc").glob("*.py"),
+        ) + sorted(
+            (routes_dir / "shared").glob("*.py"),
+        )
+        for route_file in route_files:
             if route_file.name in exempt_files:
                 continue
 
@@ -475,7 +482,7 @@ class TestAuditCompleteness:
 
     def test_clinical_services_call_audit_record(self):
         """Each clinical-mutating service must reference audit_service.record."""
-        services_dir = Path(__file__).parents[1] / "services"
+        services_dir = Path(__file__).parents[1] / "services" / "edc"
 
         violations = []
         for service_filename in self.CLINICAL_SERVICES:
@@ -514,7 +521,14 @@ class TestAuditCompleteness:
         routes_dir = Path(__file__).parents[1] / "api" / "routes"
         exempt_files = {"health.py", "__init__.py", "auth.py"}
 
-        for route_file in sorted(routes_dir.glob("*.py")):
+        # EDC and shared resource routers live in their domain subfolders; scan
+        # both to cover the same resources this check always has.
+        route_files = sorted(
+            (routes_dir / "edc").glob("*.py"),
+        ) + sorted(
+            (routes_dir / "shared").glob("*.py"),
+        )
+        for route_file in route_files:
             if route_file.name in exempt_files:
                 continue
 

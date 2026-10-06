@@ -6,11 +6,11 @@ Uses Hypothesis to verify that PaginatedResponse and PaginationParams
 satisfy structural invariants across all valid input combinations.
 """
 
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from app.api.deps import PaginationParams
-from app.schemas.base import PaginatedResponse
-
+from app.schemas.shared.base import PaginatedResponse
 
 # ---------------------------------------------------------------------------
 # Strategies

@@ -22,10 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import Base
 from app.core.exceptions import ValidationError
-from app.models.audit import AuditEvent
-from app.models.identity import User, UserStatus
-from app.models.lock import FreezeLock, FreezeLockObjectType, FreezeLockType
-from app.services.lock_service import LockService
+from app.models.edc.lock import FreezeLock, FreezeLockObjectType, FreezeLockType
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
+from app.services.edc.lock_service import LockService
 
 # Feature: clinical-edc-system, Property 29: Unlock requires a reason and clears the lock
 # **Validates: Requirements 16.4**

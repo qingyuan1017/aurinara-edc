@@ -19,20 +19,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.exceptions import NotFoundError, ServiceUnavailableError, ValidationError
 from app.core.pv import ActorContext
-from app.models.audit import AuditEvent
-from app.models.identity import User, UserStatus
+from app.models.edc.site import Site
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject
 from app.models.pv.coordination import EdcAeProjection
 from app.models.pv.reconciliation import (
     DiscrepancyStatus,
     ReconciliationDiscrepancy,
     ReconciliationRun,
 )
-from app.models.site import Site
-from app.models.study import Study, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
 from app.repositories.pv.assessment_repository import AssessmentRepository
-from app.services.reconciliation_service import ReconciliationService
-from app.services.safety_case_service import SafetyCaseService
+from app.services.pv.reconciliation_service import ReconciliationService
+from app.services.pv.safety_case_service import SafetyCaseService
 
 
 @pytest.fixture

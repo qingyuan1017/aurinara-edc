@@ -7,7 +7,6 @@ Satisfies Requirements:
   - 21.1: API request/response schemas.
 """
 
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 

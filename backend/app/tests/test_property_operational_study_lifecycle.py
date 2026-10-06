@@ -29,10 +29,10 @@ from app.models.ctms.operational_study import (
     OperationalStudyStatus,
     StudyOperationalMilestone,
 )
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.services.ctms_atomicity_service import ctms_atomicity_service
-from app.services.ctms_ownership_guard import CTMSOwnershipError
-from app.services.operational_study_service import OperationalStudyService
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.services.ctms.ctms_atomicity_service import ctms_atomicity_service
+from app.services.ctms.ctms_ownership_guard import CTMSOwnershipError
+from app.services.ctms.operational_study_service import OperationalStudyService
 
 STUDY_TRANSITIONS: dict[str, set[str]] = {
     "Draft": {"Planning"},

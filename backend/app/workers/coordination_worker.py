@@ -14,12 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models.ctms.coordination import CoordinationEvent, CTMSOutbox
-from app.services.coordination_service import (
+from app.services.ctms.coordination_service import (
     CoordinationResult,
     classify_failure,
     coordination_service,
 )
-from app.services.ctms_health_service import ctms_health_service
+from app.services.ctms.ctms_health_service import ctms_health_service
 
 WORKER_NAME = "ctms-coordination"
 

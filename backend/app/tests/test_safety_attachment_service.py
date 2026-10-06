@@ -32,13 +32,17 @@ from app.core.exceptions import (
 )
 from app.core.pv import ActorContext
 from app.core.storage import LocalObjectStorage
-from app.models.audit import AuditEvent
-from app.models.file_attachment import (
+from app.models.edc.site import Site
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject
+from app.models.pv.safety_case import CaseState, SafetyCase
+from app.models.shared.audit import AuditEvent
+from app.models.shared.file_attachment import (
     FileAttachment,
     FileAttachmentModule,
     FileAttachmentObjectType,
 )
-from app.models.identity import (
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,
@@ -46,11 +50,7 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.models.pv.safety_case import CaseState, SafetyCase
-from app.models.site import Site
-from app.models.study import Study, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject
-from app.services.safety_attachment_service import SafetyAttachmentService
+from app.services.pv.safety_attachment_service import SafetyAttachmentService
 
 
 @pytest.fixture
@@ -250,7 +250,7 @@ async def test_upload_rejects_oversized_file(tmp_path, db_session, monkeypatch):
 
     # Patch the module limit down so the test does not allocate 100 MB.
     monkeypatch.setattr(
-        "app.services.safety_attachment_service._MAX_SAFETY_ATTACHMENT_BYTES", 8
+        "app.services.pv.safety_attachment_service._MAX_SAFETY_ATTACHMENT_BYTES", 8
     )
     with pytest.raises(ValidationError) as exc:
         await service.upload(

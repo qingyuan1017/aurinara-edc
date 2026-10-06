@@ -25,18 +25,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.request_context import request_id_var
 from app.core.security import hash_password
-from app.models.audit import AuditEvent
-from app.models.identity import User, UserStatus
-from app.models.site import Site, SiteStatus, StudySiteUser
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject
-from app.models.visit import VisitDefinition, VisitInstance
-from app.schemas.site import SiteCreate
-from app.schemas.study import StudyCreate
-from app.schemas.visit import VisitDefinitionCreate
-from app.services.site_service import SiteService
-from app.services.study_service import StudyService
-from app.services.visit_service import VisitService
+from app.models.edc.site import Site, SiteStatus, StudySiteUser
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject
+from app.models.edc.visit import VisitDefinition, VisitInstance
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
+from app.schemas.edc.site import SiteCreate
+from app.schemas.edc.study import StudyCreate
+from app.schemas.edc.visit import VisitDefinitionCreate
+from app.services.edc.site_service import SiteService
+from app.services.edc.study_service import StudyService
+from app.services.edc.visit_service import VisitService
 
 # ---------------------------------------------------------------------------
 # Strategies

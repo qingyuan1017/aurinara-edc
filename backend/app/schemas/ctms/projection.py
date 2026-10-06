@@ -1,6 +1,5 @@
 """Sanitized, typed, read-only CTMS projection API contracts."""
 
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 

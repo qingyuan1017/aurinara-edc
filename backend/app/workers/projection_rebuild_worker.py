@@ -19,14 +19,14 @@ from app.models.ctms.projection_rebuild import (
     CTMSProjectionRebuildState,
     ProjectionRebuildStatus,
 )
-from app.models.query import Query
-from app.models.subject import Subject
+from app.models.edc.query import Query
+from app.models.edc.subject import Subject
 from app.repositories.ctms.projection_rebuild_repository import (
     ProjectionRebuildRepository,
     projection_rebuild_repository,
 )
-from app.services.ctms_projection_service import CTMSProjectionService, ctms_projection_service
-from app.services.status_ownership_rule_service import (
+from app.services.ctms.ctms_projection_service import CTMSProjectionService, ctms_projection_service
+from app.services.ctms.status_ownership_rule_service import (
     CompiledOwnershipRule,
     StatusOwnershipRuleService,
     status_ownership_rule_service,

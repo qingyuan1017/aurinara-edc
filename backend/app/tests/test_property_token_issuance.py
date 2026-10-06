@@ -30,9 +30,8 @@ from app.core.security import (
     verify_mfa_code,
     verify_password,
 )
-from app.models.identity import User, UserStatus
-from app.services.auth_service import AuthService, AuthenticationError
-
+from app.models.shared.identity import User, UserStatus
+from app.services.shared.auth_service import AuthenticationError, AuthService
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -177,7 +176,7 @@ class TestTokenIssuanceProperty:
         expected_should_issue = _should_issue_token(scenario)
 
         with patch(
-            "app.services.auth_service.verify_mfa_code", side_effect=mock_verify_mfa
+            "app.services.shared.auth_service.verify_mfa_code", side_effect=mock_verify_mfa
         ):
             if expected_should_issue:
                 # Tokens SHOULD be issued
@@ -303,7 +302,7 @@ class TestTokenIssuanceProperty:
             return code == "123456" and mfa_code_correct
 
         with patch(
-            "app.services.auth_service.verify_mfa_code", side_effect=mock_verify_mfa
+            "app.services.shared.auth_service.verify_mfa_code", side_effect=mock_verify_mfa
         ):
             # At least one condition is False → must raise AuthenticationError
             with pytest.raises(AuthenticationError):

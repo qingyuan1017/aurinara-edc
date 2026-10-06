@@ -22,9 +22,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import AuthenticationError, AuthorizationError
-from app.models.identity import UserStatus
-from app.schemas.permission import normalize_permission_code
-from app.services.permission_service import PermissionService
+from app.models.shared.identity import UserStatus
+from app.schemas.shared.permission import normalize_permission_code
+from app.services.shared.permission_service import PermissionService
 
 
 class Scope(StrEnum):

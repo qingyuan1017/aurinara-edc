@@ -28,9 +28,8 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from app.models.query import Query, QueryMessage, QueryStatus, QueryTargetType
-from app.services.query_service import QueryService
-
+from app.models.edc.query import Query, QueryMessage, QueryStatus, QueryTargetType
+from app.services.edc.query_service import QueryService
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -119,7 +118,7 @@ class TestQueryLinkageProperties:
         service = QueryService()
         session = _make_mock_session()
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             query = await service.create_query(
                 session,
@@ -178,7 +177,7 @@ class TestQueryLinkageProperties:
 
         session.add = MagicMock(side_effect=tracking_add)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
 
             # Create the query first
@@ -264,7 +263,7 @@ class TestQueryLinkageProperties:
 
         session.add = MagicMock(side_effect=tracking_add)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
 
             # Create the query
@@ -324,7 +323,7 @@ class TestQueryLinkageProperties:
         service = QueryService()
         session = _make_mock_session()
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             query = await service.create_query(
                 session,

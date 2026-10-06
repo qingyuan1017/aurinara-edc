@@ -19,9 +19,9 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import CTMSOutbox, CTMSStatusHistory
-from app.services.ctms_atomicity_service import CTMSAtomicityService
+from app.models.shared.audit import AuditEvent
+from app.services.ctms.ctms_atomicity_service import CTMSAtomicityService
 
 
 @dataclass(frozen=True)

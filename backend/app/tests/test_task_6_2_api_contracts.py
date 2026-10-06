@@ -10,8 +10,8 @@ from app.api.routes.ctms import router as ctms_router
 from app.core.exceptions import register_exception_handlers
 from app.core.middleware import RequestIDMiddleware
 from app.core.openapi import API_TAGS, install_openapi_metadata
-from app.schemas.base import PaginatedResponse
-from app.services.ctms_ownership_guard import CTMSOwnershipError
+from app.schemas.shared.base import PaginatedResponse
+from app.services.ctms.ctms_ownership_guard import CTMSOwnershipError
 
 
 def test_ctms_openapi_publishes_contract_vocabulary_and_responses() -> None:

@@ -12,11 +12,11 @@ from app.models.ctms.enrollment import (
     EnrollmentTargetType,
     OperationalSubjectStatus,
 )
-from app.models.site import Site
-from app.models.study import Study
-from app.models.subject import Subject, SubjectStatus
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.edc.subject import Subject, SubjectStatus
 from app.schemas.ctms.enrollment import EnrollmentTargetCreate, OperationalMilestoneCreate
-from app.services.enrollment_service import EnrollmentService
+from app.services.ctms.enrollment_service import EnrollmentService
 
 
 class _Result:
@@ -57,9 +57,9 @@ class _Session:
 
 
 def _scope_records(study, site, subject):
-    from app.models.audit import AuditEvent
     from app.models.ctms.coordination import CTMSOutbox
     from app.models.ctms.enrollment import EnrollmentTarget, OperationalMilestone
+    from app.models.shared.audit import AuditEvent
 
     return {
         Study: [study],

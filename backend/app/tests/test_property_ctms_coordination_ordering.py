@@ -26,7 +26,7 @@ from app.core.ctms import Module
 from app.models.ctms.ownership import ProjectionType
 from app.models.ctms.projection import CTMSOperationalProjection, ProjectionStatus
 from app.schemas.ctms.ownership import ProjectionFieldType, StatusOwnershipRuleCreate
-from app.services.ctms_projection_service import CTMSProjectionService
+from app.services.ctms.ctms_projection_service import CTMSProjectionService
 
 
 @dataclass(frozen=True)
@@ -171,7 +171,7 @@ async def test_coordination_preserves_source_order_and_projection_freshness(
     projection_service = service(repository=repository)
     session = _Session()
     results = []
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         for event in delivery:
             result = await projection_service.apply_projection(
                 session,
@@ -212,7 +212,7 @@ async def test_coordination_preserves_source_order_and_projection_freshness(
 
     # A source snapshot that is already current is skipped while retaining the
     # same current version and projection identity.
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         repeated = await projection_service.apply_projection(
             session,
             rule=rule,

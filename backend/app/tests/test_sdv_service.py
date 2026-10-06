@@ -6,11 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.form_data import FormInstance, FormInstanceStatus
-from app.models.identity import User, UserStatus
-from app.models.sdv import SDVScopeType, SDVStatus
-from app.models.subject import Subject, SubjectStatus
-from app.services.sdv_service import SDVService, sdv_service
+from app.models.edc.form_data import FormInstance, FormInstanceStatus
+from app.models.edc.sdv import SDVScopeType, SDVStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.shared.identity import User, UserStatus
+from app.services.edc.sdv_service import SDVService, sdv_service
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ class TestSDVToggle:
         target = _subject()
         session = _session_for_status(None)
 
-        with patch("app.services.sdv_service.audit_service") as audit:
+        with patch("app.services.edc.sdv_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.set_sdv(session, SDVScopeType.subject, target, actor_id)
 
@@ -92,7 +92,7 @@ class TestSDVToggle:
         )
         session = _session_for_status(None)
 
-        with patch("app.services.sdv_service.audit_service") as audit:
+        with patch("app.services.edc.sdv_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.set_sdv(session, "subject", target.id, actor)
 
@@ -111,7 +111,7 @@ class TestSDVToggle:
         )
         session = _session_for_status(existing)
 
-        with patch("app.services.sdv_service.audit_service") as audit:
+        with patch("app.services.edc.sdv_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.clear_sdv(session, SDVScopeType.subject, target, actor_id)
 
@@ -131,7 +131,7 @@ class TestSDVToggle:
         target = _form_instance(subject)
         session = _session_for_status(None)
 
-        with patch("app.services.sdv_service.audit_service") as audit:
+        with patch("app.services.edc.sdv_service.audit_service") as audit:
             audit.record = AsyncMock()
             await service.set_sdv(session, "form", target, actor_id)
 

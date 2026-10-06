@@ -20,9 +20,8 @@ from unittest.mock import MagicMock
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from app.models.identity import Permission, Role, RolePermission, ScopeLevel, User, UserRole
-from app.services.permission_service import PermissionService
-
+from app.models.shared.identity import Permission, Role, RolePermission, ScopeLevel, User, UserRole
+from app.services.shared.permission_service import PermissionService
 
 # ---------------------------------------------------------------------------
 # Strategies

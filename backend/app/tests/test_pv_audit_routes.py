@@ -33,8 +33,9 @@ from app.core.database import Base
 from app.core.pv import Module
 from app.core.security import create_access_token
 from app.main import create_app
-from app.models.audit import AuditEvent, _reject_audit_mutation
-from app.models.identity import (
+from app.models.edc.study import Study, StudyStatus
+from app.models.shared.audit import AuditEvent, _reject_audit_mutation
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,
@@ -42,7 +43,6 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.models.study import Study, StudyStatus
 
 
 @pytest.fixture

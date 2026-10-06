@@ -14,7 +14,7 @@ from app.core.exceptions import NotFoundError, register_exception_handlers
 from app.core.middleware import RequestIDMiddleware
 from app.core.openapi import API_TAGS, install_openapi_metadata
 from app.core.request_context import get_request_context
-from app.schemas.base import BaseSchema, PaginatedResponse
+from app.schemas.shared.base import BaseSchema, PaginatedResponse
 
 
 class TimestampResponse(BaseSchema):

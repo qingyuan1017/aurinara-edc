@@ -22,17 +22,17 @@ import pytest
 
 from app.core.ctms import CTMSPhase, Module, build_ctms_manifest
 from app.core.exceptions import AuthorizationError
-from app.models.file_attachment import (
+from app.models.edc.query import Query, QueryStatus, QueryTargetType
+from app.models.edc.subject import SubjectStatus
+from app.models.shared.file_attachment import (
     FileAttachment,
     FileAttachmentModule,
     FileAttachmentObjectType,
 )
-from app.models.identity import UserStatus
-from app.models.query import Query, QueryStatus, QueryTargetType
-from app.models.subject import SubjectStatus
-from app.services.coordination_service import BoundedCoordinationQueue
-from app.services.file_attachment_service import FileAttachmentService
-from app.services.query_service import QueryService
+from app.models.shared.identity import UserStatus
+from app.services.ctms.coordination_service import BoundedCoordinationQueue
+from app.services.edc.query_service import QueryService
+from app.services.shared.file_attachment_service import FileAttachmentService
 from app.tests.test_property_ctms_resilience import (
     _run_edc_workflow,
     _valid_lifecycle_path,
@@ -191,7 +191,7 @@ async def _run_edc_query_and_attachment_workflow() -> dict[str, object]:
         return SimpleNamespace(id=uuid4())
 
     with patch(
-        "app.services.query_service.audit_service.record",
+        "app.services.edc.query_service.audit_service.record",
         new=record_query_audit,
     ):
         await QueryService().respond(
@@ -221,7 +221,7 @@ async def _run_edc_query_and_attachment_workflow() -> dict[str, object]:
         return SimpleNamespace(id=uuid4())
 
     with patch(
-        "app.services.file_attachment_service.audit_service.record",
+        "app.services.shared.file_attachment_service.audit_service.record",
         new=record_attachment_audit,
     ):
         downloaded = await FileAttachmentService(storage=storage).download(

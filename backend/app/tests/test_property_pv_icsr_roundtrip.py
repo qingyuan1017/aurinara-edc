@@ -28,10 +28,10 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import ValidationError
-from app.services.regulatory_reporting_service import (
+from app.services.pv.regulatory_reporting_service import (
     E2B_MANDATORY_FIELDS,
 )
-from app.services.regulatory_reporting_service import (
+from app.services.pv.regulatory_reporting_service import (
     regulatory_reporting_service as svc,
 )
 

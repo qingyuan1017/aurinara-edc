@@ -16,12 +16,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.export import Export, ExportStatus, ExportType
-from app.models.form_data import FieldValue, FormInstance
-from app.models.form_metadata import FieldDefinition
-from app.models.site import Site
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitInstance
+from app.models.edc.form_data import FieldValue, FormInstance
+from app.models.edc.form_metadata import FieldDefinition
+from app.models.edc.site import Site
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitInstance
+from app.models.shared.export import Export, ExportStatus, ExportType
 from app.workers.export_worker import (
     run_csv_export,
     run_export,

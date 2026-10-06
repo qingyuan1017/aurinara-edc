@@ -9,9 +9,9 @@ from pydantic import ValidationError as PydanticValidationError
 
 from app.core.ctms import Module
 from app.core.exceptions import ValidationError
-from app.models.export import Export, ExportStatus
+from app.models.shared.export import Export, ExportStatus
 from app.schemas.ctms.export import OperationalExportCreate, OperationalExportFilters
-from app.services.export_service import ExportService
+from app.services.shared.export_service import ExportService
 from app.workers.ctms_export_worker import _row_for, run_ctms_export, serialize_operational_csv
 
 
@@ -59,7 +59,7 @@ async def test_create_ctms_export_sets_shared_ctms_content_owner() -> None:
     session.add = MagicMock()
     session.flush = AsyncMock()
     service = ExportService()
-    with patch("app.services.export_service.audit_service.record", new_callable=AsyncMock):
+    with patch("app.services.shared.export_service.audit_service.record", new_callable=AsyncMock):
         export = await service.create_ctms_export(
             session,
             study_id=uuid4(),

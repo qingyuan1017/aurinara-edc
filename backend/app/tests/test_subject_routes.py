@@ -24,7 +24,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.security import create_access_token, hash_password
 from app.main import create_app
-from app.models.identity import (
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,
@@ -32,9 +35,6 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.models.site import Site, SiteStatus
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -47,27 +47,27 @@ async def async_engine():
     # Create only the tables needed by the subject routes. The full metadata
     # includes Postgres-only JSONB columns (form metadata) that SQLite cannot
     # render, so we restrict creation to the relevant tables.
-    from app.models.audit import AuditEvent
-    from app.models.identity import (
+    from app.models.edc.site import Site as SiteModel
+    from app.models.edc.site import StudySiteUser as StudySiteUserModel
+    from app.models.edc.study import Study as StudyModel
+    from app.models.edc.study import StudyVersion as StudyVersionModel
+    from app.models.edc.subject import Subject as SubjectModel
+    from app.models.shared.audit import AuditEvent
+    from app.models.shared.identity import (
         Permission as PermissionModel,
     )
-    from app.models.identity import (
+    from app.models.shared.identity import (
         Role as RoleModel,
     )
-    from app.models.identity import (
+    from app.models.shared.identity import (
         RolePermission as RolePermissionModel,
     )
-    from app.models.identity import (
+    from app.models.shared.identity import (
         User as UserModel,
     )
-    from app.models.identity import (
+    from app.models.shared.identity import (
         UserRole as UserRoleModel,
     )
-    from app.models.site import Site as SiteModel
-    from app.models.site import StudySiteUser as StudySiteUserModel
-    from app.models.study import Study as StudyModel
-    from app.models.study import StudyVersion as StudyVersionModel
-    from app.models.subject import Subject as SubjectModel
 
     tables = [
         m.__table__

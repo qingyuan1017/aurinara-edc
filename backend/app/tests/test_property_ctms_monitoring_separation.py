@@ -32,13 +32,13 @@ from app.models.ctms.monitoring import (
     MonitoringPlan,
     MonitoringPlanVersion,
 )
-from app.models.identity import User, UserStatus
-from app.models.lock import FreezeLock, FreezeLockObjectType, FreezeLockType
-from app.models.site import Site, SiteStatus
-from app.models.study import Study, StudyStatus
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitInstance, VisitInstanceStatus
-from app.services.monitoring_service import MonitoringService
+from app.models.edc.lock import FreezeLock, FreezeLockObjectType, FreezeLockType
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import Study, StudyStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitInstance, VisitInstanceStatus
+from app.models.shared.identity import User, UserStatus
+from app.services.ctms.monitoring_service import MonitoringService
 
 
 @dataclass(frozen=True)
@@ -333,7 +333,7 @@ async def test_monitoring_activities_remain_separate_from_protocol_visits(
         mutations.append(kwargs)
 
     with patch(
-        "app.services.monitoring_service.ctms_atomicity_service.record_mutation",
+        "app.services.ctms.monitoring_service.ctms_atomicity_service.record_mutation",
         new=AsyncMock(side_effect=record_mutation),
     ):
         plan = await service.create_plan(

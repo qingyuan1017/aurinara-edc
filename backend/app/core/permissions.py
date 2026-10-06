@@ -300,7 +300,7 @@ async def seed_roles_and_permissions(session: AsyncSession) -> None:
     This function is idempotent: existing permissions and roles are skipped.
     It does NOT commit — the caller controls the transaction boundary.
     """
-    from app.models.identity import Permission, Role, RolePermission
+    from app.models.shared.identity import Permission, Role, RolePermission
 
     # --- Seed permissions ---
     existing_perms_result = await session.execute(select(Permission.code))

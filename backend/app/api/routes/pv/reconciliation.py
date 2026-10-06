@@ -18,14 +18,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, require_pv_permission
 from app.api.routes.pv._common import build_actor
 from app.core.exceptions import NotFoundError
-from app.models.identity import User
+from app.models.shared.identity import User
 from app.repositories.pv.reconciliation_repository import ReconciliationRepository
 from app.schemas.pv.resources import (
     ReconciliationDiscrepancyResponse,
     ReconciliationRunRequest,
     ReconciliationRunResponse,
 )
-from app.services.reconciliation_service import reconciliation_service
+from app.services.pv.reconciliation_service import reconciliation_service
 
 router = APIRouter(tags=["pv-reconciliation"])
 

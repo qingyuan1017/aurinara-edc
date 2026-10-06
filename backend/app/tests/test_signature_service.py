@@ -8,11 +8,11 @@ import pytest
 
 from app.core.exceptions import AuthenticationError
 from app.core.security import hash_password
-from app.models.form_data import FieldValue, FormInstance, FormInstanceStatus
-from app.models.identity import User, UserStatus
-from app.models.signature import Signature, SignatureStatus
-from app.services.data_capture_service import DataCaptureService
-from app.services.signature_service import SignatureService, signature_service
+from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
+from app.models.edc.signature import Signature, SignatureStatus
+from app.models.shared.identity import User, UserStatus
+from app.services.edc.data_capture_service import DataCaptureService
+from app.services.edc.signature_service import SignatureService, signature_service
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ class TestSign:
         form = _form()
 
         with patch(
-            "app.services.signature_service.verify_re_auth", return_value=False
+            "app.services.edc.signature_service.verify_re_auth", return_value=False
         ) as verify, pytest.raises(AuthenticationError, match="Re-authentication failed"):
             await service.sign(
                 session, form, "I attest this data is accurate.", "wrong", actor
@@ -74,7 +74,7 @@ class TestSign:
         session.flush = AsyncMock()
         form = _form()
 
-        with patch("app.services.signature_service.audit_service") as audit:
+        with patch("app.services.edc.signature_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.sign(
                 session,
@@ -105,7 +105,7 @@ class TestSign:
         session.flush = AsyncMock()
         form = _form()
 
-        with patch("app.services.signature_service.audit_service") as audit:
+        with patch("app.services.edc.signature_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.sign(
                 session,
@@ -135,7 +135,7 @@ class TestInvalidateIfChanged:
         session.flush = AsyncMock()
         session.execute = AsyncMock(return_value=_result(all_items=[signature]))
 
-        with patch("app.services.signature_service.audit_service") as audit:
+        with patch("app.services.edc.signature_service.audit_service") as audit:
             audit.record = AsyncMock()
             stale = await service.invalidate_if_changed(
                 session,
@@ -169,7 +169,7 @@ class TestInvalidateIfChanged:
         session = AsyncMock()
         session.execute = AsyncMock(return_value=_result(all_items=[signature]))
 
-        with patch("app.services.signature_service.audit_service") as audit:
+        with patch("app.services.edc.signature_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.invalidate_if_changed(session, form, actor)
 
@@ -200,11 +200,11 @@ class TestDataCaptureSignatureIntegration:
 
         with (
             patch(
-                "app.services.data_capture_service.lock_service.is_modification_blocked",
+                "app.services.edc.data_capture_service.lock_service.is_modification_blocked",
                 new_callable=AsyncMock,
                 return_value=False,
             ),
-            patch("app.services.data_capture_service.audit_service") as audit,
+            patch("app.services.edc.data_capture_service.audit_service") as audit,
             patch.object(signature_service, "invalidate_if_changed", new_callable=AsyncMock) as invalidate,
         ):
             audit.record = AsyncMock()

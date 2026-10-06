@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.exceptions import BusinessRuleError, ConflictError, ValidationError
-from app.models.form_data import FormInstance, FormInstanceStatus
-from app.models.form_record import FormRecord
-from app.services.repeating_record_service import (
+from app.models.edc.form_data import FormInstance, FormInstanceStatus
+from app.models.edc.form_record import FormRecord
+from app.services.edc.repeating_record_service import (
     RepeatingRecordService,
     repeating_record_service,
 )
@@ -58,7 +58,7 @@ class TestAddRecord:
         session = _make_session(max_sequence=4)
 
         with patch(
-            "app.services.repeating_record_service.audit_service"
+            "app.services.edc.repeating_record_service.audit_service"
         ) as audit:
             audit.record = AsyncMock()
             record = await service.add_record(
@@ -84,7 +84,7 @@ class TestAddRecord:
         session = _make_session(max_sequence=None)
 
         with patch(
-            "app.services.repeating_record_service.audit_service"
+            "app.services.edc.repeating_record_service.audit_service"
         ) as audit:
             audit.record = AsyncMock()
             record = await service.add_record(session, form_instance, actor_id)
@@ -108,7 +108,7 @@ class TestEditRecord:
         session.flush = AsyncMock()
 
         with patch(
-            "app.services.repeating_record_service.audit_service"
+            "app.services.edc.repeating_record_service.audit_service"
         ) as audit:
             audit.record = AsyncMock()
             result = await service.edit_record(
@@ -157,7 +157,7 @@ class TestSoftDeleteAndRestore:
         session.flush = AsyncMock()
 
         with patch(
-            "app.services.repeating_record_service.audit_service"
+            "app.services.edc.repeating_record_service.audit_service"
         ) as audit:
             audit.record = AsyncMock()
             result = await service.soft_delete(
@@ -207,7 +207,7 @@ class TestSoftDeleteAndRestore:
         session.flush = AsyncMock()
 
         with patch(
-            "app.services.repeating_record_service.audit_service"
+            "app.services.edc.repeating_record_service.audit_service"
         ) as audit:
             audit.record = AsyncMock()
             result = await service.restore(session, record, actor_id)

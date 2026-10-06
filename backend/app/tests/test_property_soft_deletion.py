@@ -33,12 +33,12 @@ from app.core.database import Base
 from app.core.exceptions import NotFoundError
 from app.core.request_context import request_id_var
 from app.core.security import hash_password
-from app.models.identity import User, UserStatus
-from app.models.site import Site, SiteStatus
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.services.subject_service import SubjectService
-from app.services.user_service import UserService
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.shared.identity import User, UserStatus
+from app.services.edc.subject_service import SubjectService
+from app.services.shared.user_service import UserService
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -66,8 +66,8 @@ subject_number_strategy = st.from_regex(r"[0-9]{3}-[0-9]{4}", fullmatch=True)
 
 async def _create_engine_and_session():
     """Create an in-memory SQLite async engine with only the needed tables."""
-    from app.models.audit import AuditEvent
-    from app.models.site import StudySiteUser
+    from app.models.edc.site import StudySiteUser
+    from app.models.shared.audit import AuditEvent
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
 

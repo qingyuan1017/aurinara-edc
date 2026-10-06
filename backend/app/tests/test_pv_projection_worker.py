@@ -24,14 +24,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.database import Base
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import CTMSOutbox
 from app.models.pv.coordination import (
     APPROVED_PROJECTION_FIELDS,
     CoordinationRef,
     EdcAeProjection,
 )
-from app.services.pv_projection_service import PVProjectionService
+from app.models.shared.audit import AuditEvent
+from app.services.pv.pv_projection_service import PVProjectionService
 from app.workers.pv_projection_worker import PVProjectionWorker
 
 

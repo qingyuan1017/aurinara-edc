@@ -21,12 +21,12 @@ from hypothesis import strategies as st
 
 from app.core.ctms import Module
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
-from app.models.query import Query
-from app.models.site import Site
-from app.models.study import Study
-from app.models.subject import Subject
-from app.models.visit import VisitInstance
-from app.services.ctms_identity_service import (
+from app.models.edc.query import Query
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.edc.subject import Subject
+from app.models.edc.visit import VisitInstance
+from app.services.ctms.ctms_identity_service import (
     CanonicalEntityType,
     CanonicalIdentityResolver,
 )

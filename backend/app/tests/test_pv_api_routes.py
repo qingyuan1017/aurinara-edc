@@ -32,8 +32,12 @@ from app.core.database import Base
 from app.core.permissions import PV_PERMISSION_CODES
 from app.core.security import create_access_token
 from app.main import create_app
-from app.models.audit import AuditEvent
-from app.models.identity import (
+from app.models.edc.site import Site
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject
+from app.models.pv.safety_case import CaseState, SafetyCase
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,
@@ -41,10 +45,6 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.models.pv.safety_case import CaseState, SafetyCase
-from app.models.site import Site
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject
 
 
 @pytest.fixture

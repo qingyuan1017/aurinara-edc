@@ -33,7 +33,7 @@ from hypothesis import strategies as st
 from app.core.exceptions import ValidationError
 from app.core.pv import ReportStatus
 from app.models.pv.regulatory import TIMELINE_DAYS_MAX, TIMELINE_DAYS_MIN
-from app.services.regulatory_reporting_service import regulatory_reporting_service
+from app.services.pv.regulatory_reporting_service import regulatory_reporting_service
 
 # ReportStatus values that stop the expedited clock (Requirement 8.6).
 _CLOCK_STOPPED_STATUSES = frozenset(

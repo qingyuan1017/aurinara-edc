@@ -1,6 +1,5 @@
 """Sanitized coordination, failed-event, and conflict API contracts."""
 
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 

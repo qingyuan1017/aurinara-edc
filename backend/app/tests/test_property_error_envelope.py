@@ -15,9 +15,9 @@ from typing import Any
 
 import pytest
 from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from httpx import ASGITransport, AsyncClient
 
 from app.core.exceptions import (
     AuthenticationError,

@@ -27,21 +27,21 @@ from app.core.audit import audit_service
 from app.core.database import Base
 from app.core.security import create_access_token
 from app.main import create_app
-from app.models.audit import AuditEvent
 from app.models.ctms.enrollment import EnrollmentTarget, OperationalMilestone
 from app.models.ctms.operational_site import ActivationAction, OperationalSite
 from app.models.ctms.operational_study import OperationalStudy, StudyPlan
-from app.models.export import Export
-from app.models.file_attachment import FileAttachment
-from app.models.form_data import FieldValue, FormInstance, FormInstanceStatus
-from app.models.form_metadata import FieldDefinition, FormDefinition, FormSection
-from app.models.identity import Permission, Role, RolePermission, User, UserRole, UserStatus
-from app.models.query import Query, QueryMessage, QueryStatus, QueryTargetType
-from app.models.site import Site, SiteStatus
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
-from app.services.operational_study_service import OperationalStudyService
+from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
+from app.models.edc.form_metadata import FieldDefinition, FormDefinition, FormSection
+from app.models.edc.query import Query, QueryMessage, QueryStatus, QueryTargetType
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
+from app.models.shared.audit import AuditEvent
+from app.models.shared.export import Export
+from app.models.shared.file_attachment import FileAttachment
+from app.models.shared.identity import Permission, Role, RolePermission, User, UserRole, UserStatus
+from app.services.ctms.operational_study_service import OperationalStudyService
 
 
 @pytest.fixture

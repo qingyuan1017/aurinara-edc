@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import Base
 from app.core.exceptions import BusinessRuleError, ConflictError
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import CTMSOutbox, CTMSStatusHistory
 from app.models.ctms.work import (
     EscalationStatus,
@@ -23,12 +22,13 @@ from app.models.ctms.work import (
     OperationalTaskStatus,
     TaskDependency,
 )
-from app.models.identity import User, UserStatus
-from app.models.notification import Notification
-from app.models.query import Query, QueryStatus, QueryTargetType
-from app.models.site import Site
-from app.models.study import Study
-from app.services.work_management_service import WorkManagementService
+from app.models.edc.query import Query, QueryStatus, QueryTargetType
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
+from app.models.shared.notification import Notification
+from app.services.ctms.work_management_service import WorkManagementService
 
 
 @pytest.fixture

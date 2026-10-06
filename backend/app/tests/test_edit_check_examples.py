@@ -6,13 +6,13 @@ from uuid import uuid4
 import pytest
 
 from app.core.exceptions import BusinessRuleError
-from app.models.edit_check import EditCheck
-from app.models.study import StudyVersion, StudyVersionStatus
-from app.services.edit_check_examples import (
+from app.models.edc.edit_check import EditCheck
+from app.models.edc.study import StudyVersion, StudyVersionStatus
+from app.services.edc.edit_check_examples import (
     EXAMPLE_EDIT_CHECKS,
     seed_example_edit_checks,
 )
-from app.services.edit_check_service import EditCheckService
+from app.services.edc.edit_check_service import EditCheckService
 
 
 def _version(status: StudyVersionStatus = StudyVersionStatus.draft) -> MagicMock:

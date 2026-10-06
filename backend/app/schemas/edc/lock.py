@@ -1,6 +1,5 @@
 """Pydantic schemas for freeze and lock controls."""
 
-from datetime import datetime
 from uuid import UUID
 
 from pydantic import Field

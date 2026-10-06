@@ -1,6 +1,5 @@
 """Pydantic response schemas for user notifications."""
 
-from datetime import datetime
 from uuid import UUID
 
 from app.models.shared.notification import NotificationStatus

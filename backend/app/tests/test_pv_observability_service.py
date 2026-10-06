@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.services.pv_observability_service import (
+from app.services.pv.pv_observability_service import (
     METRICS_WINDOW_SECONDS,
     PVObservabilityService,
 )

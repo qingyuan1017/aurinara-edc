@@ -11,20 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.security import create_access_token, hash_password
 from app.main import create_app
-from app.models.audit import AuditEvent
-from app.models.form_data import FieldValue, FormInstance
-from app.models.form_metadata import (
+from app.models.edc.form_data import FieldValue, FormInstance
+from app.models.edc.form_metadata import (
     Codelist,
     CodelistItem,
     FieldDefinition,
     FormDefinition,
     FormSection,
 )
-from app.models.identity import Permission, Role, RolePermission, User, UserRole, UserStatus
-from app.models.lock import FreezeLock
-from app.models.site import Site, StudySiteUser
-from app.models.study import Study, StudyStatus, StudyVersion
-from app.models.subject import Subject, SubjectStatus
+from app.models.edc.lock import FreezeLock
+from app.models.edc.site import Site, StudySiteUser
+from app.models.edc.study import Study, StudyStatus, StudyVersion
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import Permission, Role, RolePermission, User, UserRole, UserStatus
 
 
 @pytest.fixture

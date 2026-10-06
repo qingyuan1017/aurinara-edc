@@ -1,4 +1,4 @@
-"""Unit tests for app.services.user_service.UserService.
+"""Unit tests for app.services.shared.user_service.UserService.
 
 Tests cover invite, accept_invitation, deactivate, and assign_roles.
 Uses an in-memory SQLite database to test real DB interactions without external deps.
@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.request_context import request_id_var
 from app.core.security import hash_password, verify_password
-from app.models.identity import (
+from app.models.shared.identity import (
     Invitation,
     InvitationStatus,
     Role,
@@ -22,8 +22,8 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.schemas.user import InvitationCreate, RoleAssignmentRequest
-from app.services.user_service import InvitationError, UserService
+from app.schemas.shared.user import InvitationCreate, RoleAssignmentRequest
+from app.services.shared.user_service import InvitationError, UserService
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -194,7 +194,7 @@ class TestInvite:
     async def test_invite_writes_audit_event(
         self, user_service, db_session, admin_user, site_coordinator_role
     ):
-        from app.models.audit import AuditEvent
+        from app.models.shared.audit import AuditEvent
 
         data = InvitationCreate(
             email="audited@example.com",
@@ -280,7 +280,7 @@ class TestAcceptInvitation:
     async def test_accept_writes_audit_event(
         self, user_service, db_session, pending_invitation
     ):
-        from app.models.audit import AuditEvent
+        from app.models.shared.audit import AuditEvent
 
         user = await user_service.accept_invitation(
             db_session,
@@ -396,7 +396,7 @@ class TestDeactivate:
     async def test_deactivate_writes_audit_event(
         self, user_service, db_session, active_user, admin_user
     ):
-        from app.models.audit import AuditEvent
+        from app.models.shared.audit import AuditEvent
 
         await user_service.deactivate(db_session, active_user.id, admin_user.id)
 
@@ -490,7 +490,7 @@ class TestAssignRoles:
     async def test_assign_roles_writes_audit_event(
         self, user_service, db_session, active_user, admin_user, site_coordinator_role
     ):
-        from app.models.audit import AuditEvent
+        from app.models.shared.audit import AuditEvent
 
         assignments = [
             RoleAssignmentRequest(role_id=site_coordinator_role.id)

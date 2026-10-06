@@ -17,11 +17,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.exceptions import BusinessRuleError, NotFoundError
-from app.models.study import StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
-from app.schemas.visit import UnscheduledVisitCreate, VisitDefinitionCreate
-from app.services.visit_service import (
+from app.models.edc.study import StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
+from app.schemas.edc.visit import UnscheduledVisitCreate, VisitDefinitionCreate
+from app.services.edc.visit_service import (
     WINDOW_AFTER,
     WINDOW_BEFORE,
     WINDOW_IN,
@@ -165,7 +165,7 @@ class TestDefineVisit:
             is_required=True,
         )
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             definition = await service.define_visit(
                 mock_session, version, data, actor_id
@@ -206,7 +206,7 @@ class TestDefineVisit:
             display_order=1,
         )
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.define_visit(mock_session, version, data, actor_id)
 
@@ -236,7 +236,7 @@ class TestInitializeInstances:
         mock_result.scalars.return_value.all.return_value = definitions
         mock_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             instances = await service.initialize_instances(
                 mock_session, subject, actor_id
@@ -256,7 +256,7 @@ class TestInitializeInstances:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             instances = await service.initialize_instances(
                 mock_session, subject, actor_id
@@ -279,7 +279,7 @@ class TestRecordVisitDate:
         # day offset 7 -> in window
         visit_date = date(2024, 1, 8)
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.record_visit_date(
                 mock_session, instance, visit_date, actor_id, baseline_date=baseline
@@ -296,7 +296,7 @@ class TestRecordVisitDate:
         # day offset 4 -> before window (< 5)
         visit_date = date(2024, 1, 5)
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.record_visit_date(
                 mock_session, instance, visit_date, actor_id, baseline_date=baseline
@@ -311,7 +311,7 @@ class TestRecordVisitDate:
         # day offset 10 -> after window (> 9)
         visit_date = date(2024, 1, 11)
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.record_visit_date(
                 mock_session, instance, visit_date, actor_id, baseline_date=baseline
@@ -325,7 +325,7 @@ class TestRecordVisitDate:
         definition = _make_definition(target_day=7)
         instance = _make_instance(definition)
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.record_visit_date(
                 mock_session, instance, date(2024, 1, 8), actor_id
@@ -339,7 +339,7 @@ class TestRecordVisitDate:
     ):
         instance = _make_instance(definition=None)
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.record_visit_date(
                 mock_session,
@@ -355,7 +355,7 @@ class TestRecordVisitDate:
         definition = _make_definition()
         instance = _make_instance(definition)
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.record_visit_date(
                 mock_session,
@@ -385,7 +385,7 @@ class TestCreateUnscheduled:
         subject = _make_subject()
         data = UnscheduledVisitCreate(name="Unscheduled AE Visit")
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             instance = await service.create_unscheduled(
                 mock_session, subject, data, actor_id
@@ -404,7 +404,7 @@ class TestCreateUnscheduled:
             name="Unscheduled Visit", visit_date=date(2024, 2, 1)
         )
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.create_unscheduled(mock_session, subject, data, actor_id)
 
@@ -424,7 +424,7 @@ class TestMarkMissed:
     async def test_mark_missed_sets_status(self, service, mock_session, actor_id):
         instance = _make_instance(status=VisitInstanceStatus.scheduled)
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.mark_missed(mock_session, instance, actor_id)
 
@@ -436,7 +436,7 @@ class TestMarkMissed:
     ):
         instance = _make_instance(status=VisitInstanceStatus.scheduled)
 
-        with patch("app.services.visit_service.audit_service") as mock_audit:
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.mark_missed(mock_session, instance, actor_id)
 

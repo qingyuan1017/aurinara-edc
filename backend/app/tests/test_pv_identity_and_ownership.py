@@ -16,14 +16,14 @@ import pytest
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.pv import Module
-from app.models.site import Site
-from app.models.study import Study
-from app.models.subject import Subject
-from app.services.pv_identity_service import (
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.edc.subject import Subject
+from app.services.pv.pv_identity_service import (
     CanonicalEntityType,
     PVIdentityResolver,
 )
-from app.services.pv_ownership_guard import (
+from app.services.pv.pv_ownership_guard import (
     PVOwnershipError,
     assert_pv_command_safe,
 )

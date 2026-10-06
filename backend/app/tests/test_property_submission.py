@@ -26,10 +26,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import ValidationError
-from app.models.form_data import FieldValue, FormInstance, FormInstanceStatus
-from app.models.form_metadata import FieldDefinition
-from app.services.data_capture_service import DataCaptureService
-
+from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
+from app.models.edc.form_metadata import FieldDefinition
+from app.services.edc.data_capture_service import DataCaptureService
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -331,7 +330,7 @@ class TestSubmissionValidationProperty:
         ), patch.object(
             service, "_get_field_value_map", return_value=field_value_map
         ), patch(
-            "app.services.data_capture_service.audit_service"
+            "app.services.edc.data_capture_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
 

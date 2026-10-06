@@ -1,4 +1,4 @@
-"""Unit tests for app.services.auth_service.AuthService.
+"""Unit tests for app.services.shared.auth_service.AuthService.
 
 Tests cover login, refresh, logout, me, password reset, and external token validation.
 Uses an in-memory SQLite database to test real DB interactions without external deps.
@@ -20,7 +20,7 @@ from app.core.security import (
     decode_token,
     hash_password,
 )
-from app.models.identity import (
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,
@@ -28,8 +28,8 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.models.revoked_token import RevokedToken
-from app.services.auth_service import AuthenticationError, AuthService
+from app.models.shared.revoked_token import RevokedToken
+from app.services.shared.auth_service import AuthenticationError, AuthService
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -408,7 +408,7 @@ class TestValidateExternalToken:
         result = await auth_service.validate_external_token(db_session, "any-token")
         assert result is None
 
-    @patch("app.services.auth_service.validate_cognito_token")
+    @patch("app.services.shared.auth_service.validate_cognito_token")
     async def test_external_subject_mapping_does_not_use_email(
         self, validate, auth_service, db_session, active_user
     ):
@@ -423,7 +423,7 @@ class TestValidateExternalToken:
         with pytest.raises(AuthenticationError, match="No internal user mapped"):
             await auth_service.validate_external_token(db_session, "access-token")
 
-    @patch("app.services.auth_service.validate_cognito_token")
+    @patch("app.services.shared.auth_service.validate_cognito_token")
     async def test_verified_id_token_links_legacy_user_once(
         self, validate, auth_service, db_session, active_user
     ):
@@ -441,7 +441,7 @@ class TestValidateExternalToken:
         assert active_user.external_identity_provider == "cognito"
         assert active_user.external_subject == "cognito-subject"
 
-    @patch("app.services.auth_service.validate_cognito_token")
+    @patch("app.services.shared.auth_service.validate_cognito_token")
     async def test_external_mapping_rejects_inactive_user(
         self, validate, auth_service, db_session, inactive_user
     ):

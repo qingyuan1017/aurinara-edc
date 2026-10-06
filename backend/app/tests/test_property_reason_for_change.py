@@ -25,8 +25,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import BusinessRuleError, ValidationError
-from app.models.form_data import FieldValue, FormInstance, FormInstanceStatus
-from app.services.data_capture_service import DataCaptureService
+from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
+from app.services.edc.data_capture_service import DataCaptureService
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -197,7 +197,7 @@ class TestPostSubmissionReasonProperty:
         mock_session = _make_mock_session_for_success(fi.id, field_id)
 
         with patch(
-            "app.services.data_capture_service.audit_service"
+            "app.services.edc.data_capture_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.change_value(

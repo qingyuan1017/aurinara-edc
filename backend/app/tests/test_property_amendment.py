@@ -19,9 +19,9 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from app.models.form_metadata import FormDefinition
-from app.models.study import Study, StudyVersion, StudyVersionStatus
-from app.services.study_version_service import StudyVersionService
+from app.models.edc.form_metadata import FormDefinition
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
+from app.services.edc.study_version_service import StudyVersionService
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -148,7 +148,7 @@ async def test_amendment_retains_published_history_and_form_ownership(
         created_by=actor_id,
     )
 
-    with patch("app.services.study_version_service.audit_service") as mock_audit:
+    with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
         mock_audit.record = AsyncMock()
         amendment = await service.create_amendment(session, study, reason, actor_id)
 

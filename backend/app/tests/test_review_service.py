@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.form_data import FormInstance, FormInstanceStatus
-from app.models.review import ReviewStatus
-from app.services.review_service import ReviewService, review_service
+from app.models.edc.form_data import FormInstance, FormInstanceStatus
+from app.models.edc.review import ReviewStatus
+from app.services.edc.review_service import ReviewService, review_service
 
 
 @pytest.fixture
@@ -50,7 +50,7 @@ class TestMarkReviewed:
         form_instance = _make_form_instance()
         session = _mock_session_for_status(None)
 
-        with patch("app.services.review_service.audit_service") as audit:
+        with patch("app.services.edc.review_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.mark_reviewed(session, form_instance, actor_id)
 
@@ -76,7 +76,7 @@ class TestMarkReviewed:
         )
         session = _mock_session_for_status(existing)
 
-        with patch("app.services.review_service.audit_service") as audit:
+        with patch("app.services.edc.review_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.mark_reviewed(session, form_instance, actor_id)
 
@@ -98,7 +98,7 @@ class TestClearReview:
         )
         session = _mock_session_for_status(existing)
 
-        with patch("app.services.review_service.audit_service") as audit:
+        with patch("app.services.edc.review_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.clear_review(session, form_instance, actor_id)
 
@@ -120,7 +120,7 @@ class TestClearReview:
         form_instance = _make_form_instance()
         session = _mock_session_for_status(None)
 
-        with patch("app.services.review_service.audit_service") as audit:
+        with patch("app.services.edc.review_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.clear_review(session, form_instance, actor_id)
 

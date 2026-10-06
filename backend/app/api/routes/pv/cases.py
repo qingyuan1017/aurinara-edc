@@ -24,8 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, require_pv_permission
 from app.api.routes.pv._common import build_actor
 from app.core.exceptions import NotFoundError
-from app.models.identity import User
 from app.models.pv.safety_case import CaseState
+from app.models.shared.identity import User
 from app.repositories.pv.export_repository import PVExportRepository
 from app.repositories.pv.safety_case_repository import SafetyCaseRepository
 from app.schemas.pv.contracts import PVPaginatedResponse, PVPaginationParams
@@ -38,7 +38,7 @@ from app.schemas.pv.resources import (
     SafetyCaseCreate,
     SafetyCaseResponse,
 )
-from app.services.safety_case_service import safety_case_service
+from app.services.pv.safety_case_service import safety_case_service
 
 router = APIRouter(tags=["pv-cases"])
 

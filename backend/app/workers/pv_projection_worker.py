@@ -1,7 +1,7 @@
 """Worker for consuming approved read-only EDC adverse-event projections.
 
 The worker claims one PV-targeted coordination outbox event, delegates to the
-:class:`~app.services.pv_projection_service.PVProjectionService` to revalidate
+:class:`~app.services.pv.pv_projection_service.PVProjectionService` to revalidate
 the active ``Status_Ownership_Rule`` and field allowlist, and upserts only the
 PV-side read-only projection read model idempotently by ``Idempotency_Key``. It
 records the processing outcome and never lets a stale event overwrite a current
@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.pv_projection_service import (
+from app.services.pv.pv_projection_service import (
     ProjectionResult,
     PVProjectionService,
     pv_projection_service,
@@ -62,7 +62,7 @@ class PVProjectionWorker:
         except Exception:
             # Record only that a PV worker job failed; never retain event
             # content, payloads, or the exception detail in the metric.
-            from app.services.pv_observability_service import pv_observability_service
+            from app.services.pv.pv_observability_service import pv_observability_service
 
             pv_observability_service.record_worker_failure()
             raise

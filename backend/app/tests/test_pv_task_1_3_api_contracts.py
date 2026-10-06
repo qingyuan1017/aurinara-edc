@@ -19,7 +19,6 @@ from app.core.exceptions import ConflictError, register_exception_handlers
 from app.core.middleware import RequestIDMiddleware
 from app.core.openapi import API_TAGS, install_openapi_metadata
 from app.core.request_context import get_request_context
-from app.schemas.base import BaseSchema
 from app.schemas.pv import (
     PV_MAX_PAGE_SIZE,
     PVErrorCode,
@@ -27,6 +26,7 @@ from app.schemas.pv import (
     PVPaginationContract,
     PVPaginationParams,
 )
+from app.schemas.shared.base import BaseSchema
 
 
 class _TimestampResponse(BaseSchema):

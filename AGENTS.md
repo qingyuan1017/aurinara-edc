@@ -13,7 +13,7 @@ Important directories:
 - `backend/app/api/` — FastAPI dependencies, pagination, and route registration.
 - `backend/app/api/routes/` — versioned EDC, CTMS, and PV HTTP routes.
 - `backend/app/core/` — configuration, database, security, request context, exceptions, and OpenAPI support.
-- `backend/app/models/`, `repositories/`, `schemas/`, `services/`, and `workers/` — persistence models, database access, Pydantic contracts, business logic, and background jobs.
+- `backend/app/models/`, `repositories/`, `schemas/`, and `services/` — persistence models, database access, Pydantic contracts, and business logic. Each of these layers is organized into `ctms/`, `pv/`, `edc/`, and `shared/` domain subfolders (for example `backend/app/services/edc/`, `backend/app/services/pv/`, `backend/app/schemas/shared/`). CTMS and PV own their operational and safety code; EDC holds clinical code; `shared/` holds cross-cutting infrastructure (auth, users, permissions, audit, notifications, exports, file attachments, and the platform AI assistant). `backend/app/workers/` holds background jobs.
 - `backend/app/tests/` — backend unit, integration, and property-based tests.
 - `backend/alembic/versions/` — committed database migrations; `backend/alembic.ini` is the Alembic configuration.
 - `frontend/src/components/` and `frontend/src/lib/` — shared UI and client infrastructure.
@@ -94,7 +94,7 @@ Never commit `.env`, `backend/.env`, credentials, tokens, generated keys, or oth
 
 - Use the versioned REST/JSON API under `/api/v1`; PV routes are under `/api/v1/pv`.
 - Keep FastAPI route handlers thin: authenticate, validate/request-map, enforce permission, delegate to a service, and return the schema response. Database access belongs in repositories/services rather than route handlers.
-- Use Pydantic v2 schemas and the shared contracts in `backend/app/schemas/base.py`. List responses use `{items, page, page_size, total}`; page is at least 1 and the current shared schema limits `page_size` to 100.
+- Use Pydantic v2 schemas and the shared contracts in `backend/app/schemas/shared/base.py`. List responses use `{items, page, page_size, total}`; page is at least 1 and the current shared schema limits `page_size` to 100.
 - Serialize aware timestamps as UTC ISO-8601 values (`Z`). Preserve the repository's UUID, scope, request/correlation ID, and audit metadata conventions.
 - Use the shared error envelope `{error: {code, message, details, request_id, correlation_id}}`. Errors must be sanitized: do not expose stack traces, SQL/database internals, credentials, raw coordination payloads, or sensitive safety data.
 - Server-side authentication and authorization are authoritative. Frontend checks improve navigation and affordances but must never be treated as security enforcement.
@@ -107,7 +107,7 @@ PV is the safety case system of record. Its primary boundaries are:
 - `backend/app/models/pv/` — PV safety case, assessment, coding, narrative, regulatory, reconciliation, coordination, and retention models.
 - `backend/app/repositories/pv/` — PV database access.
 - `backend/app/schemas/pv/` — PV request/response contracts.
-- `backend/app/services/` — shared services plus PV service modules such as `safety_case_service.py`, `assessment_service.py`, `regulatory_reporting_service.py`, `reconciliation_service.py`, `pv_ownership_guard.py`, and PV integration services. Reuse shared services; do not fork them.
+- `backend/app/services/pv/` — PV service modules such as `safety_case_service.py`, `assessment_service.py`, `regulatory_reporting_service.py`, `reconciliation_service.py`, and `pv_ownership_guard.py`, plus PV integration services. Reuse the shared services in `backend/app/services/shared/`; do not fork them.
 - `backend/app/workers/` and `backend/app/workers/pv/` — export, projection, reconciliation, retention, and related worker boundaries.
 - `frontend/src/features/pv/` — PV pages, API client, capability manifest handling, navigation, forms, and components.
 

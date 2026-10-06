@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_ctms_permission
-from app.models.identity import User
+from app.models.shared.identity import User
 from app.schemas.ctms.dashboard import CTMSDashboardResponse
-from app.services.ctms_dashboard_service import ctms_dashboard_service
+from app.services.ctms.ctms_dashboard_service import ctms_dashboard_service
 
 router = APIRouter(tags=["ctms-dashboards"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]

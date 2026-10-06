@@ -19,18 +19,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.exceptions import NotFoundError, ValidationError
 from app.core.pv import ActorContext, ReportStatus
-from app.models.audit import AuditEvent
-from app.models.identity import User, UserStatus
+from app.models.edc.site import Site
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject
 from app.models.pv.regulatory import (
     RegulatoryClock,
     RegulatoryReport,
     ReportabilityRule,
 )
-from app.models.site import Site
-from app.models.study import Study, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject
-from app.services.regulatory_reporting_service import RegulatoryReportingService
-from app.services.safety_case_service import SafetyCaseService
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
+from app.services.pv.regulatory_reporting_service import RegulatoryReportingService
+from app.services.pv.safety_case_service import SafetyCaseService
 
 
 @pytest.fixture

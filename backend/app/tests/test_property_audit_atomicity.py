@@ -32,9 +32,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.audit import AuditService
-from app.models.form_data import FieldValue, FormInstance, FormInstanceStatus
-from app.services.data_capture_service import DataCaptureService
-
+from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
+from app.services.edc.data_capture_service import DataCaptureService
 
 # ---------------------------------------------------------------------------
 # Strategies

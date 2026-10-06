@@ -13,8 +13,8 @@ import pytest
 
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.core.permissions import CTMS_PERMISSION_CODES, ROLE_DEFINITIONS
-from app.schemas.permission import AuthorizationScope, PermissionGrant
-from app.services.permission_service import PermissionService
+from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
+from app.services.shared.permission_service import PermissionService
 
 # ---------------------------------------------------------------------------
 # Lightweight stubs for ORM objects (avoids database dependency in unit tests)

@@ -15,10 +15,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.models.query import QueryStatus
-from app.models.subject import SubjectStatus
-from app.schemas.dashboard import QueryMetrics, SiteDashboard, StudyDashboard
-from app.services.dashboard_service import (
+from app.models.edc.query import QueryStatus
+from app.models.edc.subject import SubjectStatus
+from app.schemas.edc.dashboard import QueryMetrics, SiteDashboard, StudyDashboard
+from app.services.edc.dashboard_service import (
     OVERDUE_THRESHOLD_DAYS,
     DashboardService,
     dashboard_service,

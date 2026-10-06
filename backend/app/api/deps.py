@@ -24,9 +24,9 @@ from app.core.database import async_session_factory
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.core.request_context import set_actor
 from app.core.security import InvalidTokenError, decode_token
-from app.models.identity import Role, RolePermission, User, UserRole, UserStatus
-from app.services.auth_service import auth_service
-from app.services.permission_service import PermissionService
+from app.models.shared.identity import Role, RolePermission, User, UserRole, UserStatus
+from app.services.shared.auth_service import auth_service
+from app.services.shared.permission_service import PermissionService
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 

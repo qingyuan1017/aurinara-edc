@@ -60,16 +60,16 @@ from app.models.pv.safety_case import (
     CaseState,
     SafetyCase,
 )
-from app.schemas.permission import AuthorizationScope, PermissionGrant
 from app.schemas.pv.export import PVExportFilters
-from app.services.pv_dashboard_service import (
+from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
+from app.services.pv.pv_dashboard_service import (
     READ_PERMISSION,
     SERIOUSNESS_NON_SERIOUS,
     SERIOUSNESS_SERIOUS,
     SERIOUSNESS_UNASSESSED,
     PVDashboardService,
 )
-from app.services.pv_ownership_guard import (
+from app.services.pv.pv_ownership_guard import (
     CTMS_OWNED_FIELDS,
     EDC_OWNED_FIELDS,
     PVOwnershipError,

@@ -9,11 +9,11 @@ from uuid import uuid4
 import pytest
 from fastapi import UploadFile
 
-from app.api.routes.files import delete_file, download_file, upload_file
+from app.api.routes.shared.files import delete_file, download_file, upload_file
 from app.core.exceptions import NotFoundError
 from app.main import create_app
-from app.models.file_attachment import FileAttachment
-from app.schemas.file_attachment import FileAttachmentDelete, FileAttachmentResponse
+from app.models.shared.file_attachment import FileAttachment
+from app.schemas.shared.file_attachment import FileAttachmentDelete, FileAttachmentResponse
 
 
 def _attachment() -> FileAttachment:
@@ -35,7 +35,7 @@ def _attachment() -> FileAttachment:
 async def test_upload_route_delegates_multipart_file_and_returns_metadata(monkeypatch):
     attachment = _attachment()
     service = SimpleNamespace(upload=AsyncMock(return_value=attachment))
-    monkeypatch.setattr("app.api.routes.files.file_attachment_service", service)
+    monkeypatch.setattr("app.api.routes.shared.files.file_attachment_service", service)
 
     user = SimpleNamespace(id=uuid4())
     session = AsyncMock()
@@ -62,7 +62,7 @@ async def test_download_route_returns_bytes_and_content_metadata(monkeypatch):
     session = AsyncMock()
     session.get.return_value = attachment
     service = SimpleNamespace(download=AsyncMock(return_value=b"pdf data"))
-    monkeypatch.setattr("app.api.routes.files.file_attachment_service", service)
+    monkeypatch.setattr("app.api.routes.shared.files.file_attachment_service", service)
     user = SimpleNamespace(id=uuid4())
 
     response = await download_file(attachment.id, session, user)
@@ -78,7 +78,7 @@ async def test_download_route_returns_bytes_and_content_metadata(monkeypatch):
 async def test_delete_route_passes_reason_to_soft_delete(monkeypatch):
     attachment = _attachment()
     service = SimpleNamespace(soft_delete=AsyncMock(return_value=attachment))
-    monkeypatch.setattr("app.api.routes.files.file_attachment_service", service)
+    monkeypatch.setattr("app.api.routes.shared.files.file_attachment_service", service)
     user = SimpleNamespace(id=uuid4())
     session = AsyncMock()
     body = FileAttachmentDelete(reason="Entered in error")

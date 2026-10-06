@@ -11,7 +11,7 @@ from app.core.exceptions import ConflictError
 from app.models.ctms.ownership import ProjectionType
 from app.models.ctms.projection import CTMSOperationalProjection, ProjectionStatus
 from app.schemas.ctms.ownership import ProjectionFieldType, StatusOwnershipRuleCreate
-from app.services.ctms_projection_service import CTMSProjectionService
+from app.services.ctms.ctms_projection_service import CTMSProjectionService
 
 
 class _Result:
@@ -81,7 +81,7 @@ async def test_apply_projection_persists_typed_metadata_and_only_allowlisted_pay
     subject_id = uuid4()
     source_id = uuid4()
 
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         result = await service.apply_projection(
             session,
             rule=_rule(),
@@ -117,7 +117,7 @@ async def test_prohibited_projection_is_rejected_without_retaining_values():
     service = CTMSProjectionService(repository=repository)
     session = _Session()
 
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         result = await service.apply_projection(
             session,
             rule=_rule(),
@@ -145,7 +145,7 @@ async def test_older_source_version_and_timestamp_cannot_overwrite_current_proje
     source_id = uuid4()
     base = datetime(2025, 1, 2, tzinfo=UTC)
 
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         current = await service.apply_projection(
             session,
             rule=_rule(),
@@ -216,7 +216,7 @@ async def test_current_projection_is_skipped_and_records_current_version():
     source_id = uuid4()
     timestamp = datetime(2025, 1, 2, tzinfo=UTC)
 
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         await service.apply_projection(
             session,
             rule=_rule(),
@@ -254,7 +254,7 @@ async def test_out_of_order_sequence_conflicts_without_overwriting_newer_project
     source_id = uuid4()
     timestamp = datetime(2025, 1, 2, tzinfo=UTC)
 
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         current = await service.apply_projection(
             session,
             rule=_rule(),
@@ -296,7 +296,7 @@ async def test_refresh_preserves_target_scope_and_rebuild_metadata_when_omitted(
     generation = uuid4()
     timestamp = datetime(2025, 1, 2, tzinfo=UTC)
 
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         await service.apply_projection(
             session,
             rule=_rule(),

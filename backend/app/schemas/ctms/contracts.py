@@ -12,7 +12,7 @@ from pydantic import Field
 
 from app.models.ctms.ownership import OwnershipRuleStatus, ProjectionType
 from app.models.ctms.projection import ProjectionStatus
-from app.schemas.base import BaseSchema, ErrorBody, ErrorEnvelope
+from app.schemas.shared.base import BaseSchema, ErrorBody, ErrorEnvelope
 
 
 class CoordinationEventType(StrEnum):

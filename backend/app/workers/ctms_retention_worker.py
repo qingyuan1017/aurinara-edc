@@ -7,7 +7,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.ctms_retention_service import RetentionRunResult, ctms_retention_service
+from app.services.ctms.ctms_retention_service import RetentionRunResult, ctms_retention_service
 
 WORKER_NAME = "ctms-retention"
 

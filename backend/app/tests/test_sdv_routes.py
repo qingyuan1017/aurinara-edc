@@ -10,10 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.security import create_access_token, hash_password
 from app.main import create_app
-from app.models.audit import AuditEvent
-from app.models.form_data import FieldValue, FormInstance, FormInstanceStatus
-from app.models.form_metadata import FieldDefinition, FormDefinition, FormSection
-from app.models.identity import (
+from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
+from app.models.edc.form_metadata import FieldDefinition, FormDefinition, FormSection
+from app.models.edc.sdv import SDVStatus
+from app.models.edc.site import Site, SiteStatus, StudySiteUser
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitDefinition, VisitInstance
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,
@@ -21,11 +26,6 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.models.sdv import SDVStatus
-from app.models.site import Site, SiteStatus, StudySiteUser
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitDefinition, VisitInstance
 
 
 @pytest.fixture

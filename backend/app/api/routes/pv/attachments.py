@@ -21,13 +21,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, require_pv_permission
 from app.api.routes.pv._common import build_actor
 from app.core.exceptions import NotFoundError
-from app.models.file_attachment import FileAttachment
-from app.models.identity import User
+from app.models.shared.file_attachment import FileAttachment
+from app.models.shared.identity import User
 from app.schemas.pv.resources import (
     SafetyAttachmentDeleteRequest,
     SafetyAttachmentResponse,
 )
-from app.services.safety_attachment_service import safety_attachment_service
+from app.services.pv.safety_attachment_service import safety_attachment_service
 
 router = APIRouter(tags=["pv-attachments"])
 

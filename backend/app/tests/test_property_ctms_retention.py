@@ -21,15 +21,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import Settings
 from app.core.database import Base
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import CoordinationEventLog
-from app.models.ctms.projection import CTMSOperationalProjection, ProjectionStatus
 from app.models.ctms.operational_study import OperationalStudy
+from app.models.ctms.projection import CTMSOperationalProjection, ProjectionStatus
 from app.models.ctms.retention import CTMSRetentionAction
-from app.models.export import Export
-from app.models.file_attachment import FileAttachment
-from app.models.notification import Notification
-from app.services.ctms_retention_service import CTMSRetentionService
+from app.models.shared.audit import AuditEvent
+from app.models.shared.export import Export
+from app.models.shared.file_attachment import FileAttachment
+from app.models.shared.notification import Notification
+from app.services.ctms.ctms_retention_service import CTMSRetentionService
 
 
 @pytest.fixture

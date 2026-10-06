@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.exceptions import BusinessRuleError, NotFoundError
-from app.models.query import Query, QueryMessage, QueryStatus, QueryTargetType, QueryType
-from app.services.query_service import QueryService, query_service
+from app.models.edc.query import Query, QueryMessage, QueryStatus, QueryTargetType, QueryType
+from app.services.edc.query_service import QueryService, query_service
 
 
 @pytest.fixture
@@ -80,7 +80,7 @@ class TestCreateQuery:
         """create_query creates a Query with status Open and correct target (Req 13.1, 13.2)."""
         target_id = uuid.uuid4()
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             query = await service.create_query(
                 mock_session,
@@ -107,7 +107,7 @@ class TestCreateQuery:
         site_id = uuid.uuid4()
         subject_id = uuid.uuid4()
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             query = await service.create_query(
                 mock_session,
@@ -129,7 +129,7 @@ class TestCreateQuery:
         """create_query writes an Audit_Event (Req 13.7)."""
         target_id = uuid.uuid4()
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.create_query(
                 mock_session,
@@ -151,7 +151,7 @@ class TestCreateQuery:
         self, service, mock_session, actor_id, study_id
     ):
         """create_query supports system-generated query type."""
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             query = await service.create_query(
                 mock_session,
@@ -175,7 +175,7 @@ class TestRespond:
         """respond transitions Open → Answered (Req 13.3)."""
         query = _make_query(status=QueryStatus.open)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.respond(
                 mock_session, query, "Here is the clarification", actor_id
@@ -190,7 +190,7 @@ class TestRespond:
         """respond transitions Reopened → Answered (Req 13.3)."""
         query = _make_query(status=QueryStatus.reopened)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.respond(
                 mock_session, query, "Updated response", actor_id
@@ -204,7 +204,7 @@ class TestRespond:
         """respond appends a QueryMessage to the thread (Req 13.6)."""
         query = _make_query(status=QueryStatus.open)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.respond(
                 mock_session, query, "My response message", actor_id
@@ -246,7 +246,7 @@ class TestRespond:
         """respond writes an Audit_Event (Req 13.7)."""
         query = _make_query(status=QueryStatus.open)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.respond(mock_session, query, "response", actor_id)
 
@@ -268,7 +268,7 @@ class TestClose:
         """close transitions Open → Closed (Req 13.4)."""
         query = _make_query(status=QueryStatus.open)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.close(mock_session, query, actor_id)
 
@@ -282,7 +282,7 @@ class TestClose:
         """close transitions Answered → Closed (Req 13.4)."""
         query = _make_query(status=QueryStatus.answered)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.close(mock_session, query, actor_id)
 
@@ -295,7 +295,7 @@ class TestClose:
         """close transitions Reopened → Closed (per design state diagram)."""
         query = _make_query(status=QueryStatus.reopened)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.close(mock_session, query, actor_id)
 
@@ -319,7 +319,7 @@ class TestClose:
         """close writes an Audit_Event (Req 13.7)."""
         query = _make_query(status=QueryStatus.answered)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.close(mock_session, query, actor_id)
 
@@ -342,7 +342,7 @@ class TestReopen:
         query.closed_at = datetime.now(UTC)
         query.closed_by = uuid.uuid4()
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.reopen(mock_session, query, actor_id)
 
@@ -379,7 +379,7 @@ class TestReopen:
         """reopen writes an Audit_Event (Req 13.7)."""
         query = _make_query(status=QueryStatus.closed)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.reopen(mock_session, query, actor_id)
 
@@ -400,7 +400,7 @@ class TestCancel:
         """cancel transitions Open → Cancelled."""
         query = _make_query(status=QueryStatus.open)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.cancel(mock_session, query, actor_id)
 
@@ -413,7 +413,7 @@ class TestCancel:
         """cancel transitions Answered → Cancelled."""
         query = _make_query(status=QueryStatus.answered)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.cancel(mock_session, query, actor_id)
 
@@ -447,7 +447,7 @@ class TestCancel:
         """cancel writes an Audit_Event (Req 13.7)."""
         query = _make_query(status=QueryStatus.open)
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.cancel(mock_session, query, actor_id)
 

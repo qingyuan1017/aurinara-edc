@@ -28,8 +28,8 @@ from app.api.deps import PaginationParams
 from app.api.pagination import paginate
 from app.core.ctms import Module, utc_now
 from app.core.request_context import get_actor, get_request_id
-from app.models.audit import AuditEvent
-from app.schemas.audit import AuditEventExport, AuditSearchFilters
+from app.models.shared.audit import AuditEvent
+from app.schemas.shared.audit import AuditEventExport, AuditSearchFilters
 
 logger = logging.getLogger(__name__)
 

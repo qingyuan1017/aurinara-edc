@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.ctms import Module
 from app.core.database import Base
 from app.core.exceptions import AuthorizationError, ConflictError
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import (
     CoordinationEvent,
     CoordinationEventLog,
@@ -38,23 +37,24 @@ from app.models.ctms.monitoring import (
 )
 from app.models.ctms.ownership import ProjectionType
 from app.models.ctms.projection import CTMSOperationalProjection
-from app.models.file_attachment import FileAttachment, FileAttachmentObjectType
-from app.models.identity import User, UserStatus
-from app.models.lock import FreezeLock, FreezeLockType
-from app.models.notification import NotificationStatus
-from app.models.query import Query, QueryStatus, QueryTargetType
-from app.models.site import Site
-from app.models.study import Study
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitInstance, VisitInstanceStatus
+from app.models.edc.lock import FreezeLock, FreezeLockType
+from app.models.edc.query import Query, QueryStatus, QueryTargetType
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitInstance, VisitInstanceStatus
+from app.models.shared.audit import AuditEvent
+from app.models.shared.file_attachment import FileAttachment, FileAttachmentObjectType
+from app.models.shared.identity import User, UserStatus
+from app.models.shared.notification import NotificationStatus
 from app.schemas.ctms.ownership import ProjectionFieldType, StatusOwnershipRuleCreate
-from app.services.coordination_service import BoundedCoordinationQueue, CoordinationService
-from app.services.ctms_projection_service import CTMSProjectionService
-from app.services.file_attachment_service import FileAttachmentService
-from app.services.monitoring_service import MonitoringService
-from app.services.notification_service import NotificationService
-from app.services.query_service import QueryService
-from app.services.work_management_service import WorkManagementService
+from app.services.ctms.coordination_service import BoundedCoordinationQueue, CoordinationService
+from app.services.ctms.ctms_projection_service import CTMSProjectionService
+from app.services.ctms.monitoring_service import MonitoringService
+from app.services.ctms.work_management_service import WorkManagementService
+from app.services.edc.query_service import QueryService
+from app.services.shared.file_attachment_service import FileAttachmentService
+from app.services.shared.notification_service import NotificationService
 from app.workers.coordination_worker import CoordinationWorker
 
 

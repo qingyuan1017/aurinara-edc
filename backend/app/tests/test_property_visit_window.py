@@ -6,9 +6,10 @@ Uses Hypothesis to verify that compute_window_status correctly classifies
 day offsets relative to a target day and configured window bounds.
 """
 
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
-from app.services.visit_service import (
+from app.services.edc.visit_service import (
     WINDOW_AFTER,
     WINDOW_BEFORE,
     WINDOW_IN,

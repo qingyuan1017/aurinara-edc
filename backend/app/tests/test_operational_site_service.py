@@ -10,10 +10,10 @@ from app.core.database import Base
 from app.core.exceptions import ValidationError
 from app.models.ctms.operational_site import ActivationActionStatus, OperationalSiteStatus
 from app.models.ctms.work import OperationalContact, OperationalContactStatus
-from app.models.identity import User, UserStatus
-from app.models.site import Site
-from app.models.study import Study
-from app.services.operational_site_service import OperationalSiteService
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.shared.identity import User, UserStatus
+from app.services.ctms.operational_site_service import OperationalSiteService
 
 
 @pytest.fixture

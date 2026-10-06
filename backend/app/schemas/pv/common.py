@@ -21,7 +21,7 @@ from app.core.pv import (
     ensure_utc,
     utc_now,
 )
-from app.schemas.base import BaseSchema
+from app.schemas.shared.base import BaseSchema
 
 
 class PVReference(BaseSchema):

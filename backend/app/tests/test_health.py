@@ -30,7 +30,7 @@ async def test_readiness_endpoint_healthy(client):
     mock_connect.__aenter__ = AsyncMock(return_value=mock_conn)
     mock_connect.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("app.api.routes.health.engine") as mock_engine:
+    with patch("app.api.routes.shared.health.engine") as mock_engine:
         mock_engine.connect.return_value = mock_connect
         response = await client.get("/api/v1/health/ready")
 
@@ -45,7 +45,7 @@ async def test_readiness_endpoint_unhealthy(client):
     mock_connect.__aenter__ = AsyncMock(side_effect=ConnectionError("DB down"))
     mock_connect.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("app.api.routes.health.engine") as mock_engine:
+    with patch("app.api.routes.shared.health.engine") as mock_engine:
         mock_engine.connect.return_value = mock_connect
         response = await client.get("/api/v1/health/ready")
 
@@ -67,7 +67,7 @@ async def test_metrics_endpoint(client):
     mock_pool.checkedout.return_value = 2
     mock_pool.overflow.return_value = 0
 
-    with patch("app.api.routes.health.engine") as mock_engine:
+    with patch("app.api.routes.shared.health.engine") as mock_engine:
         mock_engine.pool = mock_pool
         response = await client.get("/api/v1/metrics")
 

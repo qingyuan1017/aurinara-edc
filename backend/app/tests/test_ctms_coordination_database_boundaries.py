@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.ctms import Module
 from app.core.database import Base
 from app.core.exceptions import ServiceUnavailableError
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import (
     CoordinationEvent,
     CoordinationEventLog,
@@ -24,10 +23,11 @@ from app.models.ctms.coordination import (
 from app.models.ctms.ownership import ProjectionType
 from app.models.ctms.projection import CTMSOperationalProjection
 from app.models.ctms.retention import CTMSCoordinationConflict, CTMSFailedEvent
+from app.models.shared.audit import AuditEvent
 from app.schemas.ctms.coordination import ConflictResolveRequest
 from app.schemas.ctms.ownership import ProjectionFieldType, StatusOwnershipRuleCreate
-from app.services.coordination_service import CoordinationService
-from app.services.ctms_projection_service import CTMSProjectionService
+from app.services.ctms.coordination_service import CoordinationService
+from app.services.ctms.ctms_projection_service import CTMSProjectionService
 from app.workers.coordination_worker import CoordinationWorker
 from app.workers.projection_rebuild_worker import (
     AuthoritativeRecordSnapshot,
@@ -206,7 +206,7 @@ async def test_retry_exhaustion_creates_failed_event_without_target_mutation(dat
     service = CoordinationService()
     service._apply_target = AsyncMock(side_effect=ServiceUnavailableError())
     monkeypatch.setattr(
-        "app.services.coordination_service.get_settings",
+        "app.services.ctms.coordination_service.get_settings",
         lambda: SimpleNamespace(
             ctms_coordination_max_attempts=2,
             ctms_coordination_backoff_base_seconds=1,

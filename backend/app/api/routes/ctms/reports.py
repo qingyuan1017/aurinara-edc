@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_ctms_permission
-from app.models.identity import User
+from app.models.shared.identity import User
 from app.schemas.ctms.report import CTMSReportResponse
-from app.services.ctms_report_service import ctms_report_service
+from app.services.ctms.ctms_report_service import ctms_report_service
 
 router = APIRouter(tags=["ctms-reports"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]

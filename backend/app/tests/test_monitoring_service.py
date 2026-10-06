@@ -15,10 +15,10 @@ from app.models.ctms.monitoring import (
     MonitoringActivityType,
     MonitoringPlanVersionStatus,
 )
-from app.models.identity import User, UserStatus
-from app.models.site import Site
-from app.models.study import Study
-from app.services.monitoring_service import MonitoringService
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.shared.identity import User, UserStatus
+from app.services.ctms.monitoring_service import MonitoringService
 
 
 @pytest.fixture

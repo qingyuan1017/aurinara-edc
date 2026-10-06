@@ -40,7 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, require_pv_permission
 from app.api.routes.pv._common import build_actor
 from app.core.exceptions import NotFoundError, ValidationError
-from app.models.identity import User
+from app.models.shared.identity import User
 from app.repositories.pv.safety_case_repository import SafetyCaseRepository
 from app.schemas.pv.ai import (
     PVAIApplySuggestionRequest,
@@ -48,8 +48,8 @@ from app.schemas.pv.ai import (
     PVAIChatRequest,
     PVAINarrativeDraftRequest,
 )
-from app.services.ai_assistant_service import pv_ai_assistant_service
-from app.services.narrative_service import narrative_service
+from app.services.pv.narrative_service import narrative_service
+from app.services.shared.ai_assistant_service import pv_ai_assistant_service
 
 router = APIRouter(prefix="/ai", tags=["pv-ai-assistant"])
 

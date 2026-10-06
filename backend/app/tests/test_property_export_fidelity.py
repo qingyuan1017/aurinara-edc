@@ -27,9 +27,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import BusinessRuleError
-from app.models.export import Export, ExportStatus, ExportType
-from app.services.export_service import ExportService
-
+from app.models.shared.export import Export, ExportStatus, ExportType
+from app.services.shared.export_service import ExportService
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -198,7 +197,7 @@ class TestExportFilteringAndFidelityProperties:
         session = _make_mock_session()
 
         # Mock audit_service.record to avoid side effects
-        with patch("app.services.export_service.audit_service") as mock_audit:
+        with patch("app.services.shared.export_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
 
             export = await service.create_export(
@@ -406,7 +405,7 @@ class TestExportFilteringAndFidelityProperties:
         service = ExportService()
         session = _make_mock_session()
 
-        with patch("app.services.export_service.audit_service") as mock_audit:
+        with patch("app.services.shared.export_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
 
             export = await service.create_export(
@@ -455,7 +454,7 @@ class TestExportFilteringAndFidelityProperties:
         service = ExportService()
         session = _make_mock_session()
 
-        with patch("app.services.export_service.audit_service") as mock_audit:
+        with patch("app.services.shared.export_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
 
             await service.create_export(

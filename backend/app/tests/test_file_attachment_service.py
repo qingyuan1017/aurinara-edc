@@ -13,10 +13,10 @@ import pytest
 
 from app.core.exceptions import ConflictError, ValidationError
 from app.core.storage import LocalObjectStorage
-from app.models.file_attachment import FileAttachment
-from app.models.study import Study
-from app.services.file_attachment_service import FileAttachmentService
-from app.services.permission_service import PermissionService
+from app.models.edc.study import Study
+from app.models.shared.file_attachment import FileAttachment
+from app.services.shared.file_attachment_service import FileAttachmentService
+from app.services.shared.permission_service import PermissionService
 
 
 class MemoryStorage:
@@ -73,7 +73,7 @@ async def test_upload_stores_metadata_and_audits(study, actor_id):
     service = FileAttachmentService(storage=storage, lock_service_instance=locks)
     session = _session()
 
-    with patch("app.services.file_attachment_service.audit_service") as audit:
+    with patch("app.services.shared.file_attachment_service.audit_service") as audit:
         audit.record = AsyncMock()
         attachment = await service.upload(
             session,
@@ -127,7 +127,7 @@ async def test_download_requires_parent_read_access_and_audits(actor_id):
     service = FileAttachmentService(storage=storage, permission_service=permissions)
     user = MagicMock(id=actor_id)
 
-    with patch("app.services.file_attachment_service.audit_service") as audit:
+    with patch("app.services.shared.file_attachment_service.audit_service") as audit:
         audit.record = AsyncMock()
         content = await service.download(_session(), attachment, user)
 
@@ -160,7 +160,7 @@ async def test_soft_delete_retains_metadata_and_audits(actor_id):
     storage.objects[attachment.storage_key] = b"source"
     service = FileAttachmentService(storage=storage)
 
-    with patch("app.services.file_attachment_service.audit_service") as audit:
+    with patch("app.services.shared.file_attachment_service.audit_service") as audit:
         audit.record = AsyncMock()
         result = await service.soft_delete(_session(), attachment, "Entered in error", actor_id)
 
@@ -209,7 +209,7 @@ async def test_upload_operational_uses_ctms_metadata_safe_key_and_audit(actor_id
     )
     user = MagicMock(id=actor_id)
 
-    with patch("app.services.file_attachment_service.audit_service") as audit:
+    with patch("app.services.shared.file_attachment_service.audit_service") as audit:
         audit.record = AsyncMock()
         attachment = await service.upload_operational(
             session,
@@ -305,7 +305,7 @@ async def test_operational_delete_restore_and_purge_are_audited_and_retention_gu
     storage.objects[attachment.storage_key] = b"evidence"
     user = MagicMock(id=actor_id)
 
-    with patch("app.services.file_attachment_service.audit_service") as audit:
+    with patch("app.services.shared.file_attachment_service.audit_service") as audit:
         audit.record = AsyncMock()
         await service.soft_delete(
             _session(), attachment, "retention complete", actor_id, user=user,

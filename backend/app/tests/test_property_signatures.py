@@ -24,9 +24,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.database import Base
 from app.core.exceptions import AuthenticationError
-from app.models.identity import User, UserStatus
-from app.models.signature import Signature, SignatureObjectType, SignatureStatus
-from app.services.signature_service import SignatureService
+from app.models.edc.signature import Signature, SignatureObjectType, SignatureStatus
+from app.models.shared.identity import User, UserStatus
+from app.services.edc.signature_service import SignatureService
 
 # Keep generated snapshots JSON-compatible while varying both structure and values.
 json_scalar_strategy = st.one_of(
@@ -102,11 +102,11 @@ class TestSignatureProperties:
             # outcomes make the no-write-before-re-auth invariant deterministic.
             with (
                 patch(
-                    "app.services.signature_service.verify_re_auth",
+                    "app.services.edc.signature_service.verify_re_auth",
                     side_effect=[False, True],
                 ) as verify_re_auth,
                 patch(
-                    "app.services.signature_service.audit_service.record",
+                    "app.services.edc.signature_service.audit_service.record",
                     new_callable=AsyncMock,
                 ),
             ):

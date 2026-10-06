@@ -12,7 +12,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from app.models.export import Export, ExportStatus, ExportType
+from app.models.shared.export import Export, ExportStatus, ExportType
 from app.workers.export_worker import (
     ODM_NS,
     serialize_excel,
@@ -140,11 +140,11 @@ async def test_advanced_worker_generates_and_completes_each_format(
     """The worker applies the shared query path and stores every advanced format."""
     from unittest.mock import MagicMock
 
-    from app.models.form_data import FieldValue, FormInstance
-    from app.models.form_metadata import FieldDefinition
-    from app.models.site import Site
-    from app.models.subject import Subject
-    from app.models.visit import VisitInstance
+    from app.models.edc.form_data import FieldValue, FormInstance
+    from app.models.edc.form_metadata import FieldDefinition
+    from app.models.edc.site import Site
+    from app.models.edc.subject import Subject
+    from app.models.edc.visit import VisitInstance
     from app.workers.export_worker import run_advanced_export
 
     site = MagicMock(spec=Site, site_number="SITE-01")

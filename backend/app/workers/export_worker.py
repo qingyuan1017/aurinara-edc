@@ -35,13 +35,13 @@ from sqlalchemy.orm import selectinload
 
 from app.core.audit import audit_service
 from app.core.config import get_settings
-from app.models.export import Export, ExportType
-from app.models.form_data import FieldValue, FormInstance, FormInstanceStatus
-from app.models.form_metadata import FieldDefinition, FormDefinition, FormSection
-from app.models.query import Query, QueryStatus
-from app.models.subject import Subject
-from app.services.export_service import export_service
-from app.services.notification_service import notification_service
+from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
+from app.models.edc.form_metadata import FieldDefinition, FormDefinition, FormSection
+from app.models.edc.query import Query, QueryStatus
+from app.models.edc.subject import Subject
+from app.models.shared.export import Export, ExportType
+from app.services.shared.export_service import export_service
+from app.services.shared.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
 

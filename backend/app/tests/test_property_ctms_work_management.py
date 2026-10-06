@@ -22,7 +22,6 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import BusinessRuleError, ConflictError, ValidationError
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import CTMSOutbox, CTMSStatusHistory
 from app.models.ctms.work import (
     EscalationStatus,
@@ -34,12 +33,13 @@ from app.models.ctms.work import (
     TaskDependency,
     TaskEscalation,
 )
-from app.models.identity import User, UserStatus
-from app.models.notification import Notification
-from app.models.query import Query, QueryStatus, QueryTargetType
-from app.models.site import Site
-from app.models.study import Study
-from app.services.work_management_service import WorkManagementService
+from app.models.edc.query import Query, QueryStatus, QueryTargetType
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
+from app.models.shared.notification import Notification
+from app.services.ctms.work_management_service import WorkManagementService
 
 
 class _Rows:

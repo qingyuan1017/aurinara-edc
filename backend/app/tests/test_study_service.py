@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.schemas.study import StudyCreate
-from app.services.study_service import StudyService, study_service
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.schemas.edc.study import StudyCreate
+from app.services.edc.study_service import StudyService, study_service
 
 
 @pytest.fixture
@@ -90,7 +90,7 @@ class TestCreateStudy:
         mock_result.scalars.return_value.first.return_value = None
         mock_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("app.services.study_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             study = await service.create_study(mock_session, study_create_data, actor_id)
 
@@ -111,7 +111,7 @@ class TestCreateStudy:
         mock_result.scalars.return_value.first.return_value = None
         mock_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("app.services.study_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.create_study(mock_session, study_create_data, actor_id)
 
@@ -131,7 +131,7 @@ class TestCreateStudy:
         mock_result.scalars.return_value.first.return_value = None
         mock_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("app.services.study_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.create_study(mock_session, study_create_data, actor_id)
 
@@ -159,7 +159,7 @@ class TestTransitionStatus:
         """All legal transitions in the state machine succeed (Req 4.3)."""
         study = _make_study(status=current)
 
-        with patch("app.services.study_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.transition_status(mock_session, study, target, actor_id)
 
@@ -195,7 +195,7 @@ class TestTransitionStatus:
         """transition_status writes an Audit_Event with old and new status (Req 4.5)."""
         study = _make_study(status=StudyStatus.draft)
 
-        with patch("app.services.study_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.transition_status(mock_session, study, StudyStatus.uat, actor_id)
 

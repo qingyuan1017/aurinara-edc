@@ -21,7 +21,7 @@ from app.api.deps import (
     require_permission,
 )
 from app.core.exceptions import AuthorizationError
-from app.services.permission_service import PermissionService
+from app.services.shared.permission_service import PermissionService
 
 # ---------------------------------------------------------------------------
 # Lightweight stubs

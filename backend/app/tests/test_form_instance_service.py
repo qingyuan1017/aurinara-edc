@@ -11,11 +11,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.form_data import FormInstanceStatus
-from app.models.form_metadata import FormDefinition
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitInstance, VisitInstanceStatus
-from app.services.form_instance_service import FormInstanceService, form_instance_service
+from app.models.edc.form_data import FormInstanceStatus
+from app.models.edc.form_metadata import FormDefinition
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitInstance, VisitInstanceStatus
+from app.services.edc.form_instance_service import FormInstanceService, form_instance_service
 
 
 @pytest.fixture
@@ -109,7 +109,7 @@ class TestInitializeInstances:
         )
 
         with patch(
-            "app.services.form_instance_service.audit_service"
+            "app.services.edc.form_instance_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
             instances = await service.initialize_instances(
@@ -147,7 +147,7 @@ class TestInitializeInstances:
         mock_session.execute = AsyncMock(return_value=form_defs_result)
 
         with patch(
-            "app.services.form_instance_service.audit_service"
+            "app.services.edc.form_instance_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
             instances = await service.initialize_instances(
@@ -175,7 +175,7 @@ class TestInitializeInstances:
         )
 
         with patch(
-            "app.services.form_instance_service.audit_service"
+            "app.services.edc.form_instance_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
             instances = await service.initialize_instances(
@@ -203,7 +203,7 @@ class TestInitializeInstances:
         )
 
         with patch(
-            "app.services.form_instance_service.audit_service"
+            "app.services.edc.form_instance_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
             await service.initialize_instances(mock_session, subject, actor_id)
@@ -237,7 +237,7 @@ class TestInitializeInstances:
         )
 
         with patch(
-            "app.services.form_instance_service.audit_service"
+            "app.services.edc.form_instance_service.audit_service"
         ) as mock_audit:
             mock_audit.record = AsyncMock()
             instances = await service.initialize_instances(

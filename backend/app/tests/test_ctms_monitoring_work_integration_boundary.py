@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import Base
 from app.core.exceptions import AuthorizationError, ConflictError
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import CTMSOutbox, CTMSStatusHistory
 from app.models.ctms.monitoring import (
     MonitoringActivityStatus,
@@ -33,18 +32,19 @@ from app.models.ctms.work import (
     TaskDependency,
     TaskEscalation,
 )
-from app.models.identity import User, UserStatus
-from app.models.lock import FreezeLock, FreezeLockType
-from app.models.notification import Notification
-from app.models.query import Query, QueryStatus, QueryTargetType
-from app.models.site import Site
-from app.models.study import Study, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitInstance, VisitInstanceStatus
-from app.services import work_management_service as work_module
-from app.services.lock_service import lock_service
-from app.services.monitoring_service import MonitoringService
-from app.services.work_management_service import WorkManagementService
+from app.models.edc.lock import FreezeLock, FreezeLockType
+from app.models.edc.query import Query, QueryStatus, QueryTargetType
+from app.models.edc.site import Site
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitInstance, VisitInstanceStatus
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
+from app.models.shared.notification import Notification
+from app.services.ctms import work_management_service as work_module
+from app.services.ctms.monitoring_service import MonitoringService
+from app.services.ctms.work_management_service import WorkManagementService
+from app.services.edc.lock_service import lock_service
 
 
 @pytest.fixture

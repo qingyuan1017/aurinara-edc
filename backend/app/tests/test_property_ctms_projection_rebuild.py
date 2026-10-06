@@ -26,7 +26,7 @@ from hypothesis import strategies as st
 from app.core.ctms import Module
 from app.models.ctms.ownership import ProjectionType
 from app.schemas.ctms.ownership import ProjectionFieldType, StatusOwnershipRuleCreate
-from app.services.ctms_projection_service import CTMSProjectionService
+from app.services.ctms.ctms_projection_service import CTMSProjectionService
 from app.workers.projection_rebuild_worker import (
     AuthoritativeRecordSnapshot,
     ProjectionRebuildWorker,
@@ -276,7 +276,7 @@ async def test_projection_rebuilds_are_source_preserving_and_repeatable(
         state_repository=state_repository,
     )
 
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         first = await worker.rebuild(
             _Session(),
             study_id=scenario["study_id"],

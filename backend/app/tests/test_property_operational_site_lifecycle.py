@@ -31,10 +31,9 @@ from app.models.ctms.operational_site import (
     RetentionState,
 )
 from app.models.ctms.work import OperationalContact, OperationalContactStatus
-from app.models.site import Site, SiteStatus
-from app.services.operational_site_service import OperationalSiteService
-from app.services.operational_site_service import _SITE_TRANSITIONS
-from app.services.ctms_ownership_guard import CTMSOwnershipError
+from app.models.edc.site import Site, SiteStatus
+from app.services.ctms.ctms_ownership_guard import CTMSOwnershipError
+from app.services.ctms.operational_site_service import _SITE_TRANSITIONS, OperationalSiteService
 
 
 @dataclass(frozen=True)
@@ -281,11 +280,11 @@ async def test_operational_site_lifecycle_is_independent_of_canonical_edc_site(s
 
     with (
         patch(
-            "app.services.operational_site_service.ctms_atomicity_service.record_mutation",
+            "app.services.ctms.operational_site_service.ctms_atomicity_service.record_mutation",
             new=AsyncMock(side_effect=record_mutation),
         ),
         patch(
-            "app.services.operational_site_service.audit_service.record",
+            "app.services.ctms.operational_site_service.audit_service.record",
             new=AsyncMock(),
         ),
     ):

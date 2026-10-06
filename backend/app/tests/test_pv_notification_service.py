@@ -23,8 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.exceptions import BusinessRuleError
 from app.core.pv import ActorContext, Module
-from app.models.audit import AuditEvent
-from app.models.identity import (
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,
@@ -33,8 +33,8 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.models.notification import Notification, NotificationStatus
-from app.services.pv_notification_service import (
+from app.models.shared.notification import Notification, NotificationStatus
+from app.services.pv.pv_notification_service import (
     DEFAULT_SERIOUS_CASE_PERMISSION,
     NOTIFICATION_TYPE_CLOCK_WARNING,
     NOTIFICATION_TYPE_EXPORT_OUTCOME,

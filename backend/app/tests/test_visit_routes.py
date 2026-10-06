@@ -21,7 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.security import create_access_token, hash_password
 from app.main import create_app
-from app.models.identity import (
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,
@@ -29,10 +33,6 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.models.site import Site, SiteStatus
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -42,29 +42,29 @@ from app.models.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
 @pytest.fixture
 async def async_engine():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    from app.models.audit import AuditEvent
-    from app.models.identity import (
+    from app.models.edc.site import Site as SiteModel
+    from app.models.edc.site import StudySiteUser as StudySiteUserModel
+    from app.models.edc.study import Study as StudyModel
+    from app.models.edc.study import StudyVersion as StudyVersionModel
+    from app.models.edc.subject import Subject as SubjectModel
+    from app.models.edc.visit import VisitDefinition as VisitDefinitionModel
+    from app.models.edc.visit import VisitInstance as VisitInstanceModel
+    from app.models.shared.audit import AuditEvent
+    from app.models.shared.identity import (
         Permission as PermissionModel,
     )
-    from app.models.identity import (
+    from app.models.shared.identity import (
         Role as RoleModel,
     )
-    from app.models.identity import (
+    from app.models.shared.identity import (
         RolePermission as RolePermissionModel,
     )
-    from app.models.identity import (
+    from app.models.shared.identity import (
         User as UserModel,
     )
-    from app.models.identity import (
+    from app.models.shared.identity import (
         UserRole as UserRoleModel,
     )
-    from app.models.site import Site as SiteModel
-    from app.models.site import StudySiteUser as StudySiteUserModel
-    from app.models.study import Study as StudyModel
-    from app.models.study import StudyVersion as StudyVersionModel
-    from app.models.subject import Subject as SubjectModel
-    from app.models.visit import VisitDefinition as VisitDefinitionModel
-    from app.models.visit import VisitInstance as VisitInstanceModel
 
     tables = [
         m.__table__
@@ -443,7 +443,7 @@ class TestVisitPermissionEnforcement:
         """A read-only user (subject.read only) cannot mark a visit missed."""
         from sqlalchemy import select
 
-        from app.models.identity import Permission as PermissionModel
+        from app.models.shared.identity import Permission as PermissionModel
 
         # Read-only role bound to the existing subject.read permission only.
         ro_role = Role(

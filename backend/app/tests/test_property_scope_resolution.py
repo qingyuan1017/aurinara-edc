@@ -19,7 +19,7 @@ from uuid import UUID
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from app.services.permission_service import PermissionService
+from app.services.shared.permission_service import PermissionService
 
 # ---------------------------------------------------------------------------
 # Lightweight stubs (same pattern as test_permission_service.py)

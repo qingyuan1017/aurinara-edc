@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.deps import PaginationParams
-from app.schemas.base import (
+from app.schemas.shared.base import (
     BaseCreateSchema,
     BaseSchema,
     BaseUpdateSchema,
@@ -15,7 +15,6 @@ from app.schemas.base import (
     PaginatedResponse,
     TimestampMixin,
 )
-
 
 # ---------------------------------------------------------------------------
 # PaginatedResponse tests

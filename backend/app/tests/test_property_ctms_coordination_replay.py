@@ -25,7 +25,7 @@ from app.core.database import Base
 from app.core.exceptions import AuthorizationError, ConflictError, ValidationError
 from app.models.ctms.coordination import CoordinationEventStatus, CTMSOutbox
 from app.models.ctms.retention import CTMSFailedEvent
-from app.services.coordination_service import CoordinationService
+from app.services.ctms.coordination_service import CoordinationService
 
 
 @pytest.fixture

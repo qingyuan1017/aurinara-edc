@@ -24,7 +24,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.audit import AuditService
-from app.models.audit import AuditEvent
+from app.models.shared.audit import AuditEvent
 
 # ---------------------------------------------------------------------------
 # Strategies

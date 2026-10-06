@@ -28,11 +28,11 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.core.pv import ActorContext, Module
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import CTMSOutbox
-from app.models.notification import Notification, NotificationStatus
-from app.services.pv_atomicity_service import PVAtomicityService, pv_atomicity_service
-from app.services.pv_shared_integration import PVSharedIntegrationService
+from app.models.shared.audit import AuditEvent
+from app.models.shared.notification import Notification, NotificationStatus
+from app.services.pv.pv_atomicity_service import PVAtomicityService, pv_atomicity_service
+from app.services.pv.pv_shared_integration import PVSharedIntegrationService
 
 
 class ExpectedFlushError(RuntimeError):
@@ -221,7 +221,7 @@ async def test_completed_pv_audit_event_is_immutable() -> None:
         request_id=uuid4(),
     )
 
-    from app.models.audit import _reject_audit_mutation
+    from app.models.shared.audit import _reject_audit_mutation
 
     with pytest.raises(ValueError, match="immutable"):
         _reject_audit_mutation(None, None, audit)
@@ -315,6 +315,6 @@ async def test_service_singletons_are_shared_instances() -> None:
     """The module exposes reusable singletons of the concrete service types."""
 
     assert isinstance(pv_atomicity_service, PVAtomicityService)
-    from app.services.pv_shared_integration import pv_shared_integration_service
+    from app.services.pv.pv_shared_integration import pv_shared_integration_service
 
     assert isinstance(pv_shared_integration_service, PVSharedIntegrationService)

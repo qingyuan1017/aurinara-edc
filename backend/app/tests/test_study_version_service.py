@@ -17,8 +17,8 @@ from app.core.exceptions import (
     NotFoundError,
     ValidationError,
 )
-from app.models.study import Study, StudyVersion, StudyVersionStatus
-from app.services.study_version_service import StudyVersionService, study_version_service
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
+from app.services.edc.study_version_service import StudyVersionService, study_version_service
 
 
 @pytest.fixture
@@ -69,7 +69,7 @@ class TestPublish:
         """publish() should set status to published on a draft version."""
         actor_id = uuid.uuid4()
 
-        with patch("app.services.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.publish(mock_session, draft_version, actor_id)
 
@@ -79,7 +79,7 @@ class TestPublish:
         """publish() should record published_by and published_at."""
         actor_id = uuid.uuid4()
 
-        with patch("app.services.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.publish(mock_session, draft_version, actor_id)
 
@@ -90,7 +90,7 @@ class TestPublish:
         """publish() should write an Audit_Event in the same transaction."""
         actor_id = uuid.uuid4()
 
-        with patch("app.services.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.publish(mock_session, draft_version, actor_id)
 
@@ -112,7 +112,7 @@ class TestPublish:
         """publish() should flush the session (no commit — caller's transaction)."""
         actor_id = uuid.uuid4()
 
-        with patch("app.services.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.publish(mock_session, draft_version, actor_id)
 
@@ -141,7 +141,7 @@ class TestCreateVersion:
         study_id = uuid.uuid4()
         actor_id = uuid.uuid4()
 
-        with patch("app.services.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.create_version(
                 mock_session, study_id, "1.0", actor_id=actor_id
@@ -156,7 +156,7 @@ class TestCreateVersion:
         """create_version() should store the amendment reason."""
         study_id = uuid.uuid4()
 
-        with patch("app.services.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.create_version(
                 mock_session, study_id, "2.0", amendment_reason="Protocol amendment v2"
@@ -169,7 +169,7 @@ class TestCreateVersion:
         study_id = uuid.uuid4()
         actor_id = uuid.uuid4()
 
-        with patch("app.services.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.create_version(mock_session, study_id, "1.0", actor_id=actor_id)
 
@@ -184,7 +184,7 @@ class TestCreateVersion:
         """create_version() should add the version to the session and flush."""
         study_id = uuid.uuid4()
 
-        with patch("app.services.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.create_version(mock_session, study_id, "1.0")
 
@@ -266,7 +266,7 @@ class TestCreateAmendment:
         actor_id = uuid.uuid4()
         service = StudyVersionService(amendment_repository)
 
-        with patch("app.services.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.create_amendment(
                 mock_session, study, "Protocol amendment v2", actor_id

@@ -9,7 +9,7 @@ from app.core.ctms import Module
 from app.core.exceptions import ConflictError, ValidationError
 from app.models.ctms.ownership import OwnershipRuleStatus, ProjectionType, StatusOwnershipRule
 from app.schemas.ctms.ownership import ProjectionFieldType, StatusOwnershipRuleCreate
-from app.services.status_ownership_rule_service import (
+from app.services.ctms.status_ownership_rule_service import (
     StatusOwnershipRuleService,
 )
 

@@ -31,7 +31,7 @@ from app.models.ctms.coordination import (
 )
 from app.models.ctms.projection import CTMSOperationalProjection
 from app.models.ctms.retention import CTMSCoordinationConflict, CTMSFailedEvent
-from app.services.coordination_service import CoordinationService
+from app.services.ctms.coordination_service import CoordinationService
 
 WorkerResult = Literal["retryable", "failed", "conflict", "success"]
 
@@ -167,7 +167,7 @@ async def test_coordination_failures_are_bounded_and_sanitized(
     # keeps this generated policy scoped to one example.
     from unittest.mock import patch
 
-    with patch("app.services.coordination_service.get_settings", return_value=settings):
+    with patch("app.services.ctms.coordination_service.get_settings", return_value=settings):
         results = []
         while True:
             result = await service.process(

@@ -25,28 +25,28 @@ from app.core.ctms import CTMSPhase, Module, build_ctms_manifest
 from app.core.database import Base
 from app.core.exceptions import AuthorizationError, ServiceUnavailableError
 from app.core.metrics import get_metrics
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import CoordinationEventLog, CTMSOutbox
 from app.models.ctms.operational_study import OperationalStudy
 from app.models.ctms.projection import ProjectionStatus
 from app.models.ctms.retention import CTMSCoordinationConflict, CTMSFailedEvent
 from app.models.ctms.work import OperationalTask
-from app.models.export import Export
-from app.models.file_attachment import FileAttachment
-from app.models.identity import User, UserStatus
-from app.models.query import Query, QueryMessage, QueryStatus, QueryTargetType
-from app.models.site import Site
-from app.models.study import Study
-from app.models.subject import Subject, SubjectStatus
+from app.models.edc.query import Query, QueryMessage, QueryStatus, QueryTargetType
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.shared.audit import AuditEvent
+from app.models.shared.export import Export
+from app.models.shared.file_attachment import FileAttachment
+from app.models.shared.identity import User, UserStatus
 from app.schemas.ctms.coordination import ConflictResolveRequest
-from app.services.coordination_service import CoordinationService
-from app.services.ctms_dashboard_service import CTMSDashboardService
-from app.services.ctms_report_service import CTMSReportService
-from app.services.ctms_retention_service import CTMSRetentionService
-from app.services.export_service import ExportService
-from app.services.file_attachment_service import FileAttachmentService
-from app.services.query_service import QueryService
-from app.services.status_ownership_rule_service import StatusOwnershipRuleService
+from app.services.ctms.coordination_service import CoordinationService
+from app.services.ctms.ctms_dashboard_service import CTMSDashboardService
+from app.services.ctms.ctms_report_service import CTMSReportService
+from app.services.ctms.ctms_retention_service import CTMSRetentionService
+from app.services.ctms.status_ownership_rule_service import StatusOwnershipRuleService
+from app.services.edc.query_service import QueryService
+from app.services.shared.export_service import ExportService
+from app.services.shared.file_attachment_service import FileAttachmentService
 from app.workers.ctms_export_worker import fetch_operational_rows
 from app.workers.projection_rebuild_worker import ProjectionRebuildWorker
 
@@ -486,7 +486,7 @@ async def test_phase3_export_attachment_health_and_edc_resilience_are_separated(
         await attachment_service.download(db_session, clinical_attachment, scoped_user)
     assert storage.reads == [operational.storage_key]
 
-    from app.services.ctms_health_service import ctms_health_service
+    from app.services.ctms.ctms_health_service import ctms_health_service
 
     ctms_health_service.set_worker_status("unavailable")
     get_metrics().record_ctms_projection(42)

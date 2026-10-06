@@ -24,11 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import Base
 from app.core.edit_check_dsl import evaluate_rule
-from app.models.audit import AuditEvent
-from app.models.edit_check import ValidationResult
-from app.models.form_data import FieldValue, FormInstance
-from app.models.query import Query
-from app.services.edit_check_service import EditCheckService
+from app.models.edc.edit_check import ValidationResult
+from app.models.edc.form_data import FieldValue, FormInstance
+from app.models.edc.query import Query
+from app.models.shared.audit import AuditEvent
+from app.services.edc.edit_check_service import EditCheckService
 
 
 @dataclass(frozen=True)

@@ -27,9 +27,9 @@ from app.core.ctms import Module
 from app.models.ctms.ownership import OwnershipRuleStatus, ProjectionType
 from app.models.ctms.projection import ProjectionStatus
 from app.schemas.ctms.ownership import ProjectionFieldType
-from app.services.ctms_ownership_guard import CTMSOwnershipError, assert_ctms_command_safe
-from app.services.ctms_projection_service import CTMSProjectionService
-from app.services.status_ownership_rule_service import (
+from app.services.ctms.ctms_ownership_guard import CTMSOwnershipError, assert_ctms_command_safe
+from app.services.ctms.ctms_projection_service import CTMSProjectionService
+from app.services.ctms.status_ownership_rule_service import (
     CompiledOwnershipRule,
     StatusOwnershipRuleService,
 )
@@ -274,7 +274,7 @@ async def test_projection_payloads_obey_versioned_minimization_allowlists(
     repository = _ProjectionRepository()
     service = CTMSProjectionService(repository=repository)
     session = _Session()
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         accepted = await service.apply_projection(
             session,
             rule=scenario.rule,

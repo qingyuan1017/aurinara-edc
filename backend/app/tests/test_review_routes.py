@@ -11,28 +11,28 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.security import create_access_token, hash_password
 from app.main import create_app
-from app.models.audit import AuditEvent
-from app.models.form_data import FormInstance, FormInstanceStatus
-from app.models.form_metadata import FormDefinition
-from app.models.identity import Permission, Role, RolePermission, User, UserRole, UserStatus
-from app.models.review import ReviewStatus
-from app.models.site import Site, SiteStatus, StudySiteUser
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitDefinition, VisitInstance
+from app.models.edc.form_data import FormInstance, FormInstanceStatus
+from app.models.edc.form_metadata import FormDefinition
+from app.models.edc.review import ReviewStatus
+from app.models.edc.site import Site, SiteStatus, StudySiteUser
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitDefinition, VisitInstance
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import Permission, Role, RolePermission, User, UserRole, UserStatus
 
 
 @pytest.fixture
 async def async_engine():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    from app.models.form_data import FieldValue
-    from app.models.form_metadata import (
+    from app.models.edc.form_data import FieldValue
+    from app.models.edc.form_metadata import (
         Codelist,
         CodelistItem,
         FieldDefinition,
         FormSection,
     )
-    from app.models.notification import Notification
+    from app.models.shared.notification import Notification
 
     tables = [
         model.__table__

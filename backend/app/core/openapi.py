@@ -36,7 +36,6 @@ from app.models.ctms.work import (
     OperationalTaskPriority,
     OperationalTaskStatus,
 )
-from app.schemas.base import ErrorEnvelope
 from app.schemas.ctms.contracts import (
     CoordinationConflictCode,
     CoordinationEventStatus,
@@ -48,6 +47,7 @@ from app.schemas.ctms.contracts import (
     CTMSPaginationContract,
 )
 from app.schemas.pv.contracts import PVErrorCode, PVPaginationContract
+from app.schemas.shared.base import ErrorEnvelope
 
 API_TAGS: Final[list[dict[str, str]]] = [
     {

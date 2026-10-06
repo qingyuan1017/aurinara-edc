@@ -8,8 +8,8 @@ import pytest
 from app.core.config import Settings
 from app.core.ctms import Module
 from app.core.exceptions import ServiceUnavailableError
-from app.schemas.permission import AuthorizationScope, PermissionGrant
-from app.services.ai_platform_service import AIPlatformService
+from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
+from app.services.shared.ai_platform_service import AIPlatformService
 
 
 def test_ctms_context_minimization_excludes_clinical_payloads() -> None:
@@ -32,7 +32,7 @@ def test_ctms_context_minimization_excludes_clinical_payloads() -> None:
 
 def test_ctms_ai_is_disabled_by_default(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.services.ai_platform_service.get_settings",
+        "app.services.shared.ai_platform_service.get_settings",
         lambda: Settings(ai_assistant_enabled=True, ctms_ai_enabled=False),
     )
 
@@ -43,7 +43,7 @@ def test_ctms_ai_is_disabled_by_default(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_confirmed_action_audits_before_owner_callback(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.services.ai_platform_service.get_settings",
+        "app.services.shared.ai_platform_service.get_settings",
         lambda: Settings(ai_assistant_enabled=True, ctms_ai_enabled=True),
     )
     study_id = uuid4()

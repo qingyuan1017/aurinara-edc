@@ -7,12 +7,12 @@ import pytest
 
 from app.core.ctms import Module
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
-from app.models.site import Site
-from app.services.ctms_identity_service import (
+from app.models.edc.site import Site
+from app.services.ctms.ctms_identity_service import (
     CanonicalEntityType,
     CanonicalIdentityResolver,
 )
-from app.services.ctms_ownership_guard import (
+from app.services.ctms.ctms_ownership_guard import (
     CTMSOwnershipError,
     assert_ctms_command_safe,
 )

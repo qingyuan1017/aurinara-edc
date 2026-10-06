@@ -18,10 +18,10 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from app.models.edit_check import EditCheck
-from app.models.form_data import FormInstance
-from app.models.query import QueryTargetType, QueryType
-from app.services.edit_check_service import EditCheckService
+from app.models.edc.edit_check import EditCheck
+from app.models.edc.form_data import FormInstance
+from app.models.edc.query import QueryTargetType, QueryType
+from app.services.edc.edit_check_service import EditCheckService
 
 # Feature: clinical-edc-system, Property 25: Query-severity checks generate a linked system query
 
@@ -79,7 +79,7 @@ class TestSystemQueryGenerationProperty:
         query_service.create_query = AsyncMock()
         service = EditCheckService(query_service_instance=query_service)
 
-        with patch("app.services.edit_check_service.audit_service") as audit:
+        with patch("app.services.edc.edit_check_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.evaluate_edit_check(
                 session,

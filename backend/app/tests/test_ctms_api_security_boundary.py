@@ -14,7 +14,7 @@ event, or clinical record.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, date
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -27,7 +27,6 @@ from app.api.deps import get_db
 from app.core.database import Base
 from app.core.security import create_access_token
 from app.main import create_app
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import CTMSCoordinationEventLog, CTMSOutbox
 from app.models.ctms.enrollment import EnrollmentTarget, OperationalMilestone
 from app.models.ctms.monitoring import (
@@ -51,8 +50,14 @@ from app.models.ctms.work import (
     TaskDependency,
     TaskEscalation,
 )
-from app.models.file_attachment import FileAttachment
-from app.models.identity import (
+from app.models.edc.query import Query, QueryMessage, QueryStatus, QueryTargetType
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitInstance, VisitInstanceStatus
+from app.models.shared.audit import AuditEvent
+from app.models.shared.file_attachment import FileAttachment
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,
@@ -60,11 +65,6 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.models.query import Query, QueryMessage, QueryStatus, QueryTargetType
-from app.models.site import Site, SiteStatus
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitInstance, VisitInstanceStatus
 
 
 @pytest.fixture

@@ -17,14 +17,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_pv_permission
 from app.api.routes.pv._common import build_actor
-from app.models.identity import User
+from app.models.shared.identity import User
 from app.schemas.pv.resources import (
     CodingResponse,
     MedDraCodingRequest,
     RecodeRequest,
     WhoDrugCodingRequest,
 )
-from app.services.coding_service import CodingService
+from app.services.pv.coding_service import CodingService
 
 router = APIRouter(tags=["pv-coding"])
 

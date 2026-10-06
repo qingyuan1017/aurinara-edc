@@ -21,15 +21,15 @@ from hypothesis import strategies as st
 
 from app.core.ctms import Module
 from app.core.exceptions import AuthorizationError, ValidationError
-from app.models.file_attachment import (
+from app.models.shared.export import ExportStatus
+from app.models.shared.file_attachment import (
     FileAttachment,
     FileAttachmentModule,
     FileAttachmentObjectType,
 )
-from app.models.identity import Permission, Role, RolePermission, User, UserRole
-from app.models.export import ExportStatus
-from app.services.export_service import ExportService
-from app.services.file_attachment_service import FileAttachmentService
+from app.models.shared.identity import Permission, Role, RolePermission, User, UserRole
+from app.services.shared.export_service import ExportService
+from app.services.shared.file_attachment_service import FileAttachmentService
 from app.workers.ctms_export_worker import _row_for, run_ctms_export
 
 
@@ -181,7 +181,7 @@ async def test_export_and_attachment_ownership_is_separated(case: dict[str, obje
         return MagicMock()
 
     export_service = ExportService()
-    with patch("app.services.export_service.audit_service.record", side_effect=record_audit):
+    with patch("app.services.shared.export_service.audit_service.record", side_effect=record_audit):
         ctms_export = await export_service.create_ctms_export(
             session,
             study_id=study_id,
@@ -222,7 +222,7 @@ async def test_export_and_attachment_ownership_is_separated(case: dict[str, obje
     # An EDC-owned clinical export remains valid shared metadata but cannot be
     # created as a CTMS job or dispatched to the CTMS content worker.
     edc_session = _Session()
-    with patch("app.services.export_service.audit_service.record", new_callable=AsyncMock):
+    with patch("app.services.shared.export_service.audit_service.record", new_callable=AsyncMock):
         edc_export = await export_service.create_export(
             edc_session,
             study_id=study_id,
@@ -274,7 +274,7 @@ async def test_export_and_attachment_ownership_is_separated(case: dict[str, obje
     attachment_session = _Session()
     upload = _Upload(case["content"], f"ops-{case['label']}.txt", "text/plain")
 
-    with patch("app.services.file_attachment_service.audit_service.record", side_effect=record_audit):
+    with patch("app.services.shared.file_attachment_service.audit_service.record", side_effect=record_audit):
         if case["scope_mode"] == "authorized":
             attachment = await attachment_service.upload_operational(
                 attachment_session,
@@ -345,7 +345,7 @@ async def test_export_and_attachment_ownership_is_separated(case: dict[str, obje
     storage.objects[clinical.storage_key] = clinical_content
     clinical_audit = AsyncMock()
     reads_before_clinical = list(storage.get_calls)
-    with patch("app.services.file_attachment_service.audit_service.record", clinical_audit):
+    with patch("app.services.shared.file_attachment_service.audit_service.record", clinical_audit):
         with pytest.raises(AuthorizationError):
             await attachment_service.download(attachment_session, clinical, user)
     assert storage.get_calls == reads_before_clinical

@@ -15,13 +15,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 from sqlalchemy import BinaryExpression
 
 from app.core.audit import AuditService
-from app.models.audit import AuditEvent
-from app.schemas.audit import AuditSearchFilters
-
+from app.models.shared.audit import AuditEvent
+from app.schemas.shared.audit import AuditSearchFilters
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -171,7 +171,7 @@ class TestAuditSearchFilterProperties:
             """Capture the query for inspection."""
             captured_query["query"] = query
             # Return a minimal paginated response
-            from app.schemas.base import PaginatedResponse
+            from app.schemas.shared.base import PaginatedResponse
 
             return PaginatedResponse(items=[], page=1, page_size=25, total=0)
 
@@ -218,7 +218,7 @@ class TestAuditSearchFilterProperties:
         mock_session = AsyncMock()
 
         async def fake_paginate(session, query, params):
-            from app.schemas.base import PaginatedResponse
+            from app.schemas.shared.base import PaginatedResponse
 
             return PaginatedResponse(items=[], page=1, page_size=25, total=0)
 
@@ -227,7 +227,7 @@ class TestAuditSearchFilterProperties:
             result = await service.search(session=mock_session, filters=filters)
 
         # Result should always be a PaginatedResponse
-        from app.schemas.base import PaginatedResponse
+        from app.schemas.shared.base import PaginatedResponse
 
         assert isinstance(result, PaginatedResponse)
 
@@ -249,7 +249,7 @@ class TestAuditSearchFilterProperties:
 
         async def fake_paginate(session, query, params):
             captured_query["query"] = query
-            from app.schemas.base import PaginatedResponse
+            from app.schemas.shared.base import PaginatedResponse
 
             return PaginatedResponse(items=[], page=1, page_size=25, total=0)
 

@@ -12,9 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import PaginationParams, get_db, require_ctms_permission
 from app.core.exceptions import NotFoundError
 from app.models.ctms.projection import CTMSOperationalProjection
-from app.models.identity import User
-from app.schemas.base import PaginatedResponse
+from app.models.shared.identity import User
 from app.schemas.ctms.projection import ProjectionResponse
+from app.schemas.shared.base import PaginatedResponse
 
 router = APIRouter(tags=["ctms-projections"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]

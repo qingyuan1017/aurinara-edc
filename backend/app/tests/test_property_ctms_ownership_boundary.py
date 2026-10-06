@@ -25,12 +25,12 @@ from app.core.ctms import Module
 from app.core.exceptions import ConflictError
 from app.models.ctms.ownership import OwnershipRuleStatus, ProjectionType
 from app.schemas.ctms.ownership import ProjectionFieldType
-from app.services.ctms_ownership_guard import (
+from app.services.ctms.ctms_ownership_guard import (
     COMPETING_CLINICAL_OPERATIONS,
     CTMSOwnershipError,
     assert_ctms_command_safe,
 )
-from app.services.status_ownership_rule_service import (
+from app.services.ctms.status_ownership_rule_service import (
     CompiledOwnershipRule,
     StatusOwnershipRuleService,
 )

@@ -24,14 +24,14 @@ from hypothesis import strategies as st
 
 from app.core.ctms import CTMSPhase, Module, build_ctms_manifest
 from app.core.exceptions import AuthenticationError, AuthorizationError, ValidationError
-from app.models.identity import UserStatus
-from app.services.ctms_identity_service import CanonicalEntityType, CanonicalIdentity
-from app.services.ctms_ownership_guard import (
+from app.models.shared.identity import UserStatus
+from app.services.ctms.ctms_identity_service import CanonicalEntityType, CanonicalIdentity
+from app.services.ctms.ctms_ownership_guard import (
     COMPETING_CLINICAL_OPERATIONS,
     CTMSOwnershipError,
     assert_ctms_command_safe,
 )
-from app.services.permission_service import PermissionService
+from app.services.shared.permission_service import PermissionService
 
 
 @dataclass(frozen=True)

@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, require_pv_permission
 from app.api.routes.pv._common import build_actor
 from app.core.exceptions import NotFoundError
-from app.models.identity import User
+from app.models.shared.identity import User
 from app.repositories.pv.regulatory_reporting_repository import (
     RegulatoryReportingRepository,
 )
@@ -36,8 +36,8 @@ from app.schemas.pv.resources import (
     ReportSubmitRequest,
     ReportTransitionRequest,
 )
-from app.services.pv_atomicity_service import pv_atomicity_service
-from app.services.regulatory_reporting_service import regulatory_reporting_service
+from app.services.pv.pv_atomicity_service import pv_atomicity_service
+from app.services.pv.regulatory_reporting_service import regulatory_reporting_service
 
 router = APIRouter(tags=["pv-reports"])
 

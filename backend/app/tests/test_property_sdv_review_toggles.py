@@ -19,15 +19,15 @@ from hypothesis import strategies as st
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.database import Base
-from app.models.form_data import FormInstance, FormInstanceStatus
-from app.models.form_metadata import FormDefinition
-from app.models.identity import User, UserStatus
-from app.models.sdv import SDVScopeType
-from app.models.site import Site, SiteStatus
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.services.review_service import ReviewService
-from app.services.sdv_service import SDVService
+from app.models.edc.form_data import FormInstance, FormInstanceStatus
+from app.models.edc.form_metadata import FormDefinition
+from app.models.edc.sdv import SDVScopeType
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.shared.identity import User, UserStatus
+from app.services.edc.review_service import ReviewService
+from app.services.edc.sdv_service import SDVService
 
 
 @pytest.fixture

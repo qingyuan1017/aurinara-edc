@@ -10,8 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PaginationParams, get_db, require_ctms_permission
 from app.core.request_context import get_correlation_id
-from app.models.identity import User
-from app.schemas.base import PaginatedResponse
+from app.models.shared.identity import User
 from app.schemas.ctms.site import (
     ActivationActionCompletion,
     ActivationActionCreate,
@@ -22,7 +21,8 @@ from app.schemas.ctms.site import (
     OperationalSiteResponse,
     OperationalSiteStatusChange,
 )
-from app.services.operational_site_service import operational_site_service
+from app.schemas.shared.base import PaginatedResponse
+from app.services.ctms.operational_site_service import operational_site_service
 
 router = APIRouter(prefix="/sites", tags=["ctms-sites"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]

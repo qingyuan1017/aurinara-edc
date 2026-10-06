@@ -26,10 +26,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import AuthorizationError
-from app.models.identity import Permission, Role, RolePermission, User, UserRole
-from app.schemas.permission import AuthorizationScope, PermissionGrant
-from app.services.permission_service import PermissionService
-
+from app.models.shared.identity import Permission, Role, RolePermission, User, UserRole
+from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
+from app.services.shared.permission_service import PermissionService
 
 # ---------------------------------------------------------------------------
 # Strategies

@@ -33,9 +33,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import Base
 from app.core.pv import ActorContext
-from app.models.audit import AuditEvent, _reject_audit_mutation
 from app.models.ctms.coordination import CTMSOutbox
-from app.services.pv_atomicity_service import PVAtomicityService
+from app.models.shared.audit import AuditEvent, _reject_audit_mutation
+from app.services.pv.pv_atomicity_service import PVAtomicityService
 
 pytestmark = pytest.mark.asyncio
 

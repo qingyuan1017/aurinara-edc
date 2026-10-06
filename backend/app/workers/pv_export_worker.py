@@ -30,11 +30,11 @@ from app.core.config import get_settings
 from app.core.observability import sanitize_error
 from app.core.pv import ActorContext, Module
 from app.core.storage import get_object_storage
-from app.models.export import Export, ExportStatus
+from app.models.shared.export import Export, ExportStatus
 from app.repositories.pv.export_repository import PVExportRepository
 from app.schemas.pv.export import PVExportFilters, PVExportFormat
-from app.services.pv_atomicity_service import pv_atomicity_service
-from app.services.pv_export_service import pv_export_service
+from app.services.pv.pv_atomicity_service import pv_atomicity_service
+from app.services.pv.pv_export_service import pv_export_service
 
 logger = logging.getLogger(__name__)
 WORKER_NAME = "pv-export"

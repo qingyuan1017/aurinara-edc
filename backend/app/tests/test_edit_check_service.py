@@ -4,10 +4,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-from app.models.edit_check import EditCheck
-from app.models.form_data import FormInstance
-from app.models.query import QueryTargetType, QueryType
-from app.services.edit_check_service import EditCheckService
+from app.models.edc.edit_check import EditCheck
+from app.models.edc.form_data import FormInstance
+from app.models.edc.query import QueryTargetType, QueryType
+from app.services.edc.edit_check_service import EditCheckService
 
 
 def _check(*, severity: str = "warning") -> EditCheck:
@@ -61,7 +61,7 @@ async def test_runtime_persists_failed_result_with_severity():
     form = _form()
     check = _check(severity="error")
 
-    with patch("app.services.edit_check_service.audit_service") as audit:
+    with patch("app.services.edc.edit_check_service.audit_service") as audit:
         audit.record = AsyncMock()
         result = await service.evaluate_edit_check(
             session, form, check, actor_id=uuid4(), sample_data=form.data_jsonb
@@ -88,7 +88,7 @@ async def test_query_severity_creates_system_query_linked_to_form():
     check = _check(severity="query")
     actor_id = uuid4()
 
-    with patch("app.services.edit_check_service.audit_service") as audit:
+    with patch("app.services.edc.edit_check_service.audit_service") as audit:
         audit.record = AsyncMock()
         await service.evaluate_edit_check(
             session, form, check, actor_id=actor_id, sample_data=form.data_jsonb

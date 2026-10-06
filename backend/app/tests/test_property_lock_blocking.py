@@ -23,16 +23,16 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.database import Base
 from app.core.exceptions import BusinessRuleError
-from app.models.form_data import FieldValue, FormInstance
-from app.models.form_metadata import FieldDefinition, FormDefinition, FormSection
-from app.models.identity import User, UserStatus
-from app.models.lock import FreezeLockObjectType, FreezeLockType
-from app.models.site import Site
-from app.models.study import Study, StudyVersion
-from app.models.subject import Subject
-from app.models.visit import VisitInstance
-from app.services.data_capture_service import DataCaptureService
-from app.services.lock_service import LockService
+from app.models.edc.form_data import FieldValue, FormInstance
+from app.models.edc.form_metadata import FieldDefinition, FormDefinition, FormSection
+from app.models.edc.lock import FreezeLockObjectType, FreezeLockType
+from app.models.edc.site import Site
+from app.models.edc.study import Study, StudyVersion
+from app.models.edc.subject import Subject
+from app.models.edc.visit import VisitInstance
+from app.models.shared.identity import User, UserStatus
+from app.services.edc.data_capture_service import DataCaptureService
+from app.services.edc.lock_service import LockService
 
 ancestor_type_st = st.sampled_from(
     [

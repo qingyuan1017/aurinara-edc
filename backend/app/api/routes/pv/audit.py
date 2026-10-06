@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_pv_permission
 from app.api.routes.pv._common import build_actor
-from app.models.identity import User
+from app.models.shared.identity import User
 from app.schemas.pv.audit import (
     PVAuditEventResponse,
     PVAuditExportRequest,
@@ -33,7 +33,7 @@ from app.schemas.pv.audit import (
     PVAuditSearchFilters,
 )
 from app.schemas.pv.contracts import PVPaginatedResponse, PVPaginationParams
-from app.services.pv_audit_service import pv_audit_service
+from app.services.pv.pv_audit_service import pv_audit_service
 
 router = APIRouter(tags=["pv-audit"])
 

@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.exceptions import NotFoundError, ValidationError
-from app.models.lock import FreezeLock, FreezeLockObjectType, FreezeLockType
-from app.models.study import Study
-from app.services.lock_service import LockService, _HierarchyRef
+from app.models.edc.lock import FreezeLock, FreezeLockObjectType, FreezeLockType
+from app.models.edc.study import Study
+from app.services.edc.lock_service import LockService, _HierarchyRef
 
 
 @pytest.fixture
@@ -47,7 +47,7 @@ class TestFreezeAndLock:
         session.flush = AsyncMock()
         session.execute = AsyncMock(return_value=_result())
 
-        with patch("app.services.lock_service.audit_service") as audit:
+        with patch("app.services.edc.lock_service.audit_service") as audit:
             audit.record = AsyncMock()
             control = await service.freeze(session, study, actor_id)
 
@@ -66,7 +66,7 @@ class TestFreezeAndLock:
         session.flush = AsyncMock()
         session.execute = AsyncMock(return_value=_result())
 
-        with patch("app.services.lock_service.audit_service") as audit:
+        with patch("app.services.edc.lock_service.audit_service") as audit:
             audit.record = AsyncMock()
             control = await service.lock(session, study, actor_id)
 
@@ -97,7 +97,7 @@ class TestUnlock:
         session.flush = AsyncMock()
         session.execute = AsyncMock(return_value=_result(control))
 
-        with patch("app.services.lock_service.audit_service") as audit:
+        with patch("app.services.edc.lock_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.unlock(
                 session, study, "Approved protocol correction", actor_id

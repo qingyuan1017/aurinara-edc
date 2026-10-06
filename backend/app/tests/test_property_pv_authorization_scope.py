@@ -31,7 +31,7 @@ from hypothesis import strategies as st
 
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.core.permissions import PV_PERMISSION_CODES
-from app.models.identity import (
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,
@@ -40,7 +40,7 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.services.permission_service import PermissionService
+from app.services.shared.permission_service import PermissionService
 
 # ---------------------------------------------------------------------------
 # Deterministic in-memory identity construction

@@ -14,7 +14,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.pv_retention_service import RetentionRunResult, pv_retention_service
+from app.services.pv.pv_retention_service import RetentionRunResult, pv_retention_service
 
 WORKER_NAME = "pv-retention"
 

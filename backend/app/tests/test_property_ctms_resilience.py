@@ -23,17 +23,17 @@ from hypothesis import strategies as st
 from app.core.audit import AuditService
 from app.core.ctms import CTMSPhase, build_ctms_manifest
 from app.core.security import decode_token
-from app.models.export import ExportType
-from app.models.form_data import FieldValue, FormInstance, FormInstanceStatus
-from app.models.identity import User, UserStatus
-from app.models.subject import Subject, SubjectStatus
-from app.models.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
-from app.services.auth_service import AuthenticationError, AuthService
-from app.services.coordination_service import BoundedCoordinationQueue
-from app.services.data_capture_service import DataCaptureService
-from app.services.export_service import ExportService
-from app.services.subject_service import SubjectService
-from app.services.visit_service import VisitService
+from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
+from app.models.shared.export import ExportType
+from app.models.shared.identity import User, UserStatus
+from app.services.ctms.coordination_service import BoundedCoordinationQueue
+from app.services.edc.data_capture_service import DataCaptureService
+from app.services.edc.subject_service import SubjectService
+from app.services.edc.visit_service import VisitService
+from app.services.shared.auth_service import AuthenticationError, AuthService
+from app.services.shared.export_service import ExportService
 
 mode_strategy = st.sampled_from(("disabled", "empty", "worker-unavailable"))
 password_strategy = st.text(
@@ -164,7 +164,7 @@ async def _run_edc_workflow(
     auth = AuthService()
     try:
         with patch(
-            "app.services.auth_service.verify_password",
+            "app.services.shared.auth_service.verify_password",
             return_value=authentication_succeeds,
         ):
             pair = await auth.login(
@@ -181,7 +181,7 @@ async def _run_edc_workflow(
         stack.enter_context(patch.object(AuditService, "record", record_audit))
         stack.enter_context(
             patch(
-                "app.services.data_capture_service.lock_service.is_modification_blocked",
+                "app.services.edc.data_capture_service.lock_service.is_modification_blocked",
                 new=AsyncMock(return_value=False),
             )
         )

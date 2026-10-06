@@ -24,15 +24,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.request_context import request_id_var
 from app.core.security import hash_password
-from app.models.audit import AuditEvent
-from app.models.form_data import FormInstance, FormInstanceStatus
-from app.models.form_metadata import FormDefinition
-from app.models.form_record import FormRecord
-from app.models.identity import User, UserStatus
-from app.models.site import Site, SiteStatus
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.services.repeating_record_service import RepeatingRecordService
+from app.models.edc.form_data import FormInstance, FormInstanceStatus
+from app.models.edc.form_metadata import FormDefinition
+from app.models.edc.form_record import FormRecord
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
+from app.services.edc.repeating_record_service import RepeatingRecordService
 
 # Strategies
 

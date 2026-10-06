@@ -30,7 +30,7 @@ from app.models.ctms.coordination import (
     CTMSOutbox,
 )
 from app.models.ctms.projection import CTMSOperationalProjection, ProjectionStatus
-from app.services.coordination_service import CoordinationService
+from app.services.ctms.coordination_service import CoordinationService
 
 
 @pytest.fixture

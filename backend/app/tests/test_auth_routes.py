@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.security import create_access_token, create_refresh_token, hash_password
 from app.main import create_app
-from app.models.identity import (
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,

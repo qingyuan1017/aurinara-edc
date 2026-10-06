@@ -28,13 +28,13 @@ from app.core.exceptions import (
     ValidationError as DomainValidationError,
 )
 from app.main import create_app
-from app.schemas.permission import AuthorizationScope, PermissionGrant
 from app.schemas.pv.ai import (
     PVAICaseSummaryRequest,
     PVAIChatRequest,
     PVAINarrativeDraftRequest,
 )
-from app.services.ai_assistant_service import AIAssistantService
+from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
+from app.services.shared.ai_assistant_service import AIAssistantService
 
 
 class FakeProvider:
@@ -50,7 +50,7 @@ class FakeProvider:
 
 class FailingProvider:
     async def stream(self, operation, payload):
-        from app.services.ai_assistant_service import AIProviderError
+        from app.services.shared.ai_assistant_service import AIProviderError
 
         if False:  # pragma: no cover - keeps this an async generator
             yield ""
@@ -68,10 +68,10 @@ def _pv_service(provider) -> AIAssistantService:
 def _enable_pv_ai(monkeypatch, *, enabled: bool = True, pv_ai: bool = True) -> None:
     settings = Settings(ai_assistant_enabled=enabled, pv_ai_enabled=pv_ai)
     monkeypatch.setattr(
-        "app.services.ai_assistant_service.get_settings", lambda: settings
+        "app.services.shared.ai_assistant_service.get_settings", lambda: settings
     )
     monkeypatch.setattr(
-        "app.services.ai_platform_service.get_settings", lambda: settings
+        "app.services.shared.ai_platform_service.get_settings", lambda: settings
     )
 
 
@@ -266,7 +266,7 @@ async def test_pv_confirmed_change_is_scoped_applied_and_pv_audited(monkeypatch)
         return SimpleNamespace(audit=None, outbox=None)
 
     monkeypatch.setattr(
-        "app.services.ai_assistant_service.pv_atomicity_service.record_mutation",
+        "app.services.shared.ai_assistant_service.pv_atomicity_service.record_mutation",
         record_mutation,
     )
 

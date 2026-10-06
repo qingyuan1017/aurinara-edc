@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import Field
 
 from app.core.ctms import Module, OwnershipState
-from app.schemas.base import BaseSchema
+from app.schemas.shared.base import BaseSchema
 
 
 class CanonicalIdentityReference(BaseSchema):

@@ -16,8 +16,7 @@ from app.models.ctms.operational_study import (
     StudyOperationalMilestone,
     StudyPlan,
 )
-from app.models.identity import User
-from app.schemas.base import PaginatedResponse
+from app.models.shared.identity import User
 from app.schemas.ctms.dashboard import DashboardQueryCreate, DashboardQueryResponse
 from app.schemas.ctms.report import ReportQueryCreate, ReportQueryResponse
 from app.schemas.ctms.study import (
@@ -35,7 +34,8 @@ from app.schemas.ctms.study import (
     StudyPlanCreate,
     StudyPlanResponse,
 )
-from app.services.operational_study_service import operational_study_service
+from app.schemas.shared.base import PaginatedResponse
+from app.services.ctms.operational_study_service import operational_study_service
 
 router = APIRouter(prefix="/studies", tags=["ctms-studies"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]

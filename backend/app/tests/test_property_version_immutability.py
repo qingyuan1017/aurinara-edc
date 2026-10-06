@@ -18,20 +18,20 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from app.core.exceptions import BusinessRuleError
-from app.models.study import StudyVersion, StudyVersionStatus
-from app.schemas.form_metadata import (
+from app.models.edc.study import StudyVersion, StudyVersionStatus
+from app.schemas.edc.form_metadata import (
     FieldDefinitionCreate,
     FormDefinitionCreate,
     FormSectionCreate,
 )
-from app.schemas.visit import VisitDefinitionCreate
-from app.services.form_metadata_service import FormMetadataService
-from app.services.study_version_service import StudyVersionService
-from app.services.visit_service import VisitService
-
+from app.schemas.edc.visit import VisitDefinitionCreate
+from app.services.edc.form_metadata_service import FormMetadataService
+from app.services.edc.study_version_service import StudyVersionService
+from app.services.edc.visit_service import VisitService
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -187,7 +187,7 @@ class TestFormMetadataImmutabilityProperty:
                 await service.create_form(session, version, data, actor_id)
         else:
             # For draft, the DB flush/audit calls will happen — mock them
-            with patch("app.services.form_metadata_service.audit_service") as mock_audit:
+            with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
                 mock_audit.record = AsyncMock()
                 await service.create_form(session, version, data, actor_id)
 
@@ -217,7 +217,7 @@ class TestFormMetadataImmutabilityProperty:
             with pytest.raises(BusinessRuleError):
                 await service.create_section(session, version, form, data, actor_id)
         else:
-            with patch("app.services.form_metadata_service.audit_service") as mock_audit:
+            with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
                 mock_audit.record = AsyncMock()
                 await service.create_section(session, version, form, data, actor_id)
 
@@ -259,7 +259,7 @@ class TestFormMetadataImmutabilityProperty:
             with pytest.raises(BusinessRuleError):
                 await service.create_field(session, version, section, data, actor_id)
         else:
-            with patch("app.services.form_metadata_service.audit_service") as mock_audit:
+            with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
                 mock_audit.record = AsyncMock()
                 await service.create_field(session, version, section, data, actor_id)
 
@@ -305,6 +305,6 @@ class TestVisitServiceImmutabilityProperty:
             with pytest.raises(BusinessRuleError):
                 await service.define_visit(session, version, data, actor_id)
         else:
-            with patch("app.services.visit_service.audit_service") as mock_audit:
+            with patch("app.services.edc.visit_service.audit_service") as mock_audit:
                 mock_audit.record = AsyncMock()
                 await service.define_visit(session, version, data, actor_id)

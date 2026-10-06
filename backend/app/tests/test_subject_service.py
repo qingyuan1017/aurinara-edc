@@ -20,11 +20,11 @@ from app.core.exceptions import (
     ConflictError,
     NotFoundError,
 )
-from app.models.site import Site, SiteStatus
-from app.models.study import StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.schemas.subject import SubjectCreate
-from app.services.subject_service import SubjectService, subject_service
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.schemas.edc.subject import SubjectCreate
+from app.services.edc.subject_service import SubjectService, subject_service
 
 
 @pytest.fixture
@@ -133,13 +133,13 @@ class TestCreateSubject:
         data = SubjectCreate(site_id=site_id)
 
         with (
-            patch("app.services.subject_service.audit_service") as mock_audit,
+            patch("app.services.edc.subject_service.audit_service") as mock_audit,
             patch(
-                "app.services.visit_service.visit_service.initialize_instances",
+                "app.services.edc.visit_service.visit_service.initialize_instances",
                 new=AsyncMock(return_value=[]),
             ) as mock_init,
             patch(
-                "app.services.form_instance_service.form_instance_service.initialize_instances",
+                "app.services.edc.form_instance_service.form_instance_service.initialize_instances",
                 new=AsyncMock(return_value=[]),
             ) as mock_form_init,
         ):
@@ -177,13 +177,13 @@ class TestCreateSubject:
         data = SubjectCreate(site_id=site_id, subject_number="CUSTOM-007")
 
         with (
-            patch("app.services.subject_service.audit_service") as mock_audit,
+            patch("app.services.edc.subject_service.audit_service") as mock_audit,
             patch(
-                "app.services.visit_service.visit_service.initialize_instances",
+                "app.services.edc.visit_service.visit_service.initialize_instances",
                 new=AsyncMock(return_value=[]),
             ),
             patch(
-                "app.services.form_instance_service.form_instance_service.initialize_instances",
+                "app.services.edc.form_instance_service.form_instance_service.initialize_instances",
                 new=AsyncMock(return_value=[]),
             ),
         ):
@@ -261,13 +261,13 @@ class TestCreateSubject:
         data = SubjectCreate(site_id=site_id)
 
         with (
-            patch("app.services.subject_service.audit_service") as mock_audit,
+            patch("app.services.edc.subject_service.audit_service") as mock_audit,
             patch(
-                "app.services.visit_service.visit_service.initialize_instances",
+                "app.services.edc.visit_service.visit_service.initialize_instances",
                 new=AsyncMock(return_value=[]),
             ),
             patch(
-                "app.services.form_instance_service.form_instance_service.initialize_instances",
+                "app.services.edc.form_instance_service.form_instance_service.initialize_instances",
                 new=AsyncMock(return_value=[]),
             ),
         ):
@@ -306,7 +306,7 @@ class TestTransitionStatus:
         """All legal subject transitions succeed (Req 7.3)."""
         subject = _make_subject(status=current)
 
-        with patch("app.services.subject_service.audit_service") as mock_audit:
+        with patch("app.services.edc.subject_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.transition_status(
                 mock_session, subject, target, actor_id
@@ -347,7 +347,7 @@ class TestTransitionStatus:
         """transition_status writes an Audit_Event with old/new status (Req 7.6)."""
         subject = _make_subject(status=SubjectStatus.screening)
 
-        with patch("app.services.subject_service.audit_service") as mock_audit:
+        with patch("app.services.edc.subject_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.transition_status(
                 mock_session, subject, SubjectStatus.enrolled, actor_id
@@ -413,7 +413,7 @@ class TestSoftDelete:
         """soft_delete sets deleted_at/by/reason and retains the record (Req 22.2)."""
         subject = _make_subject()
 
-        with patch("app.services.subject_service.audit_service") as mock_audit:
+        with patch("app.services.edc.subject_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.soft_delete(
                 mock_session, subject, "entered in error", actor_id
@@ -439,7 +439,7 @@ class TestSoftDelete:
         """soft_delete writes an Audit_Event with the reason."""
         subject = _make_subject()
 
-        with patch("app.services.subject_service.audit_service") as mock_audit:
+        with patch("app.services.edc.subject_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.soft_delete(mock_session, subject, "duplicate", actor_id)
 

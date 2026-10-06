@@ -12,7 +12,7 @@ from app.core.database import Base
 from app.core.exceptions import ServiceUnavailableError
 from app.models.ctms.coordination import CTMSEventAttempt, CTMSOutbox
 from app.models.ctms.retention import CTMSCoordinationConflict, CTMSFailedEvent
-from app.services.coordination_service import CoordinationService, classify_failure
+from app.services.ctms.coordination_service import CoordinationService, classify_failure
 
 
 @pytest.fixture

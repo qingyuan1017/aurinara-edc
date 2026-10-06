@@ -20,10 +20,10 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import AuthorizationError
-from app.models.file_attachment import FileAttachment, FileAttachmentObjectType
-from app.models.identity import Permission, Role, RolePermission, User, UserRole
-from app.services.file_attachment_service import FileAttachmentService
-from app.services.permission_service import PermissionService
+from app.models.shared.file_attachment import FileAttachment, FileAttachmentObjectType
+from app.models.shared.identity import Permission, Role, RolePermission, User, UserRole
+from app.services.shared.file_attachment_service import FileAttachmentService
+from app.services.shared.permission_service import PermissionService
 
 PARENT_READ_PERMISSIONS = {
     FileAttachmentObjectType.field: "form.read",
@@ -154,7 +154,7 @@ class TestFileDownloadAccessProperty:
             permission_service=PermissionService(),
         )
 
-        with patch("app.services.file_attachment_service.audit_service") as audit:
+        with patch("app.services.shared.file_attachment_service.audit_service") as audit:
             audit.record = AsyncMock()
             if case["mode"] == "authorized":
                 assert await service.download(_session(), attachment, user) == content

@@ -14,8 +14,7 @@ from app.api.deps import PaginationParams, get_db, require_ctms_permission
 from app.core.audit import audit_service
 from app.models.ctms.coordination import CTMSOutbox
 from app.models.ctms.retention import CTMSCoordinationConflict, CTMSFailedEvent
-from app.models.identity import User
-from app.schemas.base import PaginatedResponse
+from app.models.shared.identity import User
 from app.schemas.ctms.coordination import (
     ConflictResolveRequest,
     CoordinationConflictResponse,
@@ -23,7 +22,8 @@ from app.schemas.ctms.coordination import (
     CoordinationReplayRequest,
     FailedEventResponse,
 )
-from app.services.coordination_service import coordination_service
+from app.schemas.shared.base import PaginatedResponse
+from app.services.ctms.coordination_service import coordination_service
 
 router = APIRouter(tags=["ctms-coordination"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]

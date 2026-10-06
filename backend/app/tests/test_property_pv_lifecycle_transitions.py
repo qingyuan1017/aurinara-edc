@@ -37,8 +37,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.exceptions import ValidationError
 from app.core.pv import ActorContext
-from app.models.audit import AuditEvent
-from app.models.identity import User, UserStatus
+from app.models.edc.site import Site
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject
 from app.models.pv.safety_case import (
     CaseState,
     CaseVersion,
@@ -46,10 +47,9 @@ from app.models.pv.safety_case import (
     CaseVersionStatus,
     SafetyCase,
 )
-from app.models.site import Site
-from app.models.study import Study, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject
-from app.services.safety_case_service import (
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
+from app.services.pv.safety_case_service import (
     _ALLOWED_TRANSITIONS,
     SafetyCaseService,
 )

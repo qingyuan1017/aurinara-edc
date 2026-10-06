@@ -25,13 +25,13 @@ from app.models.ctms.operational_study import (
 )
 from app.models.ctms.projection import CTMSOperationalProjection
 from app.models.ctms.work import OperationalContact, OperationalTask
-from app.models.identity import User, UserStatus
-from app.models.site import Site
-from app.models.study import Study
-from app.models.subject import Subject, SubjectStatus
-from app.schemas.permission import AuthorizationScope, PermissionGrant
-from app.services.ctms_dashboard_service import CTMSDashboardService
-from app.services.ctms_report_service import CTMSReportService
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.shared.identity import User, UserStatus
+from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
+from app.services.ctms.ctms_dashboard_service import CTMSDashboardService
+from app.services.ctms.ctms_report_service import CTMSReportService
 
 
 @pytest.fixture

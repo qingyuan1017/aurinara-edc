@@ -30,13 +30,13 @@ from app.models.ctms.operational_study import (
 )
 from app.models.ctms.projection import CTMSOperationalProjection
 from app.models.ctms.work import OperationalContact, OperationalTask
-from app.schemas.permission import AuthorizationScope, PermissionGrant
-from app.services.ctms_dashboard_service import (
+from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
+from app.services.ctms.ctms_dashboard_service import (
     _TERMINAL_MONITORING_STATUSES,
     _TERMINAL_TASK_STATUSES,
     CTMSDashboardService,
 )
-from app.services.ctms_report_service import CTMSReportService
+from app.services.ctms.ctms_report_service import CTMSReportService
 
 NOW = datetime(2026, 1, 15, 12, tzinfo=UTC)
 READ_PERMISSION = "ctms.operational_data_read"

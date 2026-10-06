@@ -10,7 +10,7 @@ import pytest
 from app.core.ctms import Module
 from app.models.ctms.ownership import ProjectionType
 from app.schemas.ctms.ownership import ProjectionFieldType, StatusOwnershipRuleCreate
-from app.services.ctms_projection_service import CTMSProjectionService
+from app.services.ctms.ctms_projection_service import CTMSProjectionService
 from app.workers.projection_rebuild_worker import (
     AuthoritativeRecordSnapshot,
     ProjectionRebuildWorker,
@@ -122,7 +122,7 @@ async def test_rebuild_sorts_sources_and_records_generation_watermark():
         state_repository=_StateRepository(),
     )
 
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         result = await worker.rebuild(
             _Session(),
             study_id=study_id,
@@ -161,7 +161,7 @@ async def test_repeated_rebuilds_keep_typed_payloads_and_fingerprints_stable():
         projection_service=CTMSProjectionService(repository=projection_repo),
         state_repository=state_repo,
     )
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         first = await worker.rebuild(
             _Session(), study_id=study_id, site_id=site_id,
             projection_type=ProjectionType.SUBJECT_STATUS, source_module=Module.EDC, rule=_rule(),
@@ -196,7 +196,7 @@ async def test_rebuild_is_limited_to_requested_scope_and_does_not_emit_outbox_wo
         projection_service=CTMSProjectionService(repository=projection_repo),
         state_repository=_StateRepository(),
     )
-    with patch("app.services.ctms_projection_service.audit_service.record", new=AsyncMock()):
+    with patch("app.services.ctms.ctms_projection_service.audit_service.record", new=AsyncMock()):
         result = await worker.rebuild(
             session, study_id=study_id, site_id=site_id,
             projection_type=ProjectionType.SUBJECT_STATUS, source_module=Module.EDC, rule=_rule(),

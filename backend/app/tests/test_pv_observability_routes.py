@@ -28,7 +28,7 @@ from app.core.database import Base
 from app.core.permissions import PV_PERMISSION_CODES
 from app.core.security import create_access_token
 from app.main import create_app
-from app.models.identity import (
+from app.models.shared.identity import (
     Permission,
     Role,
     RolePermission,
@@ -36,7 +36,7 @@ from app.models.identity import (
     UserRole,
     UserStatus,
 )
-from app.services.pv_observability_service import pv_observability_service
+from app.services.pv.pv_observability_service import pv_observability_service
 
 
 @pytest.fixture(autouse=True)

@@ -28,32 +28,32 @@ from app.core.database import Base
 from app.core.exceptions import AuthorizationError, ServiceUnavailableError
 from app.core.pv import ActorContext, Module, PVPhase, ReportStatus, build_pv_manifest
 from app.core.security import decode_token
-from app.models.audit import AuditEvent
 from app.models.ctms.operational_study import OperationalStudy
-from app.models.identity import User, UserStatus
+from app.models.edc.site import Site
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject
 from app.models.pv.assessment import SeriousnessCriterion
 from app.models.pv.coding import CodingSystem
 from app.models.pv.coordination import EdcAeProjection
 from app.models.pv.reconciliation import ReconciliationRun
 from app.models.pv.regulatory import ReportabilityRule
 from app.models.pv.safety_case import CaseState, SafetyCase
-from app.models.site import Site
-from app.models.study import Study, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
 from app.repositories.pv.coding_repository import CodingRepository
-from app.schemas.permission import AuthorizationScope, PermissionGrant
 from app.schemas.pv.export import PVExportFormat
-from app.services.ai_assistant_service import AIAssistantService
-from app.services.assessment_service import AssessmentService
-from app.services.auth_service import AuthService
-from app.services.coding_service import CodingService
-from app.services.narrative_service import NarrativeService
-from app.services.pv_coding_dictionary import CodingDictionaryProvider
-from app.services.pv_dashboard_service import READ_PERMISSION, PVDashboardService
-from app.services.pv_export_service import PVExportService
-from app.services.reconciliation_service import ReconciliationService
-from app.services.regulatory_reporting_service import RegulatoryReportingService
-from app.services.safety_case_service import SafetyCaseService
+from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
+from app.services.pv.assessment_service import AssessmentService
+from app.services.pv.coding_service import CodingService
+from app.services.pv.narrative_service import NarrativeService
+from app.services.pv.pv_coding_dictionary import CodingDictionaryProvider
+from app.services.pv.pv_dashboard_service import READ_PERMISSION, PVDashboardService
+from app.services.pv.pv_export_service import PVExportService
+from app.services.pv.reconciliation_service import ReconciliationService
+from app.services.pv.regulatory_reporting_service import RegulatoryReportingService
+from app.services.pv.safety_case_service import SafetyCaseService
+from app.services.shared.ai_assistant_service import AIAssistantService
+from app.services.shared.auth_service import AuthService
 from app.workers import pv_export_worker
 
 
@@ -259,7 +259,7 @@ async def test_phase1_oq_qualification_and_csv_export(db_session: AsyncSession, 
     before = await _snapshot_boundaries(db_session)
     evidence: list[QualificationResult] = []
 
-    with patch("app.services.auth_service.verify_password", return_value=True):
+    with patch("app.services.shared.auth_service.verify_password", return_value=True):
         pair = await AuthService().login(db_session, actor_user.email, "password")
     token = decode_token(pair.access_token)
     assert token.sub == str(actor_user.id)
@@ -434,7 +434,7 @@ async def test_phase3_oq_qualification_and_optional_ai(db_session: AsyncSession,
     assert regulatory.compute_clock(date(2026, 1, 1), 15) == date(2026, 1, 16)
     evidence.append(QualificationResult(3, "regulatory reporting and expedited timelines"))
 
-    from app.services.regulatory_reporting_service import E2B_MANDATORY_FIELDS
+    from app.services.pv.regulatory_reporting_service import E2B_MANDATORY_FIELDS
 
     message_case = {"case_identifier": case.case_identifier, "dictionary_versions": {"MedDRA": "27.0"}}
     message_case.update({field: f"value-{field}" for field in E2B_MANDATORY_FIELDS})
@@ -459,8 +459,8 @@ async def test_phase3_oq_qualification_and_optional_ai(db_session: AsyncSession,
     from app.core.config import Settings
 
     settings = Settings(ai_assistant_enabled=True, pv_ai_enabled=True)
-    monkeypatch.setattr("app.services.ai_assistant_service.get_settings", lambda: settings)
-    monkeypatch.setattr("app.services.ai_platform_service.get_settings", lambda: settings)
+    monkeypatch.setattr("app.services.shared.ai_assistant_service.get_settings", lambda: settings)
+    monkeypatch.setattr("app.services.shared.ai_platform_service.get_settings", lambda: settings)
     ai_user = _scope_user(actor_user, data["study"].id, permissions=("safety_case.enter",))  # type: ignore[arg-type]
     service = AIAssistantService(provider=_AIProvider(), module=Module.PV)
     context = service.build_context(

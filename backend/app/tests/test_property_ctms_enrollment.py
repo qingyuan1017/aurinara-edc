@@ -26,12 +26,12 @@ from app.models.ctms.enrollment import (
     OperationalMilestone,
     OperationalSubjectStatus,
 )
-from app.models.site import Site
-from app.models.study import Study
-from app.models.subject import Subject, SubjectStatus
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.edc.subject import Subject, SubjectStatus
 from app.schemas.ctms.enrollment import EnrollmentTargetCreate, OperationalMilestoneCreate
-from app.services.ctms_ownership_guard import CTMSOwnershipError, assert_ctms_command_safe
-from app.services.enrollment_service import EnrollmentService
+from app.services.ctms.ctms_ownership_guard import CTMSOwnershipError, assert_ctms_command_safe
+from app.services.ctms.enrollment_service import EnrollmentService
 
 
 class _Rows:

@@ -15,8 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.audit import AuditService, audit_service
-from app.models.audit import AuditEvent
-from app.schemas.audit import AuditSearchFilters
+from app.models.shared.audit import AuditEvent
+from app.schemas.shared.audit import AuditSearchFilters
 
 
 @pytest.fixture

@@ -12,8 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import PaginationParams, get_db, require_ctms_permission
 from app.core.request_context import get_correlation_id
 from app.models.ctms.work import OperationalTask, OperationalTaskStatus
-from app.models.identity import User
-from app.schemas.base import PaginatedResponse
+from app.models.shared.identity import User
 from app.schemas.ctms.work import (
     QueryFollowUpCreate,
     TaskCreate,
@@ -21,7 +20,8 @@ from app.schemas.ctms.work import (
     TaskStatusChange,
     TaskUpdate,
 )
-from app.services.work_management_service import work_management_service
+from app.schemas.shared.base import PaginatedResponse
+from app.services.ctms.work_management_service import work_management_service
 
 router = APIRouter(tags=["ctms-tasks"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]

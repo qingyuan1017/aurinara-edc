@@ -19,8 +19,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import AuthenticationError, AuthorizationError, ValidationError
-from app.schemas.permission import AuthorizationScope, PermissionGrant
-from app.services.ai_assistant_service import AIAssistantService
+from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
+from app.services.shared.ai_assistant_service import AIAssistantService
 
 _WRITE_PERMISSIONS = ("form.enter", "form.submit", "subject.update")
 _OPERATION_KIND = st.sampled_from(
@@ -130,7 +130,7 @@ async def test_ai_data_changes_require_confirmation_and_authorized_audited_write
         apply_calls.append(received)
         return {"changed": True}
 
-    with patch("app.services.ai_assistant_service.audit_service.record", audit):
+    with patch("app.services.shared.ai_assistant_service.audit_service.record", audit):
         operation = scenario["operation"]
         if operation == "success":
             result = await service.apply_suggestion(

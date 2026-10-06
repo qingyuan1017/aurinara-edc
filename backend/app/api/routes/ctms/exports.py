@@ -11,12 +11,12 @@ from app.api.deps import PaginationParams, get_db, get_permission_service, requi
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.core.request_context import get_correlation_id
 from app.core.storage import get_object_storage
-from app.models.export import Export, ExportStatus
-from app.models.identity import User
-from app.schemas.base import PaginatedResponse
+from app.models.shared.export import Export, ExportStatus
+from app.models.shared.identity import User
 from app.schemas.ctms.export import OperationalExportCreate, OperationalExportResponse
-from app.services.export_service import export_service
-from app.services.permission_service import PermissionService
+from app.schemas.shared.base import PaginatedResponse
+from app.services.shared.export_service import export_service
+from app.services.shared.permission_service import PermissionService
 
 router = APIRouter(tags=["ctms-exports"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]

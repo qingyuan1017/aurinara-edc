@@ -27,15 +27,14 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import BusinessRuleError
-from app.models.export import Export, ExportStatus
-from app.models.query import Query, QueryStatus
-from app.models.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.subject import Subject, SubjectStatus
-from app.services.export_service import ExportService
-from app.services.query_service import QueryService
-from app.services.study_service import StudyService
-from app.services.subject_service import SubjectService
-
+from app.models.edc.query import Query, QueryStatus
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
+from app.models.shared.export import Export, ExportStatus
+from app.services.edc.query_service import QueryService
+from app.services.edc.study_service import StudyService
+from app.services.edc.subject_service import SubjectService
+from app.services.shared.export_service import ExportService
 
 # ---------------------------------------------------------------------------
 # Legal transition maps (mirroring the service implementations)
@@ -227,7 +226,7 @@ class TestStudyStatusMachineProperty:
         study = _make_study(current_status)
         actor_id = uuid.uuid4()
 
-        with patch("app.services.study_service.audit_service") as mock_audit:
+        with patch("app.services.edc.study_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.transition_status(
                 session, study, target_status, actor_id
@@ -297,7 +296,7 @@ class TestSubjectStatusMachineProperty:
         subject = _make_subject(current_status)
         actor_id = uuid.uuid4()
 
-        with patch("app.services.subject_service.audit_service") as mock_audit:
+        with patch("app.services.edc.subject_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.transition_status(
                 session, subject, target_status, actor_id
@@ -367,7 +366,7 @@ class TestQueryStatusMachineProperty:
         query = _make_query(current_status)
         actor_id = uuid.uuid4()
 
-        with patch("app.services.query_service.audit_service") as mock_audit:
+        with patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
 
             # Route to the correct action based on target_status

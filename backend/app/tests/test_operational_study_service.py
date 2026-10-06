@@ -8,16 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import Base
 from app.core.exceptions import ValidationError
-from app.models.audit import AuditEvent
 from app.models.ctms.coordination import CTMSOutbox, CTMSStatusHistory
 from app.models.ctms.operational_study import (
     OperationalStudyStatus,
     StudyOperationalMilestone,
 )
-from app.models.identity import User, UserStatus
-from app.models.study import Study, StudyVersion, StudyVersionStatus
-from app.services.ctms_ownership_guard import CTMSOwnershipError
-from app.services.operational_study_service import OperationalStudyService
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import User, UserStatus
+from app.services.ctms.ctms_ownership_guard import CTMSOwnershipError
+from app.services.ctms.operational_study_service import OperationalStudyService
 
 
 @pytest.fixture

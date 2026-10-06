@@ -9,14 +9,14 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 from app.api.deps import PaginationParams
-from app.api.routes.notifications import (
+from app.api.routes.shared.notifications import (
     archive_notification,
     list_notifications,
     mark_notification_read,
 )
 from app.main import create_app
-from app.models.notification import Notification, NotificationStatus
-from app.schemas.base import PaginatedResponse
+from app.models.shared.notification import Notification, NotificationStatus
+from app.schemas.shared.base import PaginatedResponse
 
 
 def _notification(user_id, *, status=NotificationStatus.unread):
@@ -42,7 +42,7 @@ async def test_list_route_delegates_current_user_and_returns_pagination(monkeypa
     )
     service = SimpleNamespace(list_unread_paginated=AsyncMock(return_value=result))
     monkeypatch.setattr(
-        "app.api.routes.notifications.notification_service", service
+        "app.api.routes.shared.notifications.notification_service", service
     )
 
     response = await list_notifications(
@@ -69,7 +69,7 @@ async def test_read_and_archive_routes_delegate_current_user(monkeypatch):
         archive=AsyncMock(return_value=archived_item),
     )
     monkeypatch.setattr(
-        "app.api.routes.notifications.notification_service", service
+        "app.api.routes.shared.notifications.notification_service", service
     )
 
     read_response = await mark_notification_read(notification_id, session, user)

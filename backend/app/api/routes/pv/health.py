@@ -18,8 +18,8 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import require_pv_permission
 from app.core.config import get_settings
-from app.models.identity import User
-from app.services.pv_observability_service import pv_observability_service
+from app.models.shared.identity import User
+from app.services.pv.pv_observability_service import pv_observability_service
 
 router = APIRouter(tags=["pv-health"])
 PVHealthGuard = Annotated[User, Depends(require_pv_permission("safety_audit.read"))]

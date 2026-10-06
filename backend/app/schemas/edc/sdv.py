@@ -1,6 +1,5 @@
 """Pydantic response schemas for source-data-verification endpoints."""
 
-from datetime import datetime
 from uuid import UUID
 
 from app.models.edc.sdv import SDVScopeType

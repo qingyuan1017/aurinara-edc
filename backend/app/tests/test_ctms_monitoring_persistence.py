@@ -18,9 +18,9 @@ from app.models.ctms.monitoring import (
     MonitoringPlanVersion,
     MonitoringPlanVersionStatus,
 )
-from app.models.identity import User, UserStatus
-from app.models.site import Site
-from app.models.study import Study
+from app.models.edc.site import Site
+from app.models.edc.study import Study
+from app.models.shared.identity import User, UserStatus
 
 
 @pytest.fixture

@@ -14,7 +14,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from app.schemas.base import BaseCreateSchema
+from app.schemas.shared.base import BaseCreateSchema
 
 
 class _ScopedPVAIRequest(BaseCreateSchema):
