@@ -11,7 +11,7 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.core.ctms import Module, ensure_utc
 from app.models.ctms.ownership import OwnershipRuleStatus, ProjectionType
-from app.schemas.base import BaseCreateSchema, BaseSchema
+from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
 
 
 class ProjectionFieldType(StrEnum):
@@ -84,15 +84,15 @@ class StatusOwnershipRuleResponse(BaseSchema):
         validation_alias="allowlist_json"
     )
     version: int
-    effective_from: datetime
-    effective_to: datetime | None
+    effective_from: UtcDatetime
+    effective_to: UtcDatetime | None
     status: OwnershipRuleStatus
     created_by: UUID | None
     updated_by: UUID | None
     correlation_id: str
-    created_at: datetime
-    updated_at: datetime
-    retired_at: datetime | None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    retired_at: UtcDatetime | None
     retired_by: UUID | None
     retirement_reason: str | None
 

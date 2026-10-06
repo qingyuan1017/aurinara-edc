@@ -24,7 +24,7 @@ from pydantic import ConfigDict, Field
 from app.models.pv.assessment import SeriousnessCriterion
 from app.models.pv.regulatory import ReportStatus
 from app.models.pv.safety_case import CaseState, CaseVersionKind, CaseVersionStatus
-from app.schemas.base import BaseCreateSchema, BaseSchema
+from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
 
 # ---------------------------------------------------------------------------
 # Safety cases and adverse events
@@ -53,8 +53,8 @@ class SafetyCaseResponse(BaseSchema):
     subject_reference: UUID
     case_type: str
     lifecycle_state: str
-    created_at: datetime
-    updated_at: datetime | None = None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime | None = None
 
 
 class AdverseEventCreate(BaseCreateSchema):
@@ -77,8 +77,8 @@ class AdverseEventResponse(BaseSchema):
     onset_date: date
     outcome: str
     resolution_date: date | None = None
-    created_at: datetime
-    updated_at: datetime | None = None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime | None = None
 
 
 class CaseTransitionRequest(BaseCreateSchema):
@@ -107,9 +107,9 @@ class CaseVersionResponse(BaseSchema):
     sequence_number: int
     version_kind: str
     status: str
-    submitted_at: datetime | None = None
+    submitted_at: UtcDatetime | None = None
     submitted_by: UUID | None = None
-    created_at: datetime
+    created_at: UtcDatetime
 
 
 # ---------------------------------------------------------------------------
@@ -157,8 +157,8 @@ class AssessmentResponse(BaseSchema):
 
     id: UUID
     ae_id: UUID
-    created_at: datetime
-    updated_at: datetime | None = None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -206,8 +206,8 @@ class CodingResponse(BaseSchema):
     dictionary_version: str
     prior_coding_id: UUID | None = None
     assigned_by: UUID | None = None
-    assigned_at: datetime
-    created_at: datetime
+    assigned_at: UtcDatetime
+    created_at: UtcDatetime
 
 
 # ---------------------------------------------------------------------------
@@ -239,8 +239,8 @@ class NarrativeResponse(BaseSchema):
     case_id: UUID
     current_text: str
     current_version_number: int
-    created_at: datetime
-    updated_at: datetime | None = None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime | None = None
 
 
 class NarrativeVersionResponse(BaseSchema):
@@ -251,9 +251,9 @@ class NarrativeVersionResponse(BaseSchema):
     version_number: int
     text_value: str
     reason_for_change: str | None = None
-    authored_at: datetime
+    authored_at: UtcDatetime
     authored_by: UUID | None = None
-    created_at: datetime
+    created_at: UtcDatetime
 
 
 # ---------------------------------------------------------------------------
@@ -295,11 +295,11 @@ class RegulatoryReportResponse(BaseSchema):
     destination: str
     status: str
     awareness_date: date
-    submitted_at: datetime | None = None
+    submitted_at: UtcDatetime | None = None
     submitted_by: UUID | None = None
     e2b_message_ref: str | None = None
-    created_at: datetime
-    updated_at: datetime | None = None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -322,8 +322,8 @@ class ReconciliationRunResponse(BaseSchema):
     study_id: UUID
     match_count: int
     discrepancy_count: int
-    run_at: datetime
-    created_at: datetime
+    run_at: UtcDatetime
+    created_at: UtcDatetime
 
 
 class ReconciliationDiscrepancyResponse(BaseSchema):
@@ -335,9 +335,9 @@ class ReconciliationDiscrepancyResponse(BaseSchema):
     edc_reference: UUID | None = None
     differing_fields: list[str] = Field(default_factory=list)
     status: str
-    resolved_at: datetime | None = None
+    resolved_at: UtcDatetime | None = None
     resolved_by: UUID | None = None
-    created_at: datetime
+    created_at: UtcDatetime
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +356,7 @@ class SafetyAttachmentResponse(BaseSchema):
     content_type: str
     size_bytes: int
     uploaded_by: UUID | None = None
-    created_at: datetime
+    created_at: UtcDatetime
 
 
 class SafetyAttachmentDeleteRequest(BaseCreateSchema):

@@ -15,7 +15,7 @@ from app.models.ctms.work import (
     OperationalTaskPriority,
     OperationalTaskStatus,
 )
-from app.schemas.base import BaseCreateSchema, BaseSchema
+from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
 
 
 class TaskCreate(BaseCreateSchema):
@@ -92,7 +92,7 @@ class TaskResponse(BaseSchema):
     title: str
     description: str | None
     owner_id: UUID | None
-    due_date: datetime | None
+    due_date: UtcDatetime | None
     priority: OperationalTaskPriority
     status: OperationalTaskStatus
     query_id: UUID | None
@@ -100,8 +100,8 @@ class TaskResponse(BaseSchema):
     correlation_id: UUID
     created_by: UUID
     updated_by: UUID | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class ContactCreate(BaseCreateSchema):
@@ -144,8 +144,8 @@ class ContactResponse(BaseSchema):
     correlation_id: UUID
     created_by: UUID
     updated_by: UUID | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class DependencyCreate(BaseCreateSchema):

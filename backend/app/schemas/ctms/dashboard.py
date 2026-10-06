@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from app.schemas.base import BaseCreateSchema, BaseSchema
+from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
 
 
 class DashboardQueryCreate(BaseCreateSchema):
@@ -24,8 +24,8 @@ class DashboardQueryResponse(BaseSchema):
     owner_id: UUID | None = None
     status: str
     created_by: UUID
-    created_at: Any
-    updated_at: Any
+    created_at: UtcDatetime
+    updated_at: UtcDatetime | None
 
 
 __all__ = ["DashboardQueryCreate", "DashboardQueryResponse"]
@@ -36,4 +36,4 @@ class CTMSDashboardResponse(BaseSchema):
     site_id: UUID | None = None
     operational: dict[str, Any] = Field(default_factory=dict)
     projected_clinical: list[dict[str, Any]] = Field(default_factory=list)
-    generated_at: Any
+    generated_at: UtcDatetime

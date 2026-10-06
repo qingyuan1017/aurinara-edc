@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import Field
 
 from app.core.ctms import Module
-from app.schemas.base import BaseCreateSchema, BaseSchema
+from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
 
 
 class CoordinationEventResponse(BaseSchema):
@@ -27,8 +27,8 @@ class CoordinationEventResponse(BaseSchema):
     resulting_projection_id: UUID | None = None
     outcome: str | None = None
     reason: str | None = None
-    accepted_at: datetime | None = None
-    processed_at: datetime | None = None
+    accepted_at: UtcDatetime | None = None
+    processed_at: UtcDatetime | None = None
 
 
 class CoordinationEventListResponse(BaseSchema):
@@ -51,8 +51,8 @@ class FailedEventResponse(BaseSchema):
     reason_code: str
     sanitized_details: dict[str, Any] = Field(default_factory=dict)
     correlation_id: str
-    created_at: datetime
-    updated_at: datetime | None = None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime | None = None
 
 
 class ConflictResolveRequest(BaseCreateSchema):
@@ -73,8 +73,8 @@ class CoordinationConflictResponse(BaseSchema):
     status: str
     sanitized_details: dict[str, Any] = Field(default_factory=dict)
     correlation_id: str
-    created_at: datetime
-    resolved_at: datetime | None = None
+    created_at: UtcDatetime
+    resolved_at: UtcDatetime | None = None
 
 
 class SanitizedListResponse(BaseSchema):

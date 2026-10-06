@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from app.schemas.base import BaseCreateSchema, BaseSchema
+from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
 
 
 class ReportQueryCreate(BaseCreateSchema):
@@ -24,8 +24,8 @@ class ReportQueryResponse(BaseSchema):
     owner_id: UUID | None = None
     status: str
     created_by: UUID
-    created_at: Any
-    updated_at: Any
+    created_at: UtcDatetime
+    updated_at: UtcDatetime | None
 
 
 __all__ = ["ReportQueryCreate", "ReportQueryResponse"]
@@ -37,4 +37,4 @@ class CTMSReportResponse(BaseSchema):
     report_type: str
     items: list[dict[str, Any]] = Field(default_factory=list)
     totals: dict[str, Any] = Field(default_factory=dict)
-    generated_at: Any
+    generated_at: UtcDatetime

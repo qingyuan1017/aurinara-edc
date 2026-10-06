@@ -9,7 +9,12 @@ from uuid import UUID
 from pydantic import Field, field_validator
 
 from app.models.ctms.operational_study import OperationalStudyStatus
-from app.schemas.base import BaseCreateSchema, BaseSchema, BaseUpdateSchema
+from app.schemas.shared.base import (
+    BaseCreateSchema,
+    BaseSchema,
+    BaseUpdateSchema,
+    UtcDatetime,
+)
 
 
 def _reason(value: str) -> str:
@@ -108,12 +113,12 @@ class OperationalStudyResponse(BaseSchema):
     readiness_criteria: dict[str, Any]
     status: OperationalStudyStatus
     retention_state: str
-    archived_at: datetime | None = None
+    archived_at: UtcDatetime | None = None
     created_by: UUID
     updated_by: UUID | None = None
     correlation_id: UUID
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 __all__ = [
@@ -140,8 +145,8 @@ class StudyPlanResponse(BaseSchema):
     correlation_id: UUID
     created_by: UUID
     updated_by: UUID | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class EnrollmentPlanResponse(BaseSchema):
@@ -149,16 +154,16 @@ class EnrollmentPlanResponse(BaseSchema):
     study_id: UUID
     title: str
     target_quantity: int | None
-    planning_period_start: datetime | None
-    planning_period_end: datetime | None
+    planning_period_start: UtcDatetime | None
+    planning_period_end: UtcDatetime | None
     planning_scope: dict[str, Any]
     owner_id: UUID | None
     status: str
     correlation_id: UUID
     created_by: UUID
     updated_by: UUID | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class ReadinessCriterionResponse(BaseSchema):
@@ -168,15 +173,15 @@ class ReadinessCriterionResponse(BaseSchema):
     description: str | None
     status: str
     required: bool
-    due_at: datetime | None
-    completed_at: datetime | None
+    due_at: UtcDatetime | None
+    completed_at: UtcDatetime | None
     completed_by: UUID | None
     evidence_reference: str | None
     correlation_id: UUID
     created_by: UUID
     updated_by: UUID | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class StudyOperationalMilestoneResponse(BaseSchema):
@@ -184,13 +189,13 @@ class StudyOperationalMilestoneResponse(BaseSchema):
     study_id: UUID
     title: str
     milestone_type: str
-    planned_at: datetime | None
-    completed_at: datetime | None
+    planned_at: UtcDatetime | None
+    completed_at: UtcDatetime | None
     owner_id: UUID | None
     notes: str | None
     status: str
     correlation_id: UUID
     created_by: UUID
     updated_by: UUID | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime

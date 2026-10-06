@@ -1,12 +1,13 @@
 """Pydantic v2 request/response schemas."""
 
-from app.schemas.base import (
+from app.schemas.shared.base import (
     BaseCreateSchema,
     BaseSchema,
     BaseUpdateSchema,
     IDMixin,
     PaginatedResponse,
     TimestampMixin,
+    UtcDatetime,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "IDMixin",
     "PaginatedResponse",
     "TimestampMixin",
+    "UtcDatetime",
 ]

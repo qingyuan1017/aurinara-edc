@@ -1,7 +1,7 @@
 """Pydantic v2 contracts for scoped PV safety audit search and export.
 
 The PV audit trail reuses the shared, immutable append-only ``Audit_Service``
-primitive and the shared :class:`~app.models.audit.AuditEvent` model
+primitive and the shared :class:`~app.models.shared.audit.AuditEvent` model
 (``module="PV"``). These transport contracts back the authenticated
 ``/api/v1/pv`` audit search and export routes.
 
@@ -20,7 +20,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.base import BaseSchema
+from app.schemas.shared.base import BaseSchema, UtcDatetime
 
 
 class PVAuditSearchFilters(BaseModel):
@@ -67,7 +67,7 @@ class PVAuditEventResponse(BaseSchema):
     id: UUID
     actor_id: UUID | None = None
     actor_email: str | None = None
-    timestamp: datetime
+    timestamp: UtcDatetime
     entity_type: str
     entity_id: UUID
     study_id: UUID | None = None

@@ -9,7 +9,12 @@ from uuid import UUID
 from pydantic import Field, field_validator
 
 from app.models.ctms.operational_site import ActivationActionStatus, OperationalSiteStatus
-from app.schemas.base import BaseCreateSchema, BaseSchema, BaseUpdateSchema
+from app.schemas.shared.base import (
+    BaseCreateSchema,
+    BaseSchema,
+    BaseUpdateSchema,
+    UtcDatetime,
+)
 
 
 def _reason(value: str | None) -> str | None:
@@ -88,15 +93,15 @@ class OperationalSiteResponse(BaseSchema):
     site_id: UUID
     monitoring_readiness: str | None = None
     responsible_role: str | None = None
-    planned_activation_date: datetime | None = None
+    planned_activation_date: UtcDatetime | None = None
     status: OperationalSiteStatus
     retention_state: str
-    archived_at: datetime | None = None
+    archived_at: UtcDatetime | None = None
     created_by: UUID
     updated_by: UUID | None = None
     correlation_id: UUID
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class ActivationActionResponse(BaseSchema):
@@ -106,19 +111,19 @@ class ActivationActionResponse(BaseSchema):
     action_type: str
     responsible_role: str | None = None
     responsible_user_id: UUID | None = None
-    planned_date: datetime | None = None
+    planned_date: UtcDatetime | None = None
     completion_criteria: str | None = None
     completed_by: UUID | None = None
-    completed_at: datetime | None = None
+    completed_at: UtcDatetime | None = None
     evidence_reference: str | None = None
     status: ActivationActionStatus
     retention_state: str
-    archived_at: datetime | None = None
+    archived_at: UtcDatetime | None = None
     created_by: UUID
     updated_by: UUID | None = None
     correlation_id: UUID
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 __all__ = [

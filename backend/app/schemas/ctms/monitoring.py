@@ -15,7 +15,12 @@ from app.models.ctms.monitoring import (
     MonitoringPlanStatus,
     MonitoringPlanVersionStatus,
 )
-from app.schemas.base import BaseCreateSchema, BaseSchema, BaseUpdateSchema
+from app.schemas.shared.base import (
+    BaseCreateSchema,
+    BaseSchema,
+    BaseUpdateSchema,
+    UtcDatetime,
+)
 
 
 def _reason(value: str) -> str:
@@ -84,8 +89,8 @@ class MonitoringPlanResponse(BaseSchema):
     correlation_id: str
     created_by: UUID
     updated_by: UUID | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class MonitoringPlanVersionResponse(BaseSchema):
@@ -111,12 +116,12 @@ class MonitoringPlanVersionResponse(BaseSchema):
     thresholds: dict[str, Any]
     amendment_reason: str | None
     published_by: UUID | None
-    published_at: datetime | None
+    published_at: UtcDatetime | None
     correlation_id: str
     created_by: UUID
     updated_by: UUID | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class MonitoringActivityCreate(BaseCreateSchema):
@@ -180,22 +185,22 @@ class MonitoringActivityResponse(BaseSchema):
     study_id: UUID
     site_id: UUID | None
     activity_type: MonitoringActivityType
-    planned_date: datetime
+    planned_date: UtcDatetime
     assigned_cra_id: UUID | None
     status: MonitoringActivityStatus
     edc_visit_instance_id: UUID | None
     completion_evidence: dict[str, Any]
     completion_notes: str | None
-    completed_at: datetime | None
+    completed_at: UtcDatetime | None
     completed_by: UUID | None
     cancellation_reason: str | None
-    cancelled_at: datetime | None
+    cancelled_at: UtcDatetime | None
     cancelled_by: UUID | None
     correlation_id: str
     created_by: UUID
     updated_by: UUID | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 __all__ = [name for name in globals() if not name.startswith("_")]

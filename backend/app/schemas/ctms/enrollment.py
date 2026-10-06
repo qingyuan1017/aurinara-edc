@@ -14,7 +14,7 @@ from app.models.ctms.enrollment import (
     EnrollmentTargetType,
     OperationalSubjectStatus,
 )
-from app.schemas.base import BaseCreateSchema, BaseSchema
+from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
 
 
 class EnrollmentTargetCreate(BaseCreateSchema):
@@ -72,8 +72,8 @@ class EnrollmentTargetResponse(BaseSchema):
     site_id: UUID | None
     target_type: EnrollmentTargetType
     target_quantity: int
-    planning_period_start: datetime
-    planning_period_end: datetime
+    planning_period_start: UtcDatetime
+    planning_period_end: UtcDatetime
     dimension: dict[str, Any]
     owner_id: UUID | None
     status: EnrollmentTargetStatus
@@ -81,9 +81,9 @@ class EnrollmentTargetResponse(BaseSchema):
     correlation_id: UUID
     created_by: UUID
     updated_by: UUID | None
-    created_at: datetime
-    updated_at: datetime
-    deleted_at: datetime | None = None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    deleted_at: UtcDatetime | None = None
 
 
 class OperationalMilestoneCreate(BaseCreateSchema):
@@ -128,15 +128,15 @@ class OperationalMilestoneResponse(BaseSchema):
     approved_pseudonym: str | None
     approved_reference: str | None
     milestone_type: str
-    milestone_date: datetime
+    milestone_date: UtcDatetime
     status: OperationalSubjectStatus
     retention_state: str
     correlation_id: UUID
     created_by: UUID
     updated_by: UUID | None
-    created_at: datetime
-    updated_at: datetime
-    deleted_at: datetime | None = None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    deleted_at: UtcDatetime | None = None
 
 
 class SubjectStatusProjectionRule(BaseSchema):

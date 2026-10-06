@@ -9,7 +9,7 @@ from pydantic import ConfigDict, Field
 from app.core.ctms import Module, OwnershipState
 from app.models.ctms.ownership import ProjectionType
 from app.models.ctms.projection import ProjectionStatus
-from app.schemas.base import BaseSchema
+from app.schemas.shared.base import BaseSchema, UtcDatetime
 
 
 class ProjectionResponse(BaseSchema):
@@ -28,14 +28,14 @@ class ProjectionResponse(BaseSchema):
     query_id: UUID | None = None
     source_version: str | None = None
     source_sequence: int | None = None
-    source_timestamp: datetime | None = None
+    source_timestamp: UtcDatetime | None = None
     rule_version: int | None = None
     payload: dict[str, Any] = Field(default_factory=dict, validation_alias="payload_json")
     payload_fingerprint: str | None = None
     rejected_fields_fingerprint: str | None = None
     rejection_reason: str | None = None
     status: ProjectionStatus | OwnershipState | str = ProjectionStatus.CURRENT
-    projected_at: datetime
+    projected_at: UtcDatetime
     rebuild_generation: UUID | None = None
     correlation_id: str | None = None
 
@@ -66,10 +66,10 @@ class ProjectionCreate(BaseSchema):
     query_id: UUID | None = None
     source_version: str = Field(min_length=1, max_length=128)
     source_sequence: int | None = Field(default=None, ge=0)
-    source_timestamp: datetime
+    source_timestamp: UtcDatetime
     rule_version: int = Field(ge=1)
     correlation_id: str = Field(min_length=1, max_length=128)
-    projected_at: datetime | None = None
+    projected_at: UtcDatetime | None = None
     rebuild_generation: UUID | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
 

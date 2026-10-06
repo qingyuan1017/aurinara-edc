@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.models.ctms.ownership import ProjectionType
-from app.schemas.base import BaseCreateSchema, BaseSchema
+from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
 
 
 class OperationalExportFormat(StrEnum):
@@ -107,9 +107,9 @@ class OperationalExportResponse(BaseSchema):
     file_size: int | None = None
     error_message: str | None = None
     requested_by: UUID
-    created_at: datetime
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
+    created_at: UtcDatetime
+    started_at: UtcDatetime | None = None
+    completed_at: UtcDatetime | None = None
 
 
 class OperationalExportListResponse(BaseSchema):

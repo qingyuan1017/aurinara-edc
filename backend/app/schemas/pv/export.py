@@ -23,7 +23,7 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.models.pv.regulatory import ReportStatus
 from app.models.pv.safety_case import CaseState
-from app.schemas.base import BaseCreateSchema, BaseSchema
+from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
 
 # The maximum inclusive UTC date-range span accepted for a PV safety export
 # (Requirement 12.3). A requested span strictly greater than this is rejected
@@ -114,9 +114,9 @@ class PVExportResponse(BaseSchema):
     file_size: int | None = None
     error_message: str | None = None
     requested_by: UUID
-    created_at: datetime
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
+    created_at: UtcDatetime
+    started_at: UtcDatetime | None = None
+    completed_at: UtcDatetime | None = None
 
 
 class PVExportListResponse(BaseSchema):
