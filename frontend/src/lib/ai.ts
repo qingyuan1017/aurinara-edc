@@ -1,3 +1,5 @@
+import { API_BASE_URL } from './api'
+
 export interface AIStreamEvent {
   type?: 'token' | 'done' | 'error' | string
   content?: string
@@ -28,7 +30,7 @@ export async function streamAI(
   signal?: AbortSignal,
 ): Promise<void> {
   const token = localStorage.getItem('access_token')
-  const response = await fetch(`/api/v1${path}`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

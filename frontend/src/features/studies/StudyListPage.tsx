@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   createColumnHelper,
   flexRender,
@@ -13,26 +13,15 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DataTableShell, PageContainer, PageHeader, PageToolbar, StatusBadge } from '@/components/patterns'
-import { api } from '@/lib/api'
-import type { PaginatedResponse } from '@/lib/api'
+import {
+  getListStudiesApiV1StudiesGetQueryKey,
+  useCreateStudyApiV1StudiesPost,
+  useListStudiesApiV1StudiesGet,
+} from '@/api/endpoints/studies/studies'
+import type { StudyCreate, StudyResponse } from '@/api/model'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
 
-interface Study {
-  id: string
-  study_code: string
-  title: string
-  phase: string
-  status: string
-  created_at: string
-}
-
-interface CreateStudyPayload {
-  study_code: string
-  title: string
-  phase: string
-}
-
-const columnHelper = createColumnHelper<Study>()
+const columnHelper = createColumnHelper<StudyResponse>()
 
 const columns = [
   columnHelper.accessor('study_code', {
@@ -40,7 +29,10 @@ const columns = [
     cell: (info) => <a href={`/studies/${info.row.original.id}`} className="font-medium text-primary hover:underline">{info.getValue()}</a>,
   }),
   columnHelper.accessor('title', { header: 'Title' }),
-  columnHelper.accessor('phase', { header: 'Phase' }),
+  columnHelper.accessor('phase', {
+    header: 'Phase',
+    cell: (info) => info.getValue() ?? '—',
+  }),
   columnHelper.accessor('status', {
     header: 'Status',
     cell: (info) => <StatusBadge status={info.getValue()} label="Study status" />,
@@ -56,33 +48,29 @@ export function StudyListPage() {
   const canCreate = usePermission(PERMISSIONS.STUDY_CREATE)
   const [page, setPage] = useState(1)
   const [showModal, setShowModal] = useState(false)
-  const [formData, setFormData] = useState<CreateStudyPayload>({ study_code: '', title: '', phase: '' })
+  const [formData, setFormData] = useState<StudyCreate>({ study_code: '', title: '', phase: '' })
   const [error, setError] = useState<string | null>(null)
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['studies', page],
-    queryFn: async () => {
-      const { data } = await api.get<PaginatedResponse<Study>>('/studies', {
-        params: { page, page_size: 20 },
-      })
-      return data
-    },
+  const { data, isLoading, isError, refetch } = useListStudiesApiV1StudiesGet({
+    page,
+    page_size: 20,
   })
 
-  const createMutation = useMutation({
-    mutationFn: async (payload: CreateStudyPayload) => {
-      const { data } = await api.post('/studies', payload)
-      return data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['studies'] })
-      setShowModal(false)
-      setFormData({ study_code: '', title: '', phase: '' })
-      setError(null)
-    },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(msg ?? 'Failed to create study')
+  const createMutation = useCreateStudyApiV1StudiesPost({
+    mutation: {
+      onSuccess: () => {
+        // Match every page of the studies list regardless of params.
+        queryClient.invalidateQueries({
+          queryKey: getListStudiesApiV1StudiesGetQueryKey(),
+        })
+        setShowModal(false)
+        setFormData({ study_code: '', title: '', phase: '' })
+        setError(null)
+      },
+      onError: (err) => {
+        const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        setError(msg ?? 'Failed to create study')
+      },
     },
   })
 
@@ -158,10 +146,10 @@ export function StudyListPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Create Study</DialogTitle><DialogDescription>Create a study in the current authorized workspace.</DialogDescription></DialogHeader>
           {error ? <p className="rounded border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive" role="alert">{error}</p> : null}
-          <form onSubmit={(event) => { event.preventDefault(); createMutation.mutate(formData) }} className="space-y-3">
+          <form onSubmit={(event) => { event.preventDefault(); createMutation.mutate({ data: formData }) }} className="space-y-3">
             <div className="space-y-1.5"><Label htmlFor="study-code">Code</Label><Input id="study-code" type="text" value={formData.study_code} onChange={(event) => setFormData((current) => ({ ...current, study_code: event.target.value }))} required /></div>
             <div className="space-y-1.5"><Label htmlFor="study-title">Title</Label><Input id="study-title" type="text" value={formData.title} onChange={(event) => setFormData((current) => ({ ...current, title: event.target.value }))} required /></div>
-            <div className="space-y-1.5"><Label htmlFor="study-phase">Phase</Label><Select value={formData.phase} onValueChange={(value) => setFormData((current) => ({ ...current, phase: value }))}><SelectTrigger id="study-phase" aria-label="Phase"><SelectValue placeholder="Select phase…" /></SelectTrigger><SelectContent><SelectItem value="I">Phase I</SelectItem><SelectItem value="II">Phase II</SelectItem><SelectItem value="III">Phase III</SelectItem><SelectItem value="IV">Phase IV</SelectItem></SelectContent></Select></div>
+            <div className="space-y-1.5"><Label htmlFor="study-phase">Phase</Label><Select value={formData.phase ?? ''} onValueChange={(value) => setFormData((current) => ({ ...current, phase: value }))}><SelectTrigger id="study-phase" aria-label="Phase"><SelectValue placeholder="Select phase…" /></SelectTrigger><SelectContent><SelectItem value="I">Phase I</SelectItem><SelectItem value="II">Phase II</SelectItem><SelectItem value="III">Phase III</SelectItem><SelectItem value="IV">Phase IV</SelectItem></SelectContent></Select></div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => { setShowModal(false); setError(null) }}>Cancel</Button><Button type="submit" pending={createMutation.isPending} loadingText="Creating…">Create</Button></DialogFooter>
           </form>
         </DialogContent>

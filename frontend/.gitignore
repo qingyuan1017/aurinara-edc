@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated API client (reproducible from openapi/openapi.json via `npm run api:gen`)
+src/api/endpoints/
+src/api/model/

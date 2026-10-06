@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { PageContainer, PageHeader } from '@/components/patterns'
 import { streamAI, type AIStreamEvent } from '@/lib/ai'
+import { API_BASE_URL } from '@/lib/api'
 import { useStudyContext } from '@/lib/study-context'
 
 const TABS = [
@@ -79,7 +80,7 @@ export function AIAssistantPage() {
     setApplyStatus('Applying…')
     setError('')
     try {
-      await fetch('/api/v1/ai/apply-suggestion', {
+      await fetch(`${API_BASE_URL}/ai/apply-suggestion`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

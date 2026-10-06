@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "api:gen": "orval --config ./orval.config.ts",
+    "api:refresh-schema": "node scripts/refresh-openapi.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -44,6 +46,7 @@
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
+    "orval": "^8.40.0",
     "tailwindcss": "^4.3.1",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.61.0",

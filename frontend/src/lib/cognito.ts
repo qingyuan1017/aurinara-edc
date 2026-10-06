@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { API_BASE_URL } from './api'
 
 export interface CognitoTokenResponse {
   access_token: string
@@ -79,7 +80,7 @@ export async function exchangeCognitoCode(
   codeVerifier: string,
 ): Promise<CognitoTokenResponse> {
   const { redirectUri } = getCognitoConfig()
-  const { data } = await axios.post<CognitoTokenResponse>('/api/v1/auth/cognito/exchange', {
+  const { data } = await axios.post<CognitoTokenResponse>(`${API_BASE_URL}/auth/cognito/exchange`, {
     code,
     code_verifier: codeVerifier,
     redirect_uri: redirectUri,
