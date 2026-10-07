@@ -28,22 +28,26 @@ const baselineCTMSState = normalizeCTMSCapabilities({
 
 describe('PV route registration and deep-link preservation', () => {
   it('keeps EDC and CTMS navigation unchanged when PV is disabled, empty, or unavailable', () => {
-    const baseline = resolveNavigationModel(baselineCTMSState, allPermissions, {
+    const disabledPVState = normalizePVCapabilities(PV_DISABLED_MANIFEST)
+    const baseline = resolveNavigationModel(baselineCTMSState, disabledPVState, allPermissions, {
       studyId: 'study-1',
       siteId: 'site-1',
     })
     const pvStates = [
-      normalizePVCapabilities(PV_DISABLED_MANIFEST),
+      disabledPVState,
       normalizePVCapabilities({ module: 'PV', enabled: true, phase: 1, capabilities: [] }),
       unavailablePVCapabilities(new Error('worker unavailable')),
     ]
 
     for (const pvState of pvStates) {
       expect(resolvePVNavigation(pvState, allPermissions, { studyId: 'study-1', siteId: 'site-1' })).toEqual([])
-      expect(resolveNavigationModel(baselineCTMSState, allPermissions, {
+      const model = resolveNavigationModel(baselineCTMSState, pvState, allPermissions, {
         studyId: 'study-1',
         siteId: 'site-1',
-      })).toEqual(baseline)
+      })
+      expect(model.edcSections).toEqual(baseline.edcSections)
+      expect(model.ctmsSections).toEqual(baseline.ctmsSections)
+      expect(model.pvSections).toEqual([])
     }
 
     expect(baseline.edcSections.flatMap((section) => section.items).map((item) => item.to)).toContain('/')

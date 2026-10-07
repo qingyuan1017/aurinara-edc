@@ -13,6 +13,7 @@ import type {
   CTMSNavigationViewSection,
   EDCNavigationItem,
   NavigationSection,
+  PVNavigationViewSection,
 } from '@/lib/navigation-model'
 import type { AppModule } from '@/lib/module-context'
 
@@ -22,8 +23,11 @@ export interface AppSidebarProps {
   onCollapsedChange: (collapsed: boolean) => void
   edcSections: readonly NavigationSection[]
   ctmsSections: readonly CTMSNavigationViewSection[]
+  pvSections: readonly PVNavigationViewSection[]
   /** Keeps the existing capability gate visible even when no CTMS item is resolved. */
   showCTMS: boolean
+  /** Keeps the PV capability gate visible even when no PV item is resolved. */
+  showPV: boolean
   /** The module whose navigation hierarchy should be displayed. */
   activeModule?: AppModule
   /** Changes the active product module and lets the shell perform navigation. */
@@ -49,7 +53,7 @@ function NavigationLink({
   activeOptions,
   onNavigate,
 }: {
-  item: EDCNavigationItem | CTMSNavigationViewSection['items'][number]
+  item: EDCNavigationItem | CTMSNavigationViewSection['items'][number] | PVNavigationViewSection['items'][number]
   collapsed: boolean
   activeOptions?: { readonly exact: false }
   onNavigate?: () => void
@@ -142,18 +146,59 @@ function CTMSSection({
   )
 }
 
+function PVSection({
+  section,
+  collapsed,
+  onNavigate,
+}: {
+  section: PVNavigationViewSection
+  collapsed: boolean
+  onNavigate?: () => void
+}) {
+  const headingId = sectionHeadingId('pv', section.id)
+
+  return (
+    <section aria-labelledby={headingId}>
+      <h2
+        id={headingId}
+        className={cn(
+          'px-3 pb-1 pt-3 text-[0.6875rem] font-medium text-muted-foreground',
+          collapsed && 'sr-only',
+        )}
+      >
+        {section.label}
+      </h2>
+      <div className="space-y-0.5">
+        {section.items.map((item) => (
+          <NavigationLink
+            key={item.id}
+            item={item}
+            collapsed={collapsed}
+            activeOptions={item.activeOptions}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function NavigationSections({
   collapsed,
   edcSections,
   ctmsSections,
+  pvSections,
   showCTMS,
+  showPV,
   activeModule,
   onNavigate,
 }: {
   collapsed: boolean
   edcSections: readonly NavigationSection[]
   ctmsSections: readonly CTMSNavigationViewSection[]
+  pvSections: readonly PVNavigationViewSection[]
   showCTMS: boolean
+  showPV: boolean
   activeModule?: AppModule
   onNavigate?: () => void
 }) {
@@ -184,6 +229,24 @@ function NavigationSections({
           </div>
         </div>
       )}
+
+      {showPV && (activeModule === undefined || activeModule === 'pv') && (
+        <div className="mt-3 border-t border-sidebar-border pt-1" aria-label="PV navigation">
+          <p
+            className={cn(
+              'px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground',
+              collapsed && 'sr-only',
+            )}
+          >
+            PV
+          </p>
+          <div className="space-y-1">
+            {pvSections.map((section) => (
+              <PVSection key={section.id} section={section} collapsed={collapsed} onNavigate={onNavigate} />
+            ))}
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -197,13 +260,15 @@ export function AppSidebar({
   onCollapsedChange,
   edcSections,
   ctmsSections,
+  pvSections,
   showCTMS,
+  showPV,
   activeModule,
   onModuleChange = () => undefined,
   mobileOpen = false,
   onMobileOpenChange = () => undefined,
 }: AppSidebarProps) {
-  const moduleLabel = activeModule === 'ctms' ? 'CTMS' : 'EDC'
+  const moduleLabel = activeModule === 'ctms' ? 'CTMS' : activeModule === 'pv' ? 'PV' : 'EDC'
 
   const moduleSwitcher = (mobile = false) => (
     <div className={cn('border-b border-sidebar-border px-3 py-2', mobile && 'px-0')}>
@@ -230,6 +295,7 @@ export function AppSidebar({
           >
             <option value="edc">EDC</option>
             <option value="ctms" disabled={!showCTMS}>CTMS{!showCTMS ? ' (Unavailable)' : ''}</option>
+            <option value="pv" disabled={!showPV}>PV{!showPV ? ' (Unavailable)' : ''}</option>
           </select>
         </label>
       )}
@@ -276,7 +342,9 @@ export function AppSidebar({
             collapsed={collapsed}
             edcSections={edcSections}
             ctmsSections={ctmsSections}
+            pvSections={pvSections}
             showCTMS={showCTMS}
+            showPV={showPV}
             activeModule={activeModule}
           />
         </nav>
@@ -304,7 +372,9 @@ export function AppSidebar({
               collapsed={false}
               edcSections={edcSections}
               ctmsSections={ctmsSections}
+              pvSections={pvSections}
               showCTMS={showCTMS}
+              showPV={showPV}
               activeModule={activeModule}
               onNavigate={() => onMobileOpenChange(false)}
             />

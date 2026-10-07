@@ -12,12 +12,19 @@ import {
   normalizeCTMSCapabilities,
   unavailableCTMSCapabilities,
 } from '@/features/ctms'
+import {
+  PV_DISABLED_MANIFEST,
+  normalizePVCapabilities,
+  unavailablePVCapabilities,
+  type PVCapabilityState,
+} from '@/features/pv'
 import { PERMISSIONS } from '@/lib/permissions'
 import { useAuthStore } from '@/lib/auth'
 import { ThemeProvider } from '@/lib/theme'
 import type { AppModule } from '@/lib/module-context'
 
 const mockUseCTMSCapabilityState = vi.hoisted(() => vi.fn())
+const mockUsePVCapabilityState = vi.hoisted(() => vi.fn())
 const mockUsePermission = vi.hoisted(() => vi.fn())
 const mockNavigate = vi.hoisted(() => vi.fn())
 const mockLogout = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
@@ -25,6 +32,11 @@ const mockLogout = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 vi.mock('@/features/ctms', async () => {
   const actual = await vi.importActual<typeof import('@/features/ctms')>('@/features/ctms')
   return { ...actual, useCTMSCapabilityState: mockUseCTMSCapabilityState }
+})
+
+vi.mock('@/features/pv', async () => {
+  const actual = await vi.importActual<typeof import('@/features/pv')>('@/features/pv')
+  return { ...actual, usePVCapabilityState: mockUsePVCapabilityState }
 })
 
 vi.mock('@/lib/permissions', async () => {
@@ -86,20 +98,32 @@ const disabledState = normalizeCTMSCapabilities({
 })
 const unavailableState = unavailableCTMSCapabilities(new Error('capability service unavailable'))
 
+const pvReadyState = normalizePVCapabilities({
+  module: 'PV',
+  enabled: true,
+  phase: 1,
+  capabilities: ['safety_case_intake', 'safety_dashboards', 'safety_exports', 'shared_audit'],
+})
+const pvDisabledState = normalizePVCapabilities(PV_DISABLED_MANIFEST)
+const pvUnavailableState = unavailablePVCapabilities(new Error('safety capability service unavailable'))
+
 function renderResolvedSidebar(
   state: typeof readyState,
   permissions: readonly string[],
   scope = { studyId: 'study-1', siteId: 'site-1' },
   activeModule?: AppModule,
+  pvState: PVCapabilityState = pvDisabledState,
 ) {
-  const model = resolveNavigationModel(state, permissions, scope)
+  const model = resolveNavigationModel(state, pvState, permissions, scope)
   return render(
     <AppSidebar
       collapsed={false}
       onCollapsedChange={vi.fn()}
       edcSections={model.edcSections}
       ctmsSections={model.ctmsSections}
+      pvSections={model.pvSections}
       showCTMS={state.status === 'ready' && permissions.includes(PERMISSIONS.CTMS_OPERATIONAL_DATA_READ)}
+      showPV={pvState.status === 'ready' && permissions.includes(PERMISSIONS.PV_SAFETY_CASE_READ)}
       activeModule={activeModule}
     />,
   )
@@ -147,7 +171,7 @@ describe('AppSidebar', () => {
   it('reports module changes from the selector', async () => {
     const user = userEvent.setup()
     const onModuleChange = vi.fn()
-    const model = resolveNavigationModel(readyState, allPermissions, { studyId: 'study-1', siteId: 'site-1' })
+    const model = resolveNavigationModel(readyState, pvDisabledState, allPermissions, { studyId: 'study-1', siteId: 'site-1' })
 
     render(
       <AppSidebar
@@ -155,7 +179,9 @@ describe('AppSidebar', () => {
         onCollapsedChange={vi.fn()}
         edcSections={model.edcSections}
         ctmsSections={model.ctmsSections}
+        pvSections={model.pvSections}
         showCTMS
+        showPV={false}
         activeModule="edc"
         onModuleChange={onModuleChange}
       />,
@@ -177,16 +203,44 @@ describe('AppSidebar', () => {
     expect(screen.queryByText('CTMS')).not.toBeInTheDocument()
   })
 
+  it('renders PV navigation and a selectable PV option when PV is ready and the user may read safety cases', () => {
+    renderResolvedSidebar(readyState, allPermissions, undefined, 'pv', pvReadyState)
+
+    expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('pv')
+    expect(screen.getByLabelText('PV navigation')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Cases' })).toBeInTheDocument()
+
+    const pvOption = screen.getByRole('option', { name: 'PV' }) as HTMLOptionElement
+    expect(pvOption.disabled).toBe(false)
+  })
+
+  it.each([
+    ['disabled', pvDisabledState],
+    ['unavailable', pvUnavailableState],
+  ] as const)('keeps the PV affordance hidden and disabled while PV is %s', (_name, pvState) => {
+    renderResolvedSidebar(readyState, allPermissions, undefined, 'edc', pvState)
+
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('edc')
+    expect(screen.queryByLabelText('PV navigation')).not.toBeInTheDocument()
+
+    const pvOption = screen.getByRole('option', { name: /^PV/ }) as HTMLOptionElement
+    expect(pvOption.disabled).toBe(true)
+  })
+
   it('uses compact collapse semantics and labels collapsed links with tooltips', async () => {
     const onCollapsedChange = vi.fn()
-    const model = resolveNavigationModel(readyState, allPermissions, { studyId: 'study-1', siteId: 'site-1' })
+    const model = resolveNavigationModel(readyState, pvDisabledState, allPermissions, { studyId: 'study-1', siteId: 'site-1' })
     render(
       <AppSidebar
         collapsed
         onCollapsedChange={onCollapsedChange}
         edcSections={model.edcSections}
         ctmsSections={model.ctmsSections}
+        pvSections={model.pvSections}
         showCTMS
+        showPV={false}
       />,
     )
 
@@ -200,6 +254,7 @@ describe('AppSidebar', () => {
 describe('AppShell sidebar integration', () => {
   beforeEach(() => {
     mockUseCTMSCapabilityState.mockReturnValue(disabledState)
+    mockUsePVCapabilityState.mockReturnValue(pvDisabledState)
     mockUsePermission.mockReturnValue(false)
     useAuthStore.setState({
       user: {

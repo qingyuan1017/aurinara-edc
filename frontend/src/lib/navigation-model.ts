@@ -1,6 +1,8 @@
 import { Bell, BookOpen, Building2, CheckCircle2, CircleHelp, FileText, LayoutDashboard, ScrollText, Search, Settings, Sparkles, Stethoscope, Upload, Users, type LucideIcon } from 'lucide-react'
 import type { CTMSCapabilityState, CTMSNavigationSection, CTMSNavigationItem } from '@/features/ctms'
 import { resolveCTMSNavigation } from '@/features/ctms'
+import type { PVCapabilityState, PVNavigationSection, PVNavigationItem } from '@/features/pv'
+import { resolvePVNavigation } from '@/features/pv'
 
 /** Search state accepted by TanStack Router link adapters. */
 export type SearchState = Record<string, unknown>
@@ -35,9 +37,21 @@ export interface CTMSNavigationViewSection extends Omit<CTMSNavigationSection, '
   readonly items: readonly CTMSNavigationViewItem[]
 }
 
+export interface PVNavigationViewItem extends PVNavigationItem {
+  /** PV links intentionally retain the current route search state. */
+  readonly search: SearchPreserver
+  /** PV destinations match descendants of their registered route. */
+  readonly activeOptions: { readonly exact: false }
+}
+
+export interface PVNavigationViewSection extends Omit<PVNavigationSection, 'items'> {
+  readonly items: readonly PVNavigationViewItem[]
+}
+
 export interface NavigationModel {
   readonly edcSections: readonly NavigationSection[]
   readonly ctmsSections: readonly CTMSNavigationViewSection[]
+  readonly pvSections: readonly PVNavigationViewSection[]
 }
 
 /** The same EDC destinations previously defined in AppShell, grouped for presentation. */
@@ -87,6 +101,7 @@ export function preserveCurrentSearch(previous: SearchState): SearchState {
  */
 export function resolveNavigationModel(
   state: CTMSCapabilityState,
+  pvState: PVCapabilityState,
   permissions: readonly string[],
   scope: { readonly studyId?: string | null; readonly siteId?: string | null } = {},
 ): NavigationModel {
@@ -99,9 +114,19 @@ export function resolveNavigationModel(
     })),
   }))
 
+  const pvSections = resolvePVNavigation(pvState, permissions, scope).map((section) => ({
+    ...section,
+    items: section.items.map((item) => ({
+      ...item,
+      search: preserveCurrentSearch,
+      activeOptions: { exact: false as const },
+    })),
+  }))
+
   return {
     edcSections: EDC_NAVIGATION_SECTIONS,
     ctmsSections,
+    pvSections,
   }
 }
 

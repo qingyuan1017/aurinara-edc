@@ -1,14 +1,14 @@
 import { create } from 'zustand'
 
-/** The two top-level product modules a user can work in. */
-export type AppModule = 'edc' | 'ctms'
+/** The top-level product modules a user can work in. */
+export type AppModule = 'edc' | 'ctms' | 'pv'
 
 const STORAGE_KEY = 'active_module'
 
 function readStoredModule(): AppModule | null {
   try {
     const value = localStorage.getItem(STORAGE_KEY)
-    return value === 'edc' || value === 'ctms' ? value : null
+    return value === 'edc' || value === 'ctms' || value === 'pv' ? value : null
   } catch {
     return null
   }
@@ -41,7 +41,7 @@ interface ModuleState {
 }
 
 /**
- * Module store — tracks which product module (EDC or CTMS) the user has
+ * Module store — tracks which product module (EDC, CTMS, or PV) the user has
  * selected. The choice is persisted to localStorage so a returning user's
  * preference is remembered, while `resolvedThisSession` lets the app re-show
  * the picker once per fresh login.

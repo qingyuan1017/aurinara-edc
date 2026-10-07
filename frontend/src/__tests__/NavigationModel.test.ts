@@ -11,6 +11,7 @@ import {
   normalizeCTMSCapabilities,
   unavailableCTMSCapabilities,
 } from '@/features/ctms'
+import { PV_DISABLED_MANIFEST, normalizePVCapabilities } from '@/features/pv'
 import { PERMISSIONS } from '@/lib/permissions'
 
 const allPermissions = Object.values(PERMISSIONS)
@@ -21,6 +22,7 @@ const readyState = normalizeCTMSCapabilities({
   capabilities: [...CTMS_PHASE_CAPABILITIES[3]],
   platform_capabilities: { health_observability: true },
 })
+const disabledPVState = normalizePVCapabilities(PV_DISABLED_MANIFEST)
 
 describe('navigation model adapter', () => {
   it('groups every existing EDC target without changing its route', () => {
@@ -38,7 +40,7 @@ describe('navigation model adapter', () => {
   })
 
   it('delegates CTMS filtering and preserves section IDs, item IDs, and descendant matching', () => {
-    const model = resolveNavigationModel(readyState, allPermissions, {
+    const model = resolveNavigationModel(readyState, disabledPVState, allPermissions, {
       studyId: 'study/one',
       siteId: 'site one',
     })
@@ -65,13 +67,37 @@ describe('navigation model adapter', () => {
     ['disabled', normalizeCTMSCapabilities({ module: 'CTMS', enabled: false, phase: 0, capabilities: [] })],
     ['unavailable', unavailableCTMSCapabilities(new Error('offline'))],
   ] as const)('keeps EDC navigation while hiding CTMS when capability state is %s', (_name, state) => {
-    const model = resolveNavigationModel(state, [PERMISSIONS.CTMS_OPERATIONAL_DATA_READ], {
+    const model = resolveNavigationModel(state, disabledPVState, [PERMISSIONS.CTMS_OPERATIONAL_DATA_READ], {
       studyId: 'study-1',
       siteId: 'site-1',
     })
 
     expect(model.edcSections.flatMap((section) => section.items)).toHaveLength(EDC_NAV_ITEMS.length)
     expect(model.ctmsSections).toEqual([])
+    expect(model.pvSections).toEqual([])
+  })
+
+  it('resolves PV sections with view-model adapters when PV is ready and the user may read safety cases', () => {
+    const pvReadyState = normalizePVCapabilities({
+      module: 'PV',
+      enabled: true,
+      phase: 1,
+      capabilities: ['safety_case_intake', 'safety_dashboards', 'safety_exports', 'shared_audit'],
+    })
+    const model = resolveNavigationModel(readyState, pvReadyState, allPermissions, {
+      studyId: 'study-1',
+      siteId: 'site-1',
+    })
+    const pvItems = model.pvSections.flatMap((section) => section.items)
+
+    expect(pvItems.map((item) => item.id)).toEqual(['dashboard', 'cases', 'exports', 'audit', 'siteDashboard'])
+    expect(pvItems.every((item) => item.activeOptions.exact === false)).toBe(true)
+    expect(pvItems.every((item) => item.search === preserveCurrentSearch)).toBe(true)
+    expect(pvItems.find((item) => item.id === 'dashboard')?.to).toBe('/studies/study-1/pv/dashboard')
+    expect(pvItems.find((item) => item.id === 'siteDashboard')?.to).toBe('/sites/site-1/pv/dashboard')
+    // PV is purely additive: EDC and CTMS navigation are unchanged.
+    expect(model.edcSections.flatMap((section) => section.items)).toHaveLength(EDC_NAV_ITEMS.length)
+    expect(model.ctmsSections.flatMap((section) => section.items).length).toBeGreaterThan(0)
   })
 
   it('provides identity search propagation for shell navigation links', () => {
@@ -86,7 +112,7 @@ describe('navigation model adapter', () => {
       phase: 3,
       capabilities: [CTMS_CAPABILITY_CODES.operationalDashboards],
     })
-    const model = resolveNavigationModel(state, [PERMISSIONS.CTMS_OPERATIONAL_DATA_READ], { studyId: 'study-1' })
+    const model = resolveNavigationModel(state, disabledPVState, [PERMISSIONS.CTMS_OPERATIONAL_DATA_READ], { studyId: 'study-1' })
 
     expect(model.ctmsSections.flatMap((section) => section.items).map((item) => item.id)).toEqual(['studyWorkspace'])
   })

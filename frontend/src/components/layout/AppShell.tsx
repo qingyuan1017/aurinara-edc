@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { useAuthStore } from '@/lib/auth'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
 import { useCTMSCapabilityState } from '@/features/ctms'
+import { usePVCapabilityState } from '@/features/pv'
 import { useStudyContext } from '@/lib/study-context'
 import { useModuleStore, type AppModule } from '@/lib/module-context'
 import { resolveNavigationModel } from '@/lib/navigation-model'
@@ -25,6 +26,8 @@ export function AppShell() {
   const logout = useAuthStore((s) => s.logout)
   const ctmsState = useCTMSCapabilityState()
   const canReadCTMS = usePermission(PERMISSIONS.CTMS_OPERATIONAL_DATA_READ)
+  const pvState = usePVCapabilityState()
+  const canReadPV = usePermission(PERMISSIONS.PV_SAFETY_CASE_READ)
   const { selectedStudyId, selectedSiteId } = useStudyContext()
   const setModule = useModuleStore((s) => s.setModule)
   const pathname = useLocation().pathname
@@ -33,15 +36,20 @@ export function AppShell() {
   // The URL is authoritative for the visible hierarchy, including direct
   // links and browser refreshes. The store remembers the user's last choice
   // for consumers that need it, while every module switch lands on its root.
-  const activeModule: AppModule = pathname.includes('/ctms') ? 'ctms' : 'edc'
+  const activeModule: AppModule = pathname.includes('/pv')
+    ? 'pv'
+    : pathname.includes('/ctms')
+      ? 'ctms'
+      : 'edc'
 
-  // Navigation is a convenience filter only; every CTMS API route remains
-  // server-authorized and direct navigation renders Access Denied.
-  const navigationModel = resolveNavigationModel(ctmsState, user?.permissions ?? [], {
+  // Navigation is a convenience filter only; every CTMS and PV API route
+  // remains server-authorized and direct navigation renders Access Denied.
+  const navigationModel = resolveNavigationModel(ctmsState, pvState, user?.permissions ?? [], {
     studyId: selectedStudyId,
     siteId: selectedSiteId,
   })
   const showCTMS = ctmsState.status === 'ready' && canReadCTMS
+  const showPV = pvState.status === 'ready' && canReadPV
 
   const handleLogout = async () => {
     await logout()
@@ -50,7 +58,7 @@ export function AppShell() {
 
   const handleModuleChange = (module: AppModule) => {
     setModule(module)
-    navigate({ to: module === 'ctms' ? '/ctms' : '/' })
+    navigate({ to: module === 'ctms' ? '/ctms' : module === 'pv' ? '/pv' : '/' })
   }
 
   const displayName = user
@@ -67,7 +75,9 @@ export function AppShell() {
         onCollapsedChange={(collapsed) => setSidebarOpen(!collapsed)}
         edcSections={navigationModel.edcSections}
         ctmsSections={navigationModel.ctmsSections}
+        pvSections={navigationModel.pvSections}
         showCTMS={showCTMS}
+        showPV={showPV}
         activeModule={activeModule}
         onModuleChange={handleModuleChange}
         mobileOpen={mobileSidebarOpen}
