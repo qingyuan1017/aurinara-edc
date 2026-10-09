@@ -63,6 +63,19 @@ def _instance_payload(form_instance: Any) -> dict[str, Any]:
                     "default_value": field.default_value,
                     "help_text": field.help_text,
                     "unit": field.unit,
+                    # Choice controls (dropdown/radio/checkbox/...) render their
+                    # options from the linked codelist's items. Project them as
+                    # {value: code, label} ordered by display order so the
+                    # data-entry renderer can populate the control.
+                    "codelist_items": [
+                        {"value": item.code, "label": item.label}
+                        for item in sorted(
+                            field.codelist.items,
+                            key=lambda i: (i.display_order, str(i.id)),
+                        )
+                    ]
+                    if field.codelist is not None
+                    else [],
                 }
                 for field in section.fields
             ],

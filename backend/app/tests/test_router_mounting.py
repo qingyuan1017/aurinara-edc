@@ -60,6 +60,7 @@ def _methods(paths: dict[str, dict], path: str) -> set[str]:
         (f"{API_V1}/designer/versions/{{version_id}}/subject-phases", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/schedule-of-assessment", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/cycles", "post"),
+        (f"{API_V1}/designer/versions/{{version_id}}/cycles", "get"),
         (f"{API_V1}/designer/versions/{{version_id}}/visits", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/arms", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/crf-access", "post"),

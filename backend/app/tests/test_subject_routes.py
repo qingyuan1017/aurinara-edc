@@ -69,6 +69,22 @@ async def async_engine():
         UserRole as UserRoleModel,
     )
 
+    # Casebook reads visit and form instances; create those tables (and the
+    # definition tables they reference) too. Their JSONB columns use a SQLite
+    # JSON variant so they render on the in-memory engine.
+    from app.models.designer.form_metadata import (
+        FieldDefinition as FieldDefinitionModel,
+    )
+    from app.models.designer.form_metadata import (
+        FormDefinition as FormDefinitionModel,
+    )
+    from app.models.designer.form_metadata import (
+        FormSection as FormSectionModel,
+    )
+    from app.models.designer.visit import VisitDefinition as VisitDefinitionModel
+    from app.models.edc.form_data import FormInstance as FormInstanceModel
+    from app.models.edc.visit import VisitInstance as VisitInstanceModel
+
     tables = [
         m.__table__
         for m in (
@@ -83,6 +99,12 @@ async def async_engine():
             StudySiteUserModel,
             SubjectModel,
             AuditEvent,
+            VisitDefinitionModel,
+            VisitInstanceModel,
+            FormDefinitionModel,
+            FormSectionModel,
+            FieldDefinitionModel,
+            FormInstanceModel,
         )
     ]
     async with engine.begin() as conn:

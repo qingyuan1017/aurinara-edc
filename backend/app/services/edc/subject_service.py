@@ -28,9 +28,11 @@ from app.api.deps import PaginationParams
 from app.api.pagination import paginate
 from app.core.audit import audit_service
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
+from app.models.edc.form_data import FormInstance
 from app.models.edc.site import Site
 from app.models.edc.study import StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitInstance
 from app.schemas.edc.subject import SubjectCreate
 from app.schemas.shared.base import PaginatedResponse
 
@@ -289,13 +291,66 @@ class SubjectService:
         """
         subject = await self.get_subject(session, subject_id)
 
-        # Visit/form instances are populated by later tasks (10.3, 11.6).
+        # Load the subject's visit instances (scheduled + unscheduled) ordered
+        # by visit date then creation, with their source definition eagerly
+        # available (VisitInstance.visit_definition is a selectin relationship).
+        visit_result = await session.execute(
+            select(VisitInstance)
+            .where(VisitInstance.subject_id == subject.id)
+            .order_by(VisitInstance.visit_date, VisitInstance.created_at)
+        )
+        visit_instances = list(visit_result.scalars().all())
+
+        # Load the subject's form instances; group them under their owning visit
+        # instance. form_definition is eagerly loaded (selectin) for the name.
+        form_result = await session.execute(
+            select(FormInstance)
+            .where(FormInstance.subject_id == subject.id)
+            .order_by(FormInstance.created_at)
+        )
+        forms_by_visit: dict[UUID | None, list[dict]] = {}
+        for form in form_result.scalars().all():
+            definition = form.form_definition
+            entry = {
+                "form_instance_id": form.id,
+                "form_definition_id": form.form_definition_id,
+                "name": getattr(definition, "name", None),
+                "status": str(form.status),
+            }
+            forms_by_visit.setdefault(form.visit_instance_id, []).append(entry)
+
+        visits: list[dict] = []
+        for visit in visit_instances:
+            visits.append(
+                {
+                    "visit_instance_id": visit.id,
+                    "visit_definition_id": visit.visit_definition_id,
+                    "name": visit.name,
+                    "status": str(visit.status),
+                    "forms": forms_by_visit.pop(visit.id, []),
+                }
+            )
+
+        # Surface any form instances not tied to a visit instance as a trailing
+        # visit-less group so they are not silently dropped from the casebook.
+        orphan_forms = forms_by_visit.pop(None, [])
+        if orphan_forms:
+            visits.append(
+                {
+                    "visit_instance_id": None,
+                    "visit_definition_id": None,
+                    "name": "Unscheduled forms",
+                    "status": "",
+                    "forms": orphan_forms,
+                }
+            )
+
         return {
             "subject_id": subject.id,
             "subject_number": subject.subject_number,
             "status": subject.status,
             "study_version_id": subject.study_version_id,
-            "visits": [],
+            "visits": visits,
         }
 
     # ------------------------------------------------------------------

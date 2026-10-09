@@ -8,6 +8,7 @@ Satisfies Requirements:
          Draft_Design.
 
 Endpoints:
+  - GET  /versions/{version_id}/cycles   list the version's cycle definitions
   - POST /versions/{version_id}/cycles   create a cycle definition
 """
 
@@ -61,6 +62,25 @@ async def create_cycle(
         actor_id=current_user.id,
     )
     return CycleDefinitionResponse.model_validate(cycle)
+
+
+@router.get(
+    "/{version_id}/cycles", response_model=list[CycleDefinitionResponse]
+)
+async def list_cycles(
+    version_id: UUID,
+    session: DbSession,
+    current_user: Annotated[User, Depends(require_permission("designer.cycle.read"))],
+) -> list[CycleDefinitionResponse]:
+    """List the Cycle_Definitions for a Design_Version.
+
+    Permission: designer.cycle.read (Designer_Role only)
+    """
+    version = await study_version_service.get_version(session, version_id)
+    return [
+        CycleDefinitionResponse.model_validate(cycle)
+        for cycle in await cycle_service.list_cycle_definitions(session, version.id)
+    ]
 
 
 __all__ = ["router"]

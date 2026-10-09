@@ -1,9 +1,9 @@
 ﻿import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { PermissionGuard } from '@/components/guards/PermissionGuard'
 import { PERMISSIONS } from '@/lib/permissions'
-import type { CycleDefinitionCreate, CycleDefinitionResponse } from '@/api/model'
+import type { CycleDefinitionCreate, CycleDefinitionResponse, VisitDefinitionResponse } from '@/api/model'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,21 +14,26 @@ import { DraftGate, getApiErrorMessage } from './shared'
 function CyclesEditor({ versionId }: { versionId: string }) {
   const [name, setName] = useState('')
   const [displayOrder, setDisplayOrder] = useState(1)
-  const [visitIds, setVisitIds] = useState('')
+  const [visitIds, setVisitIds] = useState<string[]>([])
   const [created, setCreated] = useState<CycleDefinitionResponse[]>([])
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
+  const visitsQuery = useQuery({
+    queryKey: ['designer-visits', versionId],
+    queryFn: async () => (await api.get<VisitDefinitionResponse[]>(`/designer/versions/${versionId}/visits`)).data,
+  })
+  const visits = visitsQuery.data ?? []
+
   const create = useMutation({
     mutationFn: async () => {
       if (!name.trim()) throw new Error('A cycle name is required.')
-      const ids = visitIds.split(',').map((value) => value.trim()).filter(Boolean)
-      const payload: CycleDefinitionCreate = { name: name.trim(), display_order: displayOrder, visit_definition_ids: ids.length ? ids : undefined }
+      const payload: CycleDefinitionCreate = { name: name.trim(), display_order: displayOrder, visit_definition_ids: visitIds.length ? visitIds : undefined }
       return (await api.post<CycleDefinitionResponse>(`/designer/versions/${versionId}/cycles`, payload)).data
     },
     onSuccess: (data) => {
       setCreated((prev) => [...prev, data])
-      setName(''); setVisitIds(''); setDisplayOrder((order) => order + 1)
+      setName(''); setVisitIds([]); setDisplayOrder((order) => order + 1)
       setError(''); setMessage(`Cycle "${data.name}" added.`)
     },
     onError: (err) => { setError(getApiErrorMessage(err, 'Could not create the cycle.')); setMessage('') },
@@ -53,8 +58,22 @@ function CyclesEditor({ versionId }: { versionId: string }) {
               <FormField label="Display order" name="cycle-order" required>
                 <Input type="number" min={1} max={999} value={displayOrder} onChange={(event) => setDisplayOrder(Number(event.target.value))} required />
               </FormField>
-              <FormField label="Visit definition IDs" name="cycle-visits" description="Optional comma-separated visit definition IDs assigned to this cycle.">
-                <Input value={visitIds} onChange={(event) => setVisitIds(event.target.value)} placeholder="uuid-1, uuid-2" />
+              <FormField label="Member visits" name="cycle-visits" description="Optional visits assigned to this cycle. Hold Ctrl/Cmd to select more than one.">
+                <>
+                  <select
+                    multiple
+                    aria-label="Member visits"
+                    value={visitIds}
+                    onChange={(event) => setVisitIds(Array.from(event.target.selectedOptions, (option) => option.value))}
+                    disabled={visitsQuery.isLoading || !visits.length}
+                    className="min-h-24 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                  >
+                    {visits.map((visit) => (
+                      <option key={visit.id} value={visit.id}>{visit.visit_number} · {visit.name}</option>
+                    ))}
+                  </select>
+                  {!visitsQuery.isLoading && !visits.length ? <p className="mt-1 text-xs text-muted-foreground">No visits defined yet. Add visits on the Visits page first.</p> : null}
+                </>
               </FormField>
               <FormActions pending={create.isPending} submitLabel="Add cycle" pendingLabel="Adding…" />
             </form>

@@ -71,6 +71,7 @@ export const PERMISSIONS = {
   DESIGNER_SUBJECT_PHASE_CONFIGURE: 'designer.subject_phase.configure',
   DESIGNER_SOA_READ: 'designer.soa.read',
   DESIGNER_SOA_CONFIGURE: 'designer.soa.configure',
+  DESIGNER_CYCLE_READ: 'designer.cycle.read',
   DESIGNER_CYCLE_CONFIGURE: 'designer.cycle.configure',
   DESIGNER_ARM_CONFIGURE: 'designer.arm.configure',
   DESIGNER_CRF_ACCESS_CONFIGURE: 'designer.crf_access.configure',

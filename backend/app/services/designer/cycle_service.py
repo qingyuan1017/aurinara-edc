@@ -143,6 +143,32 @@ class CycleService:
         )
         return cycle
 
+    async def list_cycle_definitions(
+        self,
+        session: AsyncSession,
+        design_version_id: UUID,
+    ) -> list[CycleDefinition]:
+        """List a version's Cycle_Definitions ordered by display order.
+
+        Reads are not audited (matching the other Designer list reads).
+
+        Args:
+            session: The active async session.
+            design_version_id: The owning Design_Version id.
+
+        Returns:
+            The version's CycleDefinitions ordered by ``display_order``.
+        """
+        result = await session.execute(
+            select(CycleDefinition)
+            .where(
+                CycleDefinition.study_version_id == design_version_id,
+                CycleDefinition.deleted_at.is_(None),
+            )
+            .order_by(CycleDefinition.display_order)
+        )
+        return list(result.scalars().all())
+
 
 # Module-level singleton for convenience
 cycle_service = CycleService()

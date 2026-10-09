@@ -11,6 +11,7 @@ Validates Requirements:
 
 import uuid
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -378,10 +379,16 @@ class TestGetCasebook:
     """Tests for SubjectService.get_casebook()."""
 
     async def test_get_casebook_returns_structure(self, service, mock_session):
-        """get_casebook returns the subject envelope with clinical status (Req 7.5)."""
+        """get_casebook returns the subject envelope with clinical status (Req 7.5).
+
+        With no visit or form instances the visit list is empty; the subject
+        lookup resolves via ``.scalars().first()`` while the visit/form queries
+        resolve via ``.scalars().all()``.
+        """
         subject = _make_subject(status=SubjectStatus.enrolled)
         mock_result = MagicMock()
         mock_result.scalars.return_value.first.return_value = subject
+        mock_result.scalars.return_value.all.return_value = []
         mock_session.execute = AsyncMock(return_value=mock_result)
 
         casebook = await service.get_casebook(mock_session, subject.id)
@@ -391,6 +398,54 @@ class TestGetCasebook:
         assert casebook["status"] == SubjectStatus.enrolled
         assert casebook["study_version_id"] == subject.study_version_id
         assert casebook["visits"] == []
+
+    async def test_get_casebook_includes_visit_instances_and_their_forms(
+        self, service, mock_session
+    ):
+        """Casebook surfaces the subject's visit instances with their forms (Req 7.5).
+
+        Regression: get_casebook previously returned an empty visit list even
+        when visit instances existed, so the subject casebook showed "no visits
+        scheduled" while Manage Visits listed them.
+        """
+        subject = _make_subject(status=SubjectStatus.enrolled)
+
+        visit = SimpleNamespace(
+            id=uuid.uuid4(),
+            visit_definition_id=uuid.uuid4(),
+            name="Baseline",
+            status="scheduled",
+            visit_date=None,
+            created_at=datetime.now(UTC),
+        )
+        form = SimpleNamespace(
+            id=uuid.uuid4(),
+            visit_instance_id=visit.id,
+            form_definition_id=uuid.uuid4(),
+            form_definition=SimpleNamespace(name="Vitals"),
+            status="Not Started",
+            created_at=datetime.now(UTC),
+        )
+
+        subject_result = MagicMock()
+        subject_result.scalars.return_value.first.return_value = subject
+        visits_result = MagicMock()
+        visits_result.scalars.return_value.all.return_value = [visit]
+        forms_result = MagicMock()
+        forms_result.scalars.return_value.all.return_value = [form]
+        mock_session.execute = AsyncMock(
+            side_effect=[subject_result, visits_result, forms_result]
+        )
+
+        casebook = await service.get_casebook(mock_session, subject.id)
+
+        assert len(casebook["visits"]) == 1
+        entry = casebook["visits"][0]
+        assert entry["visit_instance_id"] == visit.id
+        assert entry["name"] == "Baseline"
+        assert len(entry["forms"]) == 1
+        assert entry["forms"][0]["form_instance_id"] == form.id
+        assert entry["forms"][0]["name"] == "Vitals"
 
     async def test_get_casebook_missing_subject_raises_not_found(
         self, service, mock_session

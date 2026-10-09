@@ -20241,6 +20241,57 @@
             }
           }
         }
+      },
+      "get": {
+        "tags": [
+          "designer-cycles"
+        ],
+        "summary": "List Cycles",
+        "description": "List the Cycle_Definitions for a Design_Version.\n\nPermission: designer.cycle.read (Designer_Role only)",
+        "operationId": "list_cycles_api_v1_designer_versions__version_id__cycles_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CycleDefinitionResponse"
+                  },
+                  "title": "Response List Cycles Api V1 Designer Versions  Version Id  Cycles Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/designer/versions/{version_id}/visits": {
