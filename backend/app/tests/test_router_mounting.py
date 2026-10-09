@@ -175,9 +175,7 @@ def test_ctms_paths_remain_under_ctms_prefix(paths: dict[str, dict]) -> None:
 
 def test_pv_paths_remain_under_pv_prefix(paths: dict[str, dict]) -> None:
     """Every PV route stays under ``/api/v1/pv/...``."""
-    pv_paths = [
-        path for path in paths if path.startswith(f"{API_V1}/pv")
-    ]
+    pv_paths = [path for path in paths if path.startswith(f"{API_V1}/pv")]
     assert pv_paths, "expected at least one PV route to be mounted"
     for path in pv_paths:
         assert path.startswith(f"{API_V1}/pv/"), (
