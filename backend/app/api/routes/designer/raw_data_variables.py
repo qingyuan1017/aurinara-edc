@@ -63,6 +63,8 @@ async def create_raw_data_variable(
         name=body.name,
         data_type=body.data_type,
         attributes=body.attributes,
+        label=body.label,
+        suffix=body.suffix,
         actor_id=current_user.id,
     )
     return RawDataVariableSettingResponse.model_validate(setting)

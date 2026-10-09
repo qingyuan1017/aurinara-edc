@@ -1,8 +1,9 @@
 """Versioned Designer API route package.
 
 Aggregates design-authoring resource routers (study versions, forms/fields,
-edit checks, codelists, subject phases, schedule of assessment, cycles, arms,
-CRF access, raw-data variables, coding settings) into a single ``router``.
+form dependencies, edit checks, codelists, subject phases, schedule of
+assessment, arms, visits, visit dependencies, CRF access, raw-data variables,
+coding settings) into a single ``router``.
 The aggregate is mounted below ``/api/v1`` with a ``/designer`` prefix, keeping
 design-time routes isolated from the operational EDC, CTMS, and PV routes so
 module ownership stays explicit.
@@ -19,12 +20,14 @@ from app.api.routes.designer.codelists import (
 )
 from app.api.routes.designer.coding_settings import router as coding_settings_router
 from app.api.routes.designer.crf_access import router as crf_access_router
-from app.api.routes.designer.cycles import router as cycles_router
 from app.api.routes.designer.edit_checks import (
     router as edit_checks_router,
 )
 from app.api.routes.designer.edit_checks import (
     study_router as edit_checks_study_router,
+)
+from app.api.routes.designer.form_dependencies import (
+    router as form_dependencies_router,
 )
 from app.api.routes.designer.forms import (
     fields_router,
@@ -42,6 +45,9 @@ from app.api.routes.designer.study_versions import (
     versions_router,
 )
 from app.api.routes.designer.subject_phases import router as subject_phases_router
+from app.api.routes.designer.visit_dependencies import (
+    router as visit_dependencies_router,
+)
 from app.api.routes.designer.visits import router as visits_router
 
 DESIGNER_ROUTE_PACKAGE = "app.api.routes.designer"
@@ -56,14 +62,15 @@ for resource_router in (
     study_forms_router,
     forms_router,
     fields_router,
+    form_dependencies_router,
     edit_checks_study_router,
     edit_checks_router,
     study_codelists_router,
     codelists_router,
     subject_phases_router,
     schedule_of_assessment_router,
-    cycles_router,
     visits_router,
+    visit_dependencies_router,
     arms_router,
     crf_access_router,
     raw_data_variables_router,

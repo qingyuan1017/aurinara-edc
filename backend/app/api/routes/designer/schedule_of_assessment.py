@@ -4,8 +4,8 @@ Handlers for authoring the ``Schedule_of_Assessment`` matrix inside a
 Draft_Design, delegating to the Designer ``schedule_of_assessment_service``.
 
 Satisfies Requirements:
-  - 4.1: Persist a schedule of assessment that maps forms/procedures to visit and
-         cycle definitions within a design version.
+  - 4.1: Persist a schedule of assessment that maps forms/procedures to visit
+         definitions within a design version.
 
 Endpoints:
   - GET  /versions/{version_id}/schedule-of-assessment   get the version's SoA
@@ -54,9 +54,7 @@ async def get_schedule_of_assessment(
     Permission: designer.soa.read (Designer_Role only)
     """
     await study_version_service.get_version(session, version_id)
-    soa = await schedule_of_assessment_service.get_schedule_of_assessment(
-        session, version_id
-    )
+    soa = await schedule_of_assessment_service.get_schedule_of_assessment(session, version_id)
     return ScheduleOfAssessmentResponse.model_validate(soa)
 
 
@@ -83,7 +81,6 @@ async def create_schedule_of_assessment(
             form_definition_id=entry.form_definition_id,
             procedure_name=entry.procedure_name,
             visit_definition_id=entry.visit_definition_id,
-            cycle_definition_id=entry.cycle_definition_id,
             display_order=entry.display_order,
         )
         for entry in body.entries

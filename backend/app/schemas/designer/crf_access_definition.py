@@ -22,13 +22,20 @@ from app.schemas.shared.base import (
 
 
 class CrfAccessDefinitionCreate(BaseCreateSchema):
-    """Request body for creating a Crf_Access_Definition in a Draft_Design."""
+    """Request body for creating a Crf_Access_Definition in a Draft_Design.
+
+    ``blinded`` applies at whichever scope the grant expresses (form or field).
+    ``unblind_role`` optionally names a role permitted to unblind; the service
+    requires ``blinded`` to be True when ``unblind_role`` is set.
+    """
 
     role: str = Field(..., min_length=1, max_length=100)
     can_read: bool = False
     can_write: bool = False
     form_definition_id: UUID | None = None
     field_definition_id: UUID | None = None
+    blinded: bool = False
+    unblind_role: str | None = Field(None, max_length=100)
 
 
 class CrfAccessDefinitionResponse(BaseSchema):
@@ -41,6 +48,8 @@ class CrfAccessDefinitionResponse(BaseSchema):
     can_write: bool
     form_definition_id: UUID | None = None
     field_definition_id: UUID | None = None
+    blinded: bool = False
+    unblind_role: str | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime | None = None
 

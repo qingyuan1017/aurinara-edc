@@ -1,13 +1,10 @@
 """Designer-owned ORM model boundary."""
 
-from app.models.designer.arm_definition import ArmDefinition
+from app.models.designer.arm_definition import ArmDefinition, arm_definition_visits
 from app.models.designer.coding_setting import CodingSetting
 from app.models.designer.crf_access_definition import CrfAccessDefinition
-from app.models.designer.cycle_definition import (
-    CycleDefinition,
-    cycle_definition_visits,
-)
 from app.models.designer.edit_check import EditCheck, ValidationResult
+from app.models.designer.form_dependency import FormDefinitionDependency
 from app.models.designer.form_metadata import (
     FieldDefinition,
     FormDefinition,
@@ -20,6 +17,7 @@ from app.models.designer.schedule_of_assessment import (
 )
 from app.models.designer.study_version import StudyVersion, StudyVersionStatus
 from app.models.designer.visit import VisitDefinition
+from app.models.designer.visit_dependency import VisitDefinitionDependency
 
 DESIGNER_MODEL_PACKAGE = "app.models.designer"
 
@@ -28,10 +26,10 @@ __all__ = [
     "ArmDefinition",
     "CodingSetting",
     "CrfAccessDefinition",
-    "CycleDefinition",
     "EditCheck",
     "FieldDefinition",
     "FormDefinition",
+    "FormDefinitionDependency",
     "FormSection",
     "RawDataVariableSetting",
     "ScheduleOfAssessment",
@@ -40,5 +38,6 @@ __all__ = [
     "StudyVersionStatus",
     "ValidationResult",
     "VisitDefinition",
-    "cycle_definition_visits",
+    "VisitDefinitionDependency",
+    "arm_definition_visits",
 ]

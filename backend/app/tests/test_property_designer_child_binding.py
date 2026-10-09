@@ -3,9 +3,9 @@
 # Feature: designer-edc-refactor, Property 8: Designer child binds to exactly one design version
 
 Property 8 (design.md): For all Designer child definitions (subject phase
-definitions, edit-check rules, codelists, visit definitions, cycles, arms, CRF
-access, raw-data variable settings, coding settings), each is associated with
-exactly one Design_Version.
+definitions, edit-check rules, codelists, visit definitions (including
+``visit_type='cycle'``), arms, CRF access, raw-data variable settings, coding
+settings), each is associated with exactly one Design_Version.
 
 This test asserts the binding invariant uniformly across *every* Designer child
 model: once persisted, each child references exactly one Design_Version through
@@ -17,9 +17,9 @@ stable across a round-trip read.
 The three primary children named by the task (subject phase definition →
 ``design_version_id`` R3.3, edit check → ``study_version_id`` R5.4, codelist →
 ``study_version_id`` R6.4) are exercised through their owning Designer services;
-the remaining children (form, visit, cycle, arm, SoA, CRF access, raw-data
-variable, coding setting) are exercised through direct ORM persistence so the
-single-version-binding invariant is checked for the full set of Designer
+the remaining children (form, visit, cycle-as-visit, arm, SoA, CRF access,
+raw-data variable, coding setting) are exercised through direct ORM persistence
+so the single-version-binding invariant is checked for the full set of Designer
 children enumerated by the property.
 
 **Validates: Requirements 3.3, 5.4, 6.4**
@@ -43,7 +43,6 @@ from app.models.designer.arm_definition import ArmDefinition
 from app.models.designer.codelist import Codelist
 from app.models.designer.coding_setting import CodingSetting
 from app.models.designer.crf_access_definition import CrfAccessDefinition
-from app.models.designer.cycle_definition import CycleDefinition
 from app.models.designer.edit_check import EditCheck
 from app.models.designer.form_metadata import FormDefinition
 from app.models.designer.raw_data_variable_setting import RawDataVariableSetting
@@ -293,8 +292,12 @@ def _build_children(version_id, name: str, order: int) -> list:
             visit_type="scheduled",
             display_order=order,
         ),
-        CycleDefinition(
-            study_version_id=version_id, name=name, display_order=order
+        VisitDefinition(
+            study_version_id=version_id,
+            name=f"{name}-cycle",
+            visit_number=order + 10000,
+            visit_type="cycle",
+            display_order=order,
         ),
         ArmDefinition(
             study_version_id=version_id, name=name, display_order=order

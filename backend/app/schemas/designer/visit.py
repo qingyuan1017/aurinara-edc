@@ -77,6 +77,11 @@ class VisitDefinitionCreate(BaseCreateSchema):
     )
     display_order: int = Field(..., description="Sort order within the schedule")
     is_required: bool = Field(True, description="Whether the visit is required")
+    repeat_min: int | None = Field(None, ge=0, description="Cycle-only: minimum repeat count")
+    repeat_max: int | None = Field(None, ge=0, description="Cycle-only: maximum repeat count")
+    cycle_length: int | None = Field(
+        None, ge=0, description="Cycle-only: nominal length in days of one iteration"
+    )
 
 
 class VisitDefinitionResponse(BaseSchema):
@@ -92,4 +97,7 @@ class VisitDefinitionResponse(BaseSchema):
     window_after: int | None = None
     display_order: int
     is_required: bool
+    repeat_min: int | None = None
+    repeat_max: int | None = None
+    cycle_length: int | None = None
     created_at: UtcDatetime

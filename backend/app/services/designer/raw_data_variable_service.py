@@ -42,6 +42,8 @@ class RawDataVariableService:
         name: str,
         data_type: str,
         attributes: dict[str, Any] | None = None,
+        label: str | None = None,
+        suffix: str | None = None,
         actor_id: UUID | None = None,
     ) -> RawDataVariableSetting:
         """Persist a Raw_Data_Variable_Setting within one Design_Version.
@@ -52,6 +54,8 @@ class RawDataVariableService:
             name: The variable name; 1-255 characters.
             data_type: The variable data type; 1-50 characters.
             attributes: Optional free-form, type-specific metadata.
+            label: Optional display label for a fixed variable.
+            suffix: Optional suffix applied for special variable types.
             actor_id: Optional actor UUID for the audit event.
 
         Returns:
@@ -67,21 +71,26 @@ class RawDataVariableService:
                 details={"field": "name"},
             )
         normalized_data_type = data_type.strip()
-        if not (
-            _DATA_TYPE_MIN_LENGTH
-            <= len(normalized_data_type)
-            <= _DATA_TYPE_MAX_LENGTH
-        ):
+        if not (_DATA_TYPE_MIN_LENGTH <= len(normalized_data_type) <= _DATA_TYPE_MAX_LENGTH):
             raise ValidationError(
                 "Raw-data variable data type must be 1 to 50 characters",
                 details={"field": "data_type"},
             )
+
+        normalized_label = label.strip() if label is not None else None
+        if normalized_label == "":
+            normalized_label = None
+        normalized_suffix = suffix.strip() if suffix is not None else None
+        if normalized_suffix == "":
+            normalized_suffix = None
 
         setting = RawDataVariableSetting(
             design_version_id=design_version_id,
             name=normalized_name,
             data_type=normalized_data_type,
             attributes=attributes or {},
+            label=normalized_label,
+            suffix=normalized_suffix,
         )
         session.add(setting)
         await session.flush()
@@ -92,7 +101,10 @@ class RawDataVariableService:
             entity_id=setting.id,
             action="create",
             module=Module.DESIGNER,
-            new_value=f"name={normalized_name}; data_type={normalized_data_type}",
+            new_value=(
+                f"name={normalized_name}; data_type={normalized_data_type}; "
+                f"label={normalized_label}; suffix={normalized_suffix}"
+            ),
             actor_id=actor_id,
         )
 

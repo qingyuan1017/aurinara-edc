@@ -23,11 +23,18 @@ from app.schemas.shared.base import (
 
 
 class RawDataVariableSettingCreate(BaseCreateSchema):
-    """Request body for creating a Raw_Data_Variable_Setting in a Draft_Design."""
+    """Request body for creating a Raw_Data_Variable_Setting in a Draft_Design.
+
+    ``label`` is an optional display label for a fixed variable; ``suffix`` is an
+    optional suffix applied for special variable types. Both drive dataset
+    generation.
+    """
 
     name: str = Field(..., min_length=1, max_length=255)
     data_type: str = Field(..., min_length=1, max_length=50)
     attributes: dict[str, Any] = Field(default_factory=dict)
+    label: str | None = Field(None, max_length=255)
+    suffix: str | None = Field(None, max_length=50)
 
 
 class RawDataVariableSettingResponse(BaseSchema):
@@ -38,6 +45,8 @@ class RawDataVariableSettingResponse(BaseSchema):
     name: str
     data_type: str
     attributes: dict[str, Any] = Field(default_factory=dict)
+    label: str | None = None
+    suffix: str | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime | None = None
 

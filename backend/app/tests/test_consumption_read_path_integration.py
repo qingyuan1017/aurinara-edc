@@ -274,6 +274,9 @@ class TestConsumptionReadPathIntegration:
             assert design.design_version_id == design_version_id
             assert design.study_id == study_id
             assert design.status == str(StudyVersionStatus.published)
+            # Cycles are now visit_type='cycle' visits; the aggregate no longer
+            # carries a standalone cycle_definitions collection.
+            assert not hasattr(design, "cycle_definitions")
             _assert_frozen_view(design)
 
             # Forms + their flattened fields.
@@ -363,10 +366,13 @@ class TestConsumptionReadPathIntegration:
             await design_consumption_service.list_visit_definitions(
                 read_session, design_version_id
             )
-            await design_consumption_service.list_cycle_definitions(
+            await design_consumption_service.list_arm_definitions(
                 read_session, design_version_id
             )
-            await design_consumption_service.list_arm_definitions(
+            await design_consumption_service.list_form_dependencies(
+                read_session, design_version_id
+            )
+            await design_consumption_service.list_visit_dependencies(
                 read_session, design_version_id
             )
             await design_consumption_service.list_edit_check_rules(

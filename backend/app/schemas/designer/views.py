@@ -90,7 +90,12 @@ class FormDefinitionView(FrozenView):
 
 
 class VisitDefinitionView(FrozenView):
-    """Immutable view of a published visit definition."""
+    """Immutable view of a published visit definition.
+
+    A cycle is a visit of ``visit_type == 'cycle'`` carrying the cycle metadata
+    (``repeat_min`` / ``repeat_max`` / ``cycle_length``); plain visits leave
+    those null. Consumers distinguish a cycle by ``visit_type == 'cycle'``.
+    """
 
     id: UUID
     design_version_id: UUID
@@ -102,26 +107,24 @@ class VisitDefinitionView(FrozenView):
     window_after: int | None = None
     display_order: int
     is_required: bool
-
-
-class CycleDefinitionView(FrozenView):
-    """Immutable view of a published cycle definition and its member visits."""
-
-    id: UUID
-    design_version_id: UUID
-    name: str
-    display_order: int
-    visit_definition_ids: tuple[UUID, ...] = Field(default_factory=tuple)
+    repeat_min: int | None = None
+    repeat_max: int | None = None
+    cycle_length: int | None = None
 
 
 class ArmDefinitionView(FrozenView):
-    """Immutable view of a published arm/treatment-group definition."""
+    """Immutable view of a published arm/treatment-group definition.
+
+    ``visit_definition_ids`` lists the arm's member visits (plain visits and
+    cycles), expressing which visits occur in the arm.
+    """
 
     id: UUID
     design_version_id: UUID
     name: str
     display_order: int
     description: str | None = None
+    visit_definition_ids: tuple[UUID, ...] = Field(default_factory=tuple)
 
 
 # ---------------------------------------------------------------------------
@@ -177,13 +180,16 @@ class SubjectPhaseDefinitionView(FrozenView):
 
 
 class ScheduleOfAssessmentEntryView(FrozenView):
-    """Immutable view of one form/procedure-to-visit/cycle mapping entry."""
+    """Immutable view of one form/procedure-to-visit mapping entry.
+
+    ``visit_definition_id`` references a plain visit or a cycle (a cycle is now a
+    visit of ``visit_type == 'cycle'``).
+    """
 
     id: UUID
     form_definition_id: UUID | None = None
     procedure_name: str | None = None
     visit_definition_id: UUID | None = None
-    cycle_definition_id: UUID | None = None
 
 
 class ScheduleOfAssessmentView(FrozenView):
@@ -199,7 +205,11 @@ class ScheduleOfAssessmentView(FrozenView):
 
 
 class CrfAccessDefinitionView(FrozenView):
-    """Immutable view of a published per-role CRF read/write access definition."""
+    """Immutable view of a published per-role CRF read/write access definition.
+
+    ``blinded`` applies at whichever scope the grant expresses (form or field);
+    ``unblind_role`` optionally names a role permitted to unblind.
+    """
 
     id: UUID
     design_version_id: UUID
@@ -208,16 +218,23 @@ class CrfAccessDefinitionView(FrozenView):
     field_definition_id: UUID | None = None
     can_read: bool
     can_write: bool
+    blinded: bool = False
+    unblind_role: str | None = None
 
 
 class RawDataVariableSettingView(FrozenView):
-    """Immutable view of a published raw-data variable setting (R4.7)."""
+    """Immutable view of a published raw-data variable setting (R4.7).
+
+    ``label`` and ``suffix`` are the dataset-generation configuration columns.
+    """
 
     id: UUID
     design_version_id: UUID
     name: str
     data_type: str
     attributes: dict[str, Any] = Field(default_factory=dict)
+    label: str | None = None
+    suffix: str | None = None
 
 
 class CodingSettingView(FrozenView):
@@ -228,6 +245,36 @@ class CodingSettingView(FrozenView):
     field_definition_id: UUID | None = None
     dictionary_reference: str
     coding_rule: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Dependency views (form-to-form / visit-to-visit — read side)
+# ---------------------------------------------------------------------------
+
+
+class FormDependencyView(FrozenView):
+    """Immutable view of a published form-to-form dependency edge."""
+
+    id: UUID
+    form_definition_id: UUID
+    depends_on_form_definition_id: UUID
+    dependency_type: str
+    condition_expression: str | None = None
+
+
+class VisitDependencyView(FrozenView):
+    """Immutable view of a published visit-to-visit dependency edge.
+
+    Includes the ``'cycle_member'`` edges migrated from the former cycle
+    membership, surfacing old cycle-membership information through the unified
+    model.
+    """
+
+    id: UUID
+    visit_definition_id: UUID
+    depends_on_visit_definition_id: UUID
+    dependency_type: str
+    condition_expression: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -254,21 +301,18 @@ class PublishedDesignView(FrozenView):
 
     forms: tuple[FormDefinitionView, ...] = Field(default_factory=tuple)
     visit_definitions: tuple[VisitDefinitionView, ...] = Field(default_factory=tuple)
-    cycle_definitions: tuple[CycleDefinitionView, ...] = Field(default_factory=tuple)
     arm_definitions: tuple[ArmDefinitionView, ...] = Field(default_factory=tuple)
     edit_check_rules: tuple[EditCheckRuleView, ...] = Field(default_factory=tuple)
     codelists: tuple[CodelistView, ...] = Field(default_factory=tuple)
-    subject_phase_definitions: tuple[SubjectPhaseDefinitionView, ...] = Field(
-        default_factory=tuple
-    )
+    subject_phase_definitions: tuple[SubjectPhaseDefinitionView, ...] = Field(default_factory=tuple)
     schedule_of_assessment: ScheduleOfAssessmentView | None = None
-    crf_access_definitions: tuple[CrfAccessDefinitionView, ...] = Field(
-        default_factory=tuple
-    )
+    crf_access_definitions: tuple[CrfAccessDefinitionView, ...] = Field(default_factory=tuple)
     raw_data_variable_settings: tuple[RawDataVariableSettingView, ...] = Field(
         default_factory=tuple
     )
     coding_settings: tuple[CodingSettingView, ...] = Field(default_factory=tuple)
+    form_dependencies: tuple[FormDependencyView, ...] = Field(default_factory=tuple)
+    visit_dependencies: tuple[VisitDependencyView, ...] = Field(default_factory=tuple)
 
 
 __all__ = [
@@ -277,10 +321,10 @@ __all__ = [
     "CodelistView",
     "CodingSettingView",
     "CrfAccessDefinitionView",
-    "CycleDefinitionView",
     "EditCheckRuleView",
     "FieldDefinitionView",
     "FormDefinitionView",
+    "FormDependencyView",
     "FrozenView",
     "PublishedDesignView",
     "RawDataVariableSettingView",
@@ -288,4 +332,5 @@ __all__ = [
     "ScheduleOfAssessmentView",
     "SubjectPhaseDefinitionView",
     "VisitDefinitionView",
+    "VisitDependencyView",
 ]

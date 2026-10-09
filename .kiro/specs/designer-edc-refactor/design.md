@@ -57,7 +57,7 @@ graph TB
         end
 
         subgraph Designer["Designer Module  (/designer)"]
-            DSVC[Designer services<br/>study design, versioning,<br/>forms, edit checks, codelists,<br/>phases, SoA, cycles, arms,<br/>CRF access, raw-data vars, coding]
+            DSVC[Designer services<br/>study design, versioning,<br/>forms, edit checks, codelists,<br/>phases, SoA, arms,<br/>CRF access, raw-data vars, coding]
             DPORT[DesignConsumptionService<br/>read-only published-design port]
             DSVC -- publishes --> DPORT
         end
@@ -122,7 +122,7 @@ This table is the heart of the refactor. "MOVE" means the existing artifact's ow
 | `exports` routes, `export_service`                                                                     | STAY (operational) / SHARED (platform export) | `edc` reporting uses shared export                                         | R9                   |
 | **NEW:** subject phase definitions                                                                     | NEW                                           | `designer`                                                                 | R3                   |
 | **NEW:** schedule of assessment                                                                        | NEW                                           | `designer`                                                                 | R4.1                 |
-| **NEW:** cycle definitions                                                                             | NEW                                           | `designer`                                                                 | R4.4                 |
+| cycle definitions → folded into `visit_definitions` (`visit_type='cycle'`), migration 0052             | FOLDED                                        | `designer`                                                                 | R4.4                 |
 | **NEW:** arm definitions                                                                               | NEW                                           | `designer`                                                                 | R4.5                 |
 | **NEW:** CRF access definitions                                                                        | NEW                                           | `designer`                                                                 | R4.6                 |
 | **NEW:** raw-data variable settings                                                                    | NEW                                           | `designer`                                                                 | R4.7                 |
@@ -134,7 +134,7 @@ This table is the heart of the refactor. "MOVE" means the existing artifact's ow
 - **`study_version_service`** (moved) — owns the `Design_Version` lifecycle: create draft, validate, publish, amend. Reuses the existing `StudyVersion` draft/published mechanics.
 - **`form_metadata_service`**, **`form_templates`** (moved) — form/section/field definitions and templates.
 - **`edit_check_service`**, **`edit_check_examples`** (moved) — declarative rule authoring and design-time rule testing (R5.3: evaluate a test case without creating any Operational_Record).
-- **New services:** `subject_phase_service`, `schedule_of_assessment_service`, `cycle_service`, `arm_service`, `crf_access_service`, `raw_data_variable_service`, `coding_setting_service`, `codelist_service` (codelist design split out from form metadata).
+- **New services:** `subject_phase_service`, `schedule_of_assessment_service`, `arm_service`, `crf_access_service`, `raw_data_variable_service`, `coding_setting_service`, `codelist_service` (codelist design split out from form metadata), `form_dependency_service`, `visit_dependency_service`. Cycle authoring is part of the visit authoring service (`visit_definition_service`), since a cycle is a visit of `visit_type='cycle'`.
 - **`DesignConsumptionService`** — the read port described below.
 
 ### EDC_Module services (slimmed)
@@ -152,9 +152,10 @@ class DesignConsumptionService:
     def get_latest_published_design(self, study_id: UUID) -> PublishedDesignView | None: ...
     def list_forms(self, design_version_id: UUID) -> list[FormDefinitionView]: ...
     def get_form_fields(self, design_version_id: UUID, form_id: UUID) -> list[FieldDefinitionView]: ...
-    def list_visit_definitions(self, design_version_id: UUID) -> list[VisitDefinitionView]: ...
-    def list_cycle_definitions(self, design_version_id: UUID) -> list[CycleDefinitionView]: ...
+    def list_visit_definitions(self, design_version_id: UUID) -> list[VisitDefinitionView]: ...  # now includes cycles (visit_type == 'cycle')
     def list_arm_definitions(self, design_version_id: UUID) -> list[ArmDefinitionView]: ...
+    def list_form_dependencies(self, design_version_id: UUID) -> list[FormDependencyView]: ...
+    def list_visit_dependencies(self, design_version_id: UUID) -> list[VisitDependencyView]: ...
     def list_edit_check_rules(self, design_version_id: UUID) -> list[EditCheckRuleView]: ...
     def list_codelists(self, design_version_id: UUID) -> list[CodelistView]: ...
     def list_subject_phase_definitions(self, design_version_id: UUID) -> list[SubjectPhaseDefinitionView]: ...
@@ -173,7 +174,7 @@ Contract guarantees:
 
 ### Router aggregates
 
-- **`designer_router`** — new aggregate in `app/api/routes/designer/__init__.py` collecting design-authoring resource routers (study versions, forms/fields, edit checks, codelists, subject phases, SoA, cycles, arms, CRF access, raw-data variables, coding). Mounted with a `/designer` prefix.
+- **`designer_router`** — new aggregate in `app/api/routes/designer/__init__.py` collecting design-authoring resource routers (study versions, forms/fields, form dependencies, edit checks, codelists, subject phases, SoA, arms, visits, visit dependencies, CRF access, raw-data variables, coding). The arm router also exposes a list route. Mounted with a `/designer` prefix.
 - **`edc_router`** — unchanged mounting style (no added prefix); its resource list is slimmed to operational routers (subjects, visit instances, form_data, records, queries, sdv, reviews, locks, signatures, dashboards, exports, operational study-info reads). Design-authoring routers are removed from this aggregate.
 
 **Requirements covered:** R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11.
@@ -188,14 +189,15 @@ The refactor **reassigns ownership** of existing tables and adds a small set of 
 - **`form_definitions`, `form_sections`, `field_definitions`** — reassigned to Designer (R4), each FK to `study_versions`.
 - **`codelists`, `codelist_items`** — reassigned to Designer (R6), FK to `study_versions`.
 - **`edit_checks`** — reassigned to Designer (R5), FK to `study_versions`, stored declaratively (R5.5).
-- **`visit_definitions`** — reassigned to Designer (R4.2–R4.4), FK to `study_versions`. (`visit_instances` stays in EDC.)
+- **`visit_definitions`** — reassigned to Designer (R4.2–R4.4), FK to `study_versions`. Now carries a `visit_type` discriminator (`visit` | `cycle`, plus the legacy `scheduled`/`unscheduled`/`screening` values) and nullable cycle metadata (`repeat_min`, `repeat_max`, `cycle_length`); the former `cycle_definitions` / `cycle_definition_visits` tables are folded in and dropped (migration 0052). (`visit_instances` stays in EDC.)
 - **NEW `subject_phase_definitions`** — `(design_version_id FK, name, display_order, …)`, unique name within a design version (R3).
-- **NEW `cycle_definitions`** — repeating group of visits, FK to `study_versions` (R4.4), with membership to `visit_definitions`.
-- **NEW `arm_definitions`** — study arms/treatment groups, FK to `study_versions` (R4.5).
-- **NEW `schedule_of_assessment`** — mapping of forms/procedures to visit and cycle definitions, FK to `study_versions` (R4.1).
-- **NEW `crf_access_definitions`** — design-time read/write access of each operational role to each form/field, FK to `study_versions` (R4.6).
-- **NEW `raw_data_variable_settings`** — raw-data variable name/type/attributes per captured item, FK to `study_versions` (R4.7).
+- **NEW `arm_definitions`** — study arms/treatment groups, FK to `study_versions` (R4.5); arm↔visit membership via **NEW `arm_definition_visits`** (R: arm defines which visits occur in the arm).
+- **NEW `schedule_of_assessment`** — mapping of forms/procedures to visit definitions (cycles included, single `visit_definition_id`), FK to `study_versions` (R4.1).
+- **NEW `crf_access_definitions`** — design-time read/write access of each operational role to each form/field, FK to `study_versions` (R4.6), with a form/question-level `blinded` flag and optional `unblind_role`.
+- **NEW `raw_data_variable_settings`** — raw-data variable name/type/attributes per captured item, FK to `study_versions` (R4.7), plus explicit `label` and `suffix` dataset-generation columns.
 - **NEW `coding_settings`** — dictionary reference + coding rule per coded item, FK to `study_versions` (R4.8).
+- **NEW `form_definition_dependencies`** — typed self-referential form→form dependencies (self-guarded).
+- **NEW `visit_definition_dependencies`** — typed self-referential visit→visit dependencies (cycles included, self-guarded).
 
 All Designer child tables bind to a `Design_Version` (`study_versions.id`) so that publishing freezes the whole bundle immutably (R2.4).
 
@@ -216,11 +218,15 @@ erDiagram
     FIELD_DEFINITIONS }o--o| CODELISTS : references
     STUDY_VERSIONS ||--o{ EDIT_CHECKS : contains
     STUDY_VERSIONS ||--o{ VISIT_DEFINITIONS : contains
-    STUDY_VERSIONS ||--o{ CYCLE_DEFINITIONS : contains
-    CYCLE_DEFINITIONS }o--o{ VISIT_DEFINITIONS : "member of"
     STUDY_VERSIONS ||--o{ ARM_DEFINITIONS : contains
+    ARM_DEFINITIONS }o--o{ VISIT_DEFINITIONS : "arm includes"
+    VISIT_DEFINITIONS ||--o{ VISIT_DEFINITION_DEPENDENCIES : "depends on"
+    FORM_DEFINITIONS ||--o{ FORM_DEFINITION_DEPENDENCIES : "depends on"
     STUDY_VERSIONS ||--o{ SUBJECT_PHASE_DEFINITIONS : contains
     STUDY_VERSIONS ||--o{ SCHEDULE_OF_ASSESSMENT : contains
+    SCHEDULE_OF_ASSESSMENT ||--o{ SCHEDULE_OF_ASSESSMENT_ENTRIES : contains
+    SCHEDULE_OF_ASSESSMENT_ENTRIES }o--o| VISIT_DEFINITIONS : "collected at"
+    SCHEDULE_OF_ASSESSMENT_ENTRIES }o--o| FORM_DEFINITIONS : "collects"
     STUDY_VERSIONS ||--o{ CRF_ACCESS_DEFINITIONS : contains
     STUDY_VERSIONS ||--o{ RAW_DATA_VARIABLE_SETTINGS : contains
     STUDY_VERSIONS ||--o{ CODING_SETTINGS : contains
@@ -231,6 +237,8 @@ erDiagram
     VISIT_INSTANCES ||--o{ FORM_INSTANCES : "operational"
     FORM_INSTANCES ||--o{ FORM_RECORDS : "operational"
 ```
+
+A `CYCLE` is a `VISIT_DEFINITION` with `visit_type = 'cycle'`; SoA, arms, and dependencies reference visits uniformly. (`SCHEDULE_OF_ASSESSMENT_ENTRIES`, `ARM_DEFINITION_VISITS`, and the two dependency tables are the net-new nodes/edges of the domain-model refactor.)
 
 The dotted edge from `STUDY_VERSIONS` to `SUBJECTS` is the **binding**, not ownership: EDC owns `subjects` and the operational tree below it, and each binds to the published `Design_Version` it runs against. This formalizes the existing metadata-vs-clinical separation into explicit module ownership.
 
@@ -377,13 +385,13 @@ _For all_ draft Design_Versions and all named Designer_Definitions requiring uni
 
 ### Property 8: Designer child binds to exactly one design version
 
-_For all_ Designer child definitions (subject phase definitions, edit-check rules, codelists, visit definitions, cycles, arms, CRF access, raw-data variable settings, coding settings), each is associated with exactly one Design_Version.
+_For all_ Designer child definitions (subject phase definitions, edit-check rules, codelists, visit definitions (including `visit_type='cycle'`), arms, CRF access, raw-data variable settings, coding settings), each is associated with exactly one Design_Version.
 
 **Validates: Requirements 3.3, 5.4, 6.4**
 
 ### Property 9: Designer definition persistence round-trip
 
-_For all_ valid Designer_Definitions (schedule of assessment mappings, visit definitions, cycle membership, CRF access matrices, raw-data variable settings, coding settings), persisting then reading the definition back through the Designer_Module yields values equal to those submitted.
+_For all_ valid Designer_Definitions (schedule of assessment mappings, visit definitions (cycles as `visit_type='cycle'`), visit/form dependency edges, CRF access matrices, raw-data variable settings, coding settings), persisting then reading the definition back through the Designer_Module yields values equal to those submitted.
 
 **Validates: Requirements 4.1, 4.2, 4.4, 4.6, 4.7, 4.8**
 
@@ -464,7 +472,7 @@ A dual approach: **property-based tests** verify the universal invariants above 
 - **One test per property.** Implement each of Properties 1–17 with a single property-based test.
 - **Tagging.** Tag each test with a comment referencing its design property, format:
   `# Feature: designer-edc-refactor, Property {number}: {property_text}`
-- **Generators.** Build Hypothesis strategies for: Designer_Definitions (phases, visit defs with valid/invalid windows, cycles, arms, codelists with 1–1000 items, edit-check rules including code-injection-shaped payloads, CRF access matrices, raw-data variable settings, coding settings), Design_Versions in draft/published states, operational flow states, users with Designer/Operational/both/neither roles and varying site scopes, and pre/post migration datasets. Edge and error criteria (R1.6, R2.3, R2.8, R2.10, R4.3, R4.9, R5.2, R6.3, R7.9, R7.10, R9.9, R9.10, R11.6) are embedded as generated inputs within the relevant property's strategy.
+- **Generators.** Build Hypothesis strategies for: Designer_Definitions (phases, visit defs with valid/invalid windows (including `visit_type='cycle'` with repeat/cycle_length metadata), arms, codelists with 1–1000 items, edit-check rules including code-injection-shaped payloads, CRF access matrices, raw-data variable settings, coding settings), Design_Versions in draft/published states, operational flow states, users with Designer/Operational/both/neither roles and varying site scopes, and pre/post migration datasets. Edge and error criteria (R1.6, R2.3, R2.8, R2.10, R4.3, R4.9, R5.2, R6.3, R7.9, R7.10, R9.9, R9.10, R11.6) are embedded as generated inputs within the relevant property's strategy.
 
 ### Example-based unit tests
 

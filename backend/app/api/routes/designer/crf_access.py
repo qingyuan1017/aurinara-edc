@@ -46,9 +46,7 @@ async def create_crf_access(
     version_id: UUID,
     body: CrfAccessDefinitionCreate,
     session: DbSession,
-    current_user: Annotated[
-        User, Depends(require_permission("designer.crf_access.configure"))
-    ],
+    current_user: Annotated[User, Depends(require_permission("designer.crf_access.configure"))],
 ) -> CrfAccessDefinitionResponse:
     """Create a Crf_Access_Definition within a draft Design_Version.
 
@@ -65,6 +63,8 @@ async def create_crf_access(
         can_write=body.can_write,
         form_definition_id=body.form_definition_id,
         field_definition_id=body.field_definition_id,
+        blinded=body.blinded,
+        unblind_role=body.unblind_role,
         actor_id=current_user.id,
     )
     return CrfAccessDefinitionResponse.model_validate(access)

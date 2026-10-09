@@ -22,18 +22,16 @@ from app.schemas.shared.base import (
 
 
 class ScheduleEntryCreate(BaseCreateSchema):
-    """One form/procedure-to-visit/cycle mapping within an SoA.
+    """One form/procedure-to-visit mapping within an SoA.
 
     Exactly one of ``form_definition_id`` or ``procedure_name`` identifies what
-    is collected; at least one of ``visit_definition_id`` or
-    ``cycle_definition_id`` identifies when it is collected. The service
-    validates these invariants.
+    is collected; a ``visit_definition_id`` (a plain visit or a cycle) identifies
+    when it is collected. The service validates these invariants.
     """
 
     form_definition_id: UUID | None = None
     procedure_name: str | None = Field(None, min_length=1, max_length=255)
     visit_definition_id: UUID | None = None
-    cycle_definition_id: UUID | None = None
     display_order: int = 1
 
 
@@ -51,7 +49,6 @@ class ScheduleEntryResponse(BaseSchema):
     form_definition_id: UUID | None = None
     procedure_name: str | None = None
     visit_definition_id: UUID | None = None
-    cycle_definition_id: UUID | None = None
     display_order: int
     created_at: UtcDatetime
 

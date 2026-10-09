@@ -72,7 +72,24 @@ class VisitDefinition(Base):
     visit_type: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        comment="e.g. scheduled, unscheduled, screening",
+        default="visit",
+        server_default="visit",
+        comment="discriminator: visit | cycle (also scheduled/unscheduled/screening)",
+    )
+
+    # Cycle-only metadata (nullable for all rows; only meaningful when
+    # ``visit_type == 'cycle'``). A plain visit never sets these; the service
+    # layer owns the "repeat/cycle_length only when visit_type == 'cycle'" rule.
+    repeat_min: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="cycle-only: minimum repeat count"
+    )
+    repeat_max: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="cycle-only: maximum repeat count"
+    )
+    cycle_length: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="cycle-only: nominal length in days of one iteration",
     )
 
     # Window definition (relative to baseline)
@@ -96,16 +113,14 @@ class VisitDefinition(Base):
     )
 
     # Relationships
-    study_version: Mapped[StudyVersion] = relationship(
-        "StudyVersion", lazy="selectin"
-    )
+    study_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
 
     __table_args__ = (
         Index("ix_visit_definitions_study_version_id", "study_version_id"),
+        Index("ix_visit_definitions_visit_type", "visit_type"),
     )
 
     def __repr__(self) -> str:
         return (
-            f"<VisitDefinition(id={self.id}, name={self.name!r}, "
-            f"visit_number={self.visit_number})>"
+            f"<VisitDefinition(id={self.id}, name={self.name!r}, visit_number={self.visit_number})>"
         )

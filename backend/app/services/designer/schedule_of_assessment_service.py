@@ -1,13 +1,13 @@
 """Schedule_of_Assessment_Service — authoring of Schedule_of_Assessment matrices.
 
 Owns creation of the design-time ``Schedule_of_Assessment`` (SoA) within a
-``Draft_Design``. The SoA maps forms or named procedures to the visit and/or
-cycle definitions at which they are collected, and binds to exactly one
-``Design_Version``.
+``Draft_Design``. The SoA maps forms or named procedures to the visit
+definitions at which they are collected (a cycle is now a visit of
+``visit_type == 'cycle'``), and binds to exactly one ``Design_Version``.
 
 Satisfies Requirements:
-  - 4.1: Persist a schedule of assessment that maps forms/procedures to visit and
-         cycle definitions within a design version.
+  - 4.1: Persist a schedule of assessment that maps forms/procedures to visit
+         definitions within a design version.
 
 Every mutation writes an Audit_Event inside the caller's transaction so the data
 and audit commit (or roll back) atomically.
@@ -39,17 +39,16 @@ _PROCEDURE_NAME_MAX_LENGTH = 255
 
 @dataclass(frozen=True)
 class ScheduleEntryInput:
-    """One form/procedure-to-visit/cycle mapping to persist in an SoA.
+    """One form/procedure-to-visit mapping to persist in an SoA.
 
     Exactly one of ``form_definition_id`` or ``procedure_name`` identifies what
-    is collected, and at least one of ``visit_definition_id`` or
-    ``cycle_definition_id`` identifies when it is collected (R4.1).
+    is collected, and ``visit_definition_id`` (a plain visit or a cycle)
+    identifies when it is collected (R4.1).
     """
 
     form_definition_id: UUID | None = None
     procedure_name: str | None = None
     visit_definition_id: UUID | None = None
-    cycle_definition_id: UUID | None = None
     display_order: int = 1
 
 
@@ -119,15 +118,12 @@ class ScheduleOfAssessmentService:
         actor_id: UUID | None,
     ) -> ScheduleOfAssessmentEntry:
         """Persist a single SoA entry and audit it."""
-        procedure_name = (
-            data.procedure_name.strip() if data.procedure_name is not None else None
-        )
+        procedure_name = data.procedure_name.strip() if data.procedure_name is not None else None
         entry = ScheduleOfAssessmentEntry(
             schedule_of_assessment_id=soa.id,
             form_definition_id=data.form_definition_id,
             procedure_name=procedure_name,
             visit_definition_id=data.visit_definition_id,
-            cycle_definition_id=data.cycle_definition_id,
             display_order=data.display_order,
         )
         session.add(entry)
@@ -144,10 +140,7 @@ class ScheduleOfAssessmentService:
             entity_id=entry.id,
             action="create",
             module=Module.DESIGNER,
-            new_value=(
-                f"{what}; visit_definition_id={data.visit_definition_id}; "
-                f"cycle_definition_id={data.cycle_definition_id}"
-            ),
+            new_value=f"{what}; visit_definition_id={data.visit_definition_id}",
             actor_id=actor_id,
         )
         return entry
@@ -157,14 +150,11 @@ class ScheduleOfAssessmentService:
         """Validate a single SoA entry's what/when identity (R4.1).
 
         Exactly one of a form or a procedure identifies *what* is collected, and
-        at least one of a visit or a cycle identifies *when*.
+        a ``visit_definition_id`` identifies *when* — required on every new
+        entry (a cycle is a visit now, so the single ref always covers "when").
         """
         has_form = entry.form_definition_id is not None
-        procedure = (
-            entry.procedure_name.strip()
-            if entry.procedure_name is not None
-            else None
-        )
+        procedure = entry.procedure_name.strip() if entry.procedure_name is not None else None
         has_procedure = bool(procedure)
 
         if has_form == has_procedure:
@@ -174,24 +164,19 @@ class ScheduleOfAssessmentService:
                 details={"entry_index": index},
             )
         if has_procedure and not (
-            _PROCEDURE_NAME_MIN_LENGTH
-            <= len(procedure or "")
-            <= _PROCEDURE_NAME_MAX_LENGTH
+            _PROCEDURE_NAME_MIN_LENGTH <= len(procedure or "") <= _PROCEDURE_NAME_MAX_LENGTH
         ):
             raise ValidationError(
                 "Procedure name must be 1 to 255 characters",
                 details={"entry_index": index, "field": "procedure_name"},
             )
-        if entry.visit_definition_id is None and entry.cycle_definition_id is None:
+        if entry.visit_definition_id is None:
             raise ValidationError(
-                "Each schedule-of-assessment entry must map to a visit definition "
-                "and/or a cycle definition",
-                details={"entry_index": index},
+                "Each schedule-of-assessment entry must map to a visit definition",
+                details={"entry_index": index, "field": "visit_definition_id"},
             )
 
-    async def _get_with_entries(
-        self, session: AsyncSession, soa_id: UUID
-    ) -> ScheduleOfAssessment:
+    async def _get_with_entries(self, session: AsyncSession, soa_id: UUID) -> ScheduleOfAssessment:
         """Load an SoA with its ``entries`` eagerly populated.
 
         A freshly created SoA has an unloaded ``entries`` collection; serializing

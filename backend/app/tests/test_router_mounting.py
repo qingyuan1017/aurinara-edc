@@ -6,8 +6,9 @@ mounting contract holds end-to-end:
 
 - The Designer aggregate mounts under ``/api/v1/designer`` and serves the
   design-authoring surfaces (study versions, forms/fields, edit-check testing,
-  codelists, subject phases, schedule of assessment, cycles, arms, CRF access,
-  raw-data variables, coding settings).
+  codelists, subject phases, schedule of assessment, visits, arms, CRF access,
+  raw-data variables, coding settings). Cycles are authored as visits of
+  ``visit_type == 'cycle'`` through the visits surface (no separate cycle route).
 - The slimmed EDC aggregate preserves its operational paths with NO added
   prefix (``/api/v1/studies`` list, ``/api/v1/subjects``, ``/api/v1/visits``,
   ``/api/v1/queries``, ``/api/v1/studies/{study_id}/dashboard``), and
@@ -59,10 +60,14 @@ def _methods(paths: dict[str, dict], path: str) -> set[str]:
         (f"{API_V1}/designer/studies/{{study_id}}/codelists", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/subject-phases", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/schedule-of-assessment", "post"),
-        (f"{API_V1}/designer/versions/{{version_id}}/cycles", "post"),
-        (f"{API_V1}/designer/versions/{{version_id}}/cycles", "get"),
         (f"{API_V1}/designer/versions/{{version_id}}/visits", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/arms", "post"),
+        (f"{API_V1}/designer/versions/{{version_id}}/arms", "get"),
+        # Form / visit dependency authoring
+        (f"{API_V1}/designer/forms/{{form_id}}/dependencies", "post"),
+        (f"{API_V1}/designer/forms/{{form_id}}/dependencies", "get"),
+        (f"{API_V1}/designer/visits/{{visit_id}}/dependencies", "post"),
+        (f"{API_V1}/designer/visits/{{visit_id}}/dependencies", "get"),
         (f"{API_V1}/designer/versions/{{version_id}}/crf-access", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/raw-data-variables", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/coding-settings", "post"),

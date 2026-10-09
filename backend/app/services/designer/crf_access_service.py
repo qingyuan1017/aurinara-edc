@@ -41,6 +41,8 @@ class CrfAccessService:
         can_write: bool,
         form_definition_id: UUID | None = None,
         field_definition_id: UUID | None = None,
+        blinded: bool = False,
+        unblind_role: str | None = None,
         actor_id: UUID | None = None,
     ) -> CrfAccessDefinition:
         """Persist a Crf_Access_Definition within one Design_Version.
@@ -53,19 +55,34 @@ class CrfAccessService:
             can_write: Whether the role may write the scoped form/field.
             form_definition_id: Optional form scope.
             field_definition_id: Optional field scope.
+            blinded: Whether the scoped form/field is blinded (default False).
+            unblind_role: Optional role permitted to unblind; only meaningful
+                when ``blinded`` is True.
             actor_id: Optional actor UUID for the audit event.
 
         Returns:
             The persisted CrfAccessDefinition.
 
         Raises:
-            ValidationError: If the role length is out of range.
+            ValidationError: If the role length is out of range, or an
+                ``unblind_role`` is set without ``blinded=True``.
         """
         normalized_role = role.strip()
         if not (_ROLE_MIN_LENGTH <= len(normalized_role) <= _ROLE_MAX_LENGTH):
             raise ValidationError(
                 "CRF access role must be 1 to 100 characters",
                 details={"field": "role"},
+            )
+
+        normalized_unblind_role = unblind_role.strip() if unblind_role is not None else None
+        if normalized_unblind_role == "":
+            normalized_unblind_role = None
+
+        # An unblinder is only meaningful on a blinded grant (sensible default).
+        if normalized_unblind_role is not None and not blinded:
+            raise ValidationError(
+                "unblind_role requires blinded=True",
+                details={"field": "unblind_role"},
             )
 
         access = CrfAccessDefinition(
@@ -75,6 +92,8 @@ class CrfAccessService:
             field_definition_id=field_definition_id,
             can_read=can_read,
             can_write=can_write,
+            blinded=blinded,
+            unblind_role=normalized_unblind_role,
         )
         session.add(access)
         await session.flush()
@@ -86,7 +105,8 @@ class CrfAccessService:
             action="create",
             module=Module.DESIGNER,
             new_value=(
-                f"role={normalized_role}; can_read={can_read}; can_write={can_write}"
+                f"role={normalized_role}; can_read={can_read}; "
+                f"can_write={can_write}; blinded={blinded}"
             ),
             actor_id=actor_id,
         )

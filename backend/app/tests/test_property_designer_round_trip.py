@@ -5,10 +5,10 @@
 **Validates: Requirements 4.1, 4.2, 4.4, 4.6, 4.7, 4.8**
 
 Property 9 (design.md): _For all_ valid Designer_Definitions (schedule of
-assessment mappings, visit definitions, cycle membership, CRF access matrices,
-raw-data variable settings, coding settings), persisting then reading the
-definition back through the Designer_Module yields values equal to those
-submitted.
+assessment mappings, visit definitions including ``visit_type='cycle'`` cycles,
+visit/form dependency edges, CRF access matrices, raw-data variable settings,
+coding settings), persisting then reading the definition back through the
+Designer_Module yields values equal to those submitted.
 
 This file is the **broad** Property 9 round-trip across the Designer definition
 kinds. The visit-definition / window-validity slice (R4.2, R4.3) is already
@@ -16,7 +16,8 @@ covered by ``test_property_visit_window.py`` (task 4.3), so this file stays
 focused on the *other* definition kinds to avoid overlap:
 
   - R4.1: Schedule_Of_Assessment mappings via ``ScheduleOfAssessmentService``.
-  - R4.4: Cycle_Definition + member Visit_Definitions via ``CycleService``.
+  - R4.4: Cycle as a ``visit_type='cycle'`` Visit_Definition via
+          ``VisitDefinitionService``.
   - R4.6: CRF_Access_Definition matrices via ``CrfAccessService``.
   - R4.7: Raw_Data_Variable_Setting via ``RawDataVariableService``.
   - R4.8: Coding_Setting via ``CodingSettingService``.
@@ -45,7 +46,6 @@ from sqlalchemy.ext.asyncio import (
 from app.core.database import Base
 from app.models.designer.coding_setting import CodingSetting
 from app.models.designer.crf_access_definition import CrfAccessDefinition
-from app.models.designer.cycle_definition import CycleDefinition
 from app.models.designer.raw_data_variable_setting import RawDataVariableSetting
 from app.models.designer.schedule_of_assessment import (
     ScheduleOfAssessment,
@@ -54,14 +54,15 @@ from app.models.designer.schedule_of_assessment import (
 from app.models.designer.study_version import StudyVersion, StudyVersionStatus
 from app.models.designer.visit import VisitDefinition
 from app.models.edc.study import Study, StudyStatus
+from app.schemas.designer.visit import VisitDefinitionCreate
 from app.services.designer.coding_setting_service import CodingSettingService
 from app.services.designer.crf_access_service import CrfAccessService
-from app.services.designer.cycle_service import CycleService
 from app.services.designer.raw_data_variable_service import RawDataVariableService
 from app.services.designer.schedule_of_assessment_service import (
     ScheduleEntryInput,
     ScheduleOfAssessmentService,
 )
+from app.services.designer.visit_definition_service import VisitDefinitionService
 
 # ---------------------------------------------------------------------------
 # Shared field strategies (constrained to each service's accepted input space)
@@ -138,26 +139,33 @@ async def _create_schema(engine) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R4.4 — Cycle_Definition + member Visit_Definitions round-trip
+# R4.4 — Cycle as a visit_type='cycle' Visit_Definition round-trip
 # ---------------------------------------------------------------------------
 
 
 @given(
     name=_bounded_name(1, 100),
     display_order=_display_orders,
-    visit_count=st.integers(min_value=0, max_value=4),
+    repeat_min=st.integers(min_value=0, max_value=5),
+    repeat_span=st.integers(min_value=0, max_value=5),
+    cycle_length=st.integers(min_value=1, max_value=90),
 )
 @settings(
     max_examples=100,
     deadline=None,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
-async def test_cycle_definition_round_trip(
-    name: str, display_order: int, visit_count: int
+async def test_cycle_visit_round_trip(
+    name: str,
+    display_order: int,
+    repeat_min: int,
+    repeat_span: int,
+    cycle_length: int,
 ) -> None:
-    """A Cycle_Definition and its member visits round-trip unchanged (R4.4)."""
-    service = CycleService()
+    """A cycle (``visit_type='cycle'``) and its cycle metadata round-trip (R4.4)."""
+    service = VisitDefinitionService()
     actor_id = uuid.uuid4()
+    repeat_max = repeat_min + repeat_span
 
     engine = _new_engine()
     try:
@@ -168,17 +176,20 @@ async def test_cycle_definition_round_trip(
         async with factory() as session:
             version = await _make_draft_version(session)
             version_id = version.id
-            visit_ids = [
-                (await _make_visit(session, version_id, i + 1)).id
-                for i in range(visit_count)
-            ]
 
-            cycle = await service.create_cycle_definition(
+            cycle = await service.define_visit(
                 session,
-                design_version_id=version_id,
-                name=name,
-                display_order=display_order,
-                visit_definition_ids=visit_ids,
+                version=version,
+                data=VisitDefinitionCreate(
+                    name=name,
+                    visit_number=1,
+                    visit_type="cycle",
+                    display_order=display_order,
+                    is_required=True,
+                    repeat_min=repeat_min,
+                    repeat_max=repeat_max,
+                    cycle_length=cycle_length,
+                ),
                 actor_id=actor_id,
             )
             cycle_id = cycle.id
@@ -187,13 +198,16 @@ async def test_cycle_definition_round_trip(
         async with factory() as read_session:
             stored = (
                 await read_session.execute(
-                    select(CycleDefinition).where(CycleDefinition.id == cycle_id)
+                    select(VisitDefinition).where(VisitDefinition.id == cycle_id)
                 )
             ).scalar_one()
             assert stored.study_version_id == version_id
             assert stored.name == name
+            assert stored.visit_type == "cycle"
             assert stored.display_order == display_order
-            assert {visit.id for visit in stored.visits} == set(visit_ids)
+            assert stored.repeat_min == repeat_min
+            assert stored.repeat_max == repeat_max
+            assert stored.cycle_length == cycle_length
     finally:
         await engine.dispose()
 
@@ -391,20 +405,21 @@ async def test_coding_setting_round_trip(
 def _schedule_entries(draw: st.DrawFn) -> list[dict[str, object]]:
     """A list of valid SoA entry descriptors (what/when identity satisfied).
 
-    Each entry maps a named procedure (the what) to a visit and/or a cycle (the
-    when). Visit/cycle presence is referenced by index into membership created
-    in the test body so the nullable FKs resolve against real rows.
+    Each entry maps a named procedure (the what) to a single visit (the when).
+    ``use_cycle`` selects the cycle-visit (``visit_type='cycle'``) rather than
+    the plain visit; both resolve to a ``visit_definition_id`` since a cycle is
+    now a visit. The chosen visit is referenced in the test body so the nullable
+    FK resolves against a real row.
     """
     count = draw(st.integers(min_value=1, max_value=4))
     entries: list[dict[str, object]] = []
     for index in range(count):
         procedure_name = draw(_bounded_name(1, 255))
-        # Always include a visit (the when); optionally also a cycle.
-        include_cycle = draw(st.booleans())
+        use_cycle = draw(st.booleans())
         entries.append(
             {
                 "procedure_name": procedure_name,
-                "include_cycle": include_cycle,
+                "use_cycle": use_cycle,
                 "display_order": index + 1,
             }
         )
@@ -434,22 +449,27 @@ async def test_schedule_of_assessment_round_trip(
             version = await _make_draft_version(session)
             version_id = version.id
 
-            # Create one visit and one cycle for the entries to reference so the
-            # nullable visit/cycle FKs resolve against real rows.
+            # Create a plain visit and a cycle-visit for the entries to reference
+            # so the single visit_definition_id FK resolves against a real row.
             visit = await _make_visit(session, version_id, 1)
-            cycle = CycleDefinition(
-                study_version_id=version_id, name="Cycle 1", display_order=1
+            cycle_visit = VisitDefinition(
+                study_version_id=version_id,
+                name="Cycle 1",
+                visit_number=2,
+                visit_type="cycle",
+                display_order=2,
+                is_required=True,
             )
-            session.add(cycle)
+            session.add(cycle_visit)
             await session.flush()
+
+            def _visit_id_for(spec: dict[str, object]) -> uuid.UUID:
+                return cycle_visit.id if spec["use_cycle"] else visit.id
 
             inputs = [
                 ScheduleEntryInput(
                     procedure_name=str(spec["procedure_name"]),
-                    visit_definition_id=visit.id,
-                    cycle_definition_id=(
-                        cycle.id if spec["include_cycle"] else None
-                    ),
+                    visit_definition_id=_visit_id_for(spec),
                     display_order=int(spec["display_order"]),
                 )
                 for spec in entry_specs
@@ -464,12 +484,11 @@ async def test_schedule_of_assessment_round_trip(
             soa_id = soa.id
             await session.commit()
 
-        # Expected (procedure_name, visit_id, cycle_id, display_order) tuples.
+        # Expected (procedure_name, visit_id, display_order) tuples.
         expected = {
             (
                 str(spec["procedure_name"]),
-                visit.id,
-                cycle.id if spec["include_cycle"] else None,
+                _visit_id_for(spec),
                 int(spec["display_order"]),
             )
             for spec in entry_specs
@@ -497,15 +516,16 @@ async def test_schedule_of_assessment_round_trip(
                 (
                     entry.procedure_name,
                     entry.visit_definition_id,
-                    entry.cycle_definition_id,
                     entry.display_order,
                 )
                 for entry in stored_entries
             }
             assert actual == expected
-            # Every entry carries a form XOR procedure identity (R4.1 — procedure).
+            # Every entry carries a form XOR procedure identity (R4.1 — procedure)
+            # and a required visit ref (the when).
             for entry in stored_entries:
                 assert entry.form_definition_id is None
                 assert entry.procedure_name is not None
+                assert entry.visit_definition_id is not None
     finally:
         await engine.dispose()

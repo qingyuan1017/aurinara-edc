@@ -91,6 +91,43 @@ class VisitDefinitionService:
                 },
             )
 
+    @staticmethod
+    def _validate_cycle_fields(data: VisitDefinitionCreate) -> None:
+        """Enforce the cycle-only metadata invariant.
+
+        ``repeat_min`` / ``repeat_max`` / ``cycle_length`` are meaningful only
+        for a cycle visit (``visit_type == 'cycle'``). A plain visit that carries
+        any of them is rejected. When both repeat bounds are present they must
+        satisfy ``repeat_min <= repeat_max``.
+
+        Raises:
+            ValidationError: If a non-cycle visit sets cycle metadata, or if the
+                repeat bounds are inverted; the error identifies the field.
+        """
+        is_cycle = data.visit_type == "cycle"
+        if not is_cycle and (
+            data.repeat_min is not None
+            or data.repeat_max is not None
+            or data.cycle_length is not None
+        ):
+            raise ValidationError(
+                "repeat_min/repeat_max/cycle_length are only valid when visit_type == 'cycle'",
+                details={"field": "visit_type"},
+            )
+        if (
+            data.repeat_min is not None
+            and data.repeat_max is not None
+            and data.repeat_min > data.repeat_max
+        ):
+            raise ValidationError(
+                "repeat_min must not exceed repeat_max",
+                details={
+                    "field": "repeat_min",
+                    "repeat_min": data.repeat_min,
+                    "repeat_max": data.repeat_max,
+                },
+            )
+
     async def define_visit(
         self,
         session: AsyncSession,
@@ -119,6 +156,9 @@ class VisitDefinitionService:
         # Reject an inverted window before persisting anything (Req 4.3).
         self._validate_window(data)
 
+        # Cycle-only metadata is accepted only for a cycle visit.
+        self._validate_cycle_fields(data)
+
         definition = VisitDefinition(
             study_version_id=version.id,
             name=data.name,
@@ -129,6 +169,9 @@ class VisitDefinitionService:
             window_after=data.window_after,
             display_order=data.display_order,
             is_required=data.is_required,
+            repeat_min=data.repeat_min,
+            repeat_max=data.repeat_max,
+            cycle_length=data.cycle_length,
         )
         session.add(definition)
         await session.flush()  # Assign the id

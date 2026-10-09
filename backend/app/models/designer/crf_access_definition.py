@@ -33,6 +33,7 @@ from sqlalchemy import (
     String,
     Uuid,
 )
+from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -76,13 +77,23 @@ class CrfAccessDefinition(Base):
     can_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     can_write: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # Blinding applies at whichever scope the row expresses (form or field) and
+    # defaults to False. ``unblind_role`` optionally names a role permitted to
+    # unblind; it is only meaningful when ``blinded`` is True.
+    blinded: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=sa_text("false")
+    )
+    unblind_role: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="role permitted to unblind this form/field, if any",
+    )
+
     # Timestamps (timezone-aware)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Soft-delete
     deleted_at: Mapped[datetime | None] = mapped_column(
@@ -90,12 +101,8 @@ class CrfAccessDefinition(Base):
     )
 
     # Relationships (resolved by string against the shared ORM registry)
-    design_version: Mapped[StudyVersion] = relationship(
-        "StudyVersion", lazy="selectin"
-    )
-    form_definition: Mapped[FormDefinition | None] = relationship(
-        "FormDefinition", lazy="selectin"
-    )
+    design_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
+    form_definition: Mapped[FormDefinition | None] = relationship("FormDefinition", lazy="selectin")
     field_definition: Mapped[FieldDefinition | None] = relationship(
         "FieldDefinition", lazy="selectin"
     )

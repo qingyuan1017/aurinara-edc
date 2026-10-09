@@ -28,10 +28,10 @@ from app.schemas.designer.views import (
     CodelistView,
     CodingSettingView,
     CrfAccessDefinitionView,
-    CycleDefinitionView,
     EditCheckRuleView,
     FieldDefinitionView,
     FormDefinitionView,
+    FormDependencyView,
     FrozenView,
     PublishedDesignView,
     RawDataVariableSettingView,
@@ -39,6 +39,7 @@ from app.schemas.designer.views import (
     ScheduleOfAssessmentView,
     SubjectPhaseDefinitionView,
     VisitDefinitionView,
+    VisitDependencyView,
 )
 
 DESIGNER_SCHEMA_PACKAGE = "app.schemas.designer"
@@ -51,7 +52,6 @@ __all__ = [
     "CodingSettingView",
     "ControlType",
     "CrfAccessDefinitionView",
-    "CycleDefinitionView",
     "EditCheckRuleView",
     "FieldDefinitionCreate",
     "FieldDefinitionResponse",
@@ -61,6 +61,7 @@ __all__ = [
     "FormDefinitionResponse",
     "FormDefinitionUpdate",
     "FormDefinitionView",
+    "FormDependencyView",
     "FormSectionCreate",
     "FormSectionResponse",
     "FormSectionUpdate",
@@ -77,4 +78,5 @@ __all__ = [
     "SubjectPhaseDefinitionResponse",
     "SubjectPhaseDefinitionView",
     "VisitDefinitionView",
+    "VisitDependencyView",
 ]

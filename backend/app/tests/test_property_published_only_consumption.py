@@ -398,7 +398,6 @@ async def test_published_only_consumption(shape: dict[str, object]) -> None:
         collection_reads = [
             service.list_forms,
             service.list_visit_definitions,
-            service.list_cycle_definitions,
             service.list_arm_definitions,
             service.list_edit_check_rules,
             service.list_codelists,
@@ -406,6 +405,8 @@ async def test_published_only_consumption(shape: dict[str, object]) -> None:
             service.list_crf_access_definitions,
             service.list_raw_data_variable_settings,
             service.list_coding_settings,
+            service.list_form_dependencies,
+            service.list_visit_dependencies,
         ]
 
         async with factory() as read_session:

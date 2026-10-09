@@ -1,32 +1,33 @@
 """Schedule_of_Assessment models — a NEW Designer-owned design-time table.
 
 A ``Schedule_of_Assessment`` (SoA) is the design-time matrix that maps forms or
-named procedures to the visit and/or cycle definitions at which they are
-collected, authored inside a ``Draft_Design`` and consumed downstream read-only
-through the Design_Consumption_Contract. These are **new** designer tables (not
-a reassignment of an existing EDC table), each bound to exactly one
+named procedures to the visit definitions at which they are collected, authored
+inside a ``Draft_Design`` and consumed downstream read-only through the
+Design_Consumption_Contract. These are **new** designer tables (not a
+reassignment of an existing EDC table), each bound to exactly one
 ``Design_Version`` through ``design_version_id``.
 
 The SoA is modelled as a parent ``ScheduleOfAssessment`` (one per
 ``Design_Version``) holding an ordered collection of ``ScheduleOfAssessmentEntry``
 rows. Each entry maps a form (``form_definitions``) **or** a named procedure to a
-``visit_definitions`` row and/or a ``cycle_definitions`` row:
+single ``visit_definitions`` row (a plain visit or a cycle — a cycle is now a
+visit of ``visit_type == 'cycle'``):
 
   - ``form_definition_id`` XOR ``procedure_name`` identifies *what* is collected.
-  - ``visit_definition_id`` and/or ``cycle_definition_id`` identify *when*.
+  - ``visit_definition_id`` identifies *when*.
 
 Satisfies Requirements:
-  - 4.1: Persist a schedule of assessment that maps forms/procedures to visit and
-         cycle definitions within a design version.
+  - 4.1: Persist a schedule of assessment that maps forms/procedures to visit
+         definitions within a design version.
 
 Conventions (matching the designer/edc models):
   - UUID primary keys.
   - Timezone-aware ``created_at`` / ``updated_at`` timestamps.
   - Soft-delete via a nullable ``deleted_at`` column.
   - FKs by table name so the shared ORM registry resolves them; referenced
-    designer models (FormDefinition / VisitDefinition / CycleDefinition) are
-    *not* imported at runtime to avoid coupling — relationships are declared by
-    string against the shared registry.
+    designer models (FormDefinition / VisitDefinition) are *not* imported at
+    runtime to avoid coupling — relationships are declared by string against the
+    shared registry.
 """
 
 from __future__ import annotations
@@ -74,9 +75,7 @@ class ScheduleOfAssessment(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Soft-delete
     deleted_at: Mapped[datetime | None] = mapped_column(
@@ -84,9 +83,7 @@ class ScheduleOfAssessment(Base):
     )
 
     # Relationships (resolved by string against the shared ORM registry)
-    design_version: Mapped[StudyVersion] = relationship(
-        "StudyVersion", lazy="selectin"
-    )
+    design_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
     entries: Mapped[list[ScheduleOfAssessmentEntry]] = relationship(
         "ScheduleOfAssessmentEntry",
         back_populates="schedule_of_assessment",
@@ -103,20 +100,18 @@ class ScheduleOfAssessment(Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<ScheduleOfAssessment(id={self.id}, "
-            f"design_version_id={self.design_version_id})>"
-        )
+        return f"<ScheduleOfAssessment(id={self.id}, design_version_id={self.design_version_id})>"
 
 
 class ScheduleOfAssessmentEntry(Base):
-    """One form/procedure-to-visit/cycle mapping within an SoA (R4.1).
+    """One form/procedure-to-visit mapping within an SoA (R4.1).
 
     ``form_definition_id`` *or* ``procedure_name`` identifies what is collected,
-    and ``visit_definition_id`` and/or ``cycle_definition_id`` identify when. The
-    FKs to ``form_definitions``, ``visit_definitions`` and ``cycle_definitions``
-    are declared by table name only (no runtime import of those designer models)
-    so the relationship is resolved lazily through the shared ORM registry.
+    and ``visit_definition_id`` identifies when (a cycle is now a visit of
+    ``visit_type == 'cycle'``). The FKs to ``form_definitions`` and
+    ``visit_definitions`` are declared by table name only (no runtime import of
+    those designer models) so the relationship is resolved lazily through the
+    shared ORM registry.
     """
 
     __tablename__ = "schedule_of_assessment_entries"
@@ -139,15 +134,11 @@ class ScheduleOfAssessmentEntry(Base):
     )
     procedure_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # When it is collected — a visit and/or a cycle (at least one is set).
+    # When it is collected — a single visit (a plain visit or a cycle). Nullable
+    # only to preserve pre-migration rows; the service requires it on new writes.
     visit_definition_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
         ForeignKey("visit_definitions.id", ondelete="CASCADE"),
-        nullable=True,
-    )
-    cycle_definition_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid,
-        ForeignKey("cycle_definitions.id", ondelete="CASCADE"),
         nullable=True,
     )
 
@@ -158,9 +149,7 @@ class ScheduleOfAssessmentEntry(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Soft-delete
     deleted_at: Mapped[datetime | None] = mapped_column(
@@ -185,10 +174,6 @@ class ScheduleOfAssessmentEntry(Base):
             "ix_schedule_of_assessment_entries_visit_definition_id",
             "visit_definition_id",
         ),
-        Index(
-            "ix_schedule_of_assessment_entries_cycle_definition_id",
-            "cycle_definition_id",
-        ),
     )
 
     def __repr__(self) -> str:
@@ -199,6 +184,5 @@ class ScheduleOfAssessmentEntry(Base):
         )
         return (
             f"<ScheduleOfAssessmentEntry(id={self.id}, {what}, "
-            f"visit_definition_id={self.visit_definition_id}, "
-            f"cycle_definition_id={self.cycle_definition_id})>"
+            f"visit_definition_id={self.visit_definition_id})>"
         )

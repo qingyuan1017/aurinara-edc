@@ -22,11 +22,13 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Column,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     String,
+    Table,
     Text,
     UniqueConstraint,
     Uuid,
@@ -37,6 +39,32 @@ from app.core.database import Base
 
 if TYPE_CHECKING:  # avoid a runtime import cycle; the registry resolves by string
     from app.models.designer.study_version import StudyVersion
+
+# Association table for the Arm_Definition <-> Visit_Definition membership: which
+# visits (plain visits and cycles, since a cycle is now a visit) occur in each
+# arm. Columns reference tables by name so the shared ORM registry resolves
+# ``visit_definitions`` independent of which module owns the model at import
+# time; both FKs cascade on delete so removing an arm or a visit prunes the edge.
+arm_definition_visits = Table(
+    "arm_definition_visits",
+    Base.metadata,
+    Column(
+        "arm_definition_id",
+        Uuid,
+        ForeignKey("arm_definitions.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "visit_definition_id",
+        Uuid,
+        ForeignKey("visit_definitions.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Index(
+        "ix_arm_definition_visits_visit_definition_id",
+        "visit_definition_id",
+    ),
+)
 
 
 class ArmDefinition(Base):
@@ -73,9 +101,7 @@ class ArmDefinition(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Soft-delete
     deleted_at: Mapped[datetime | None] = mapped_column(
@@ -83,8 +109,14 @@ class ArmDefinition(Base):
     )
 
     # Relationship (resolved by string against the shared ORM registry)
-    study_version: Mapped[StudyVersion] = relationship(
-        "StudyVersion", lazy="selectin"
+    study_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
+    # Many-to-many membership to Visit_Definitions (which visits occur in this
+    # arm). Resolved by class name so the registry links regardless of the
+    # owning module of VisitDefinition.
+    visits = relationship(
+        "VisitDefinition",
+        secondary=arm_definition_visits,
+        lazy="selectin",
     )
 
     __table_args__ = (

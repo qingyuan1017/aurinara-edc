@@ -59,18 +59,23 @@ class RawDataVariableSetting(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     data_type: Mapped[str] = mapped_column(String(50), nullable=False)
 
-    # Free-form, type-specific attributes (R4.7)
-    attributes: Mapped[dict[str, Any]] = mapped_column(
-        JSONBType, nullable=False, default=dict
+    # Dataset-generation configuration: a display label for a fixed variable and
+    # a suffix applied for special variable types. Both optional and nullable.
+    label: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="display label for a fixed variable"
     )
+    suffix: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="suffix for special variable types"
+    )
+
+    # Free-form, type-specific attributes (R4.7)
+    attributes: Mapped[dict[str, Any]] = mapped_column(JSONBType, nullable=False, default=dict)
 
     # Timestamps (timezone-aware)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Soft-delete
     deleted_at: Mapped[datetime | None] = mapped_column(
@@ -78,9 +83,7 @@ class RawDataVariableSetting(Base):
     )
 
     # Relationship (resolved by string against the shared ORM registry)
-    design_version: Mapped[StudyVersion] = relationship(
-        "StudyVersion", lazy="selectin"
-    )
+    design_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
 
     __table_args__ = (
         Index(
