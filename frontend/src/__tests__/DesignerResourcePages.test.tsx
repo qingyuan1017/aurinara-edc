@@ -6,6 +6,7 @@ import { CodelistsPage } from '@/features/designer/CodelistsPage'
 import { SubjectPhasesPage } from '@/features/designer/SubjectPhasesPage'
 import { ArmsPage } from '@/features/designer/ArmsPage'
 import { ScheduleOfAssessmentPage } from '@/features/designer/ScheduleOfAssessmentPage'
+import { VisitsPage } from '@/features/designer/VisitsPage'
 import { useAuthStore } from '@/lib/auth'
 import { api } from '@/lib/api'
 
@@ -128,6 +129,44 @@ describe('ArmsPage', () => {
       '/designer/versions/ver-draft/arms',
       { name: 'Active', display_order: 1, description: null },
     ))
+  })
+})
+
+describe('VisitsPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    seedPermissions(['designer.visit.read', 'designer.visit.configure'])
+  })
+
+  it('lists visit definitions and creates a new one against the draft version', async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: DRAFT_VERSIONS })
+      return Promise.resolve({
+        data: [
+          { id: 'vd-1', study_version_id: 'ver-draft', name: 'Baseline', visit_number: 1, visit_type: 'scheduled', target_day: 0, window_before: 1, window_after: 1, display_order: 1, is_required: true, created_at: 'x' },
+        ],
+      })
+    })
+    vi.mocked(api.post).mockResolvedValue({ data: { id: 'vd-2', study_version_id: 'ver-draft', name: 'Week 2', visit_number: 2, visit_type: 'scheduled', target_day: 14, window_before: null, window_after: null, display_order: 2, is_required: true, created_at: 'x' } } as never)
+
+    renderPage(<VisitsPage studyId="study-1" />)
+
+    expect(await screen.findByText('Baseline')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('Baseline'), { target: { value: 'Week 2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add visit' }))
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(
+      '/designer/versions/ver-draft/visits',
+      expect.objectContaining({ name: 'Week 2', visit_number: 1, visit_type: 'scheduled', display_order: 1, is_required: true, target_day: null, window_before: null, window_after: null }),
+    ))
+  })
+
+  it('denies access without the read permission', async () => {
+    seedPermissions([])
+    vi.mocked(api.get).mockResolvedValue({ data: DRAFT_VERSIONS } as never)
+    renderPage(<VisitsPage studyId="study-1" />)
+    await waitFor(() => expect(screen.queryByText('Visits')).not.toBeInTheDocument())
   })
 })
 

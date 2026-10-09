@@ -10,6 +10,7 @@
 export { FormBuilderPage } from './FormBuilderPage'
 export { CodelistsPage } from './CodelistsPage'
 export { SubjectPhasesPage } from './SubjectPhasesPage'
+export { VisitsPage } from './VisitsPage'
 export { ScheduleOfAssessmentPage } from './ScheduleOfAssessmentPage'
 export { CyclesPage } from './CyclesPage'
 export { ArmsPage } from './ArmsPage'

@@ -20,7 +20,7 @@ import { NotificationsPage } from '@/features/notifications'
 import { SDVWorklistPage, ReviewWorklistPage } from '@/features/quality'
 import { StudyListPage, StudyVersioningPage } from '@/features/studies'
 import { StudyDetailPage } from '@/features/studies/StudyDetailPage'
-import { CodelistsPage, SubjectPhasesPage, ScheduleOfAssessmentPage, CyclesPage, ArmsPage, CrfAccessPage, RawDataVariablesPage, CodingSettingsPage, FormBuilderPage } from '@/features/designer'
+import { CodelistsPage, SubjectPhasesPage, VisitsPage, ScheduleOfAssessmentPage, CyclesPage, ArmsPage, CrfAccessPage, RawDataVariablesPage, CodingSettingsPage, FormBuilderPage } from '@/features/designer'
 import { SubjectCasebookPage, SubjectListPage } from '@/features/subjects'
 import { FormEntryPage } from '@/features/forms'
 import { QueryListPage, QueryDetailPage } from '@/features/queries'
@@ -433,6 +433,7 @@ function CTMSSiteActivationRoute() {
 // draft Design_Version where the surface is version-scoped.
 const designerCodelistsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/codelists', component: () => createElement(DesignerResourceRoute, { Component: CodelistsPage }) })
 const designerSubjectPhasesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/subject-phases', component: () => createElement(DesignerResourceRoute, { Component: SubjectPhasesPage }) })
+const designerVisitsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/visits', component: () => createElement(DesignerResourceRoute, { Component: VisitsPage }) })
 const designerSoARoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/schedule-of-assessment', component: () => createElement(DesignerResourceRoute, { Component: ScheduleOfAssessmentPage }) })
 const designerCyclesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/cycles', component: () => createElement(DesignerResourceRoute, { Component: CyclesPage }) })
 const designerArmsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/arms', component: () => createElement(DesignerResourceRoute, { Component: ArmsPage }) })
@@ -443,6 +444,7 @@ const designerCodingSettingsRoute = createRoute({ getParentRoute: () => appShell
 // edit-checks pattern). studyId is resolved from the active study context.
 const designerCodelistsCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/codelists', component: () => createElement(DesignerResourceRoute, { Component: CodelistsPage }) })
 const designerSubjectPhasesCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/subject-phases', component: () => createElement(DesignerResourceRoute, { Component: SubjectPhasesPage }) })
+const designerVisitsCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/visits', component: () => createElement(DesignerResourceRoute, { Component: VisitsPage }) })
 const designerSoACtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/schedule-of-assessment', component: () => createElement(DesignerResourceRoute, { Component: ScheduleOfAssessmentPage }) })
 const designerCyclesCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/cycles', component: () => createElement(DesignerResourceRoute, { Component: CyclesPage }) })
 const designerArmsCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/arms', component: () => createElement(DesignerResourceRoute, { Component: ArmsPage }) })
@@ -514,6 +516,7 @@ const routeTree = rootRoute.addChildren([
       studyEditChecksRoute,
       designerCodelistsRoute,
       designerSubjectPhasesRoute,
+      designerVisitsRoute,
       designerSoARoute,
       designerCyclesRoute,
       designerArmsRoute,
@@ -522,6 +525,7 @@ const routeTree = rootRoute.addChildren([
       designerCodingSettingsRoute,
       designerCodelistsCtxRoute,
       designerSubjectPhasesCtxRoute,
+      designerVisitsCtxRoute,
       designerSoACtxRoute,
       designerCyclesCtxRoute,
       designerArmsCtxRoute,

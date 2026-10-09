@@ -482,7 +482,7 @@
           "health"
         ],
         "summary": "Liveness",
-        "description": "Liveness probe — confirms the process is running.\n\nReturns 200 with {\"status\": \"alive\"} unconditionally.",
+        "description": "Liveness probe \u2014 confirms the process is running.\n\nReturns 200 with {\"status\": \"alive\"} unconditionally.",
         "operationId": "liveness_api_v1_health_live_get",
         "responses": {
           "200": {
@@ -506,7 +506,7 @@
           "health"
         ],
         "summary": "Readiness",
-        "description": "Readiness probe — checks downstream dependencies (database).\n\nReturns 200 if DB is reachable, 503 otherwise.",
+        "description": "Readiness probe \u2014 checks downstream dependencies (database).\n\nReturns 200 if DB is reachable, 503 otherwise.",
         "operationId": "readiness_api_v1_health_ready_get",
         "responses": {
           "200": {
@@ -20243,6 +20243,116 @@
         }
       }
     },
+    "/api/v1/designer/versions/{version_id}/visits": {
+      "post": {
+        "tags": [
+          "designer-visits"
+        ],
+        "summary": "Create Visit",
+        "description": "Create a Visit_Definition within a draft Design_Version.\n\nPermission: designer.visit.configure (Designer_Role only)",
+        "operationId": "create_visit_api_v1_designer_versions__version_id__visits_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitDefinitionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "designer-visits"
+        ],
+        "summary": "List Visits",
+        "description": "List the Visit_Definitions for a Design_Version.\n\nPermission: designer.visit.read (Designer_Role only)",
+        "operationId": "list_visits_api_v1_designer_versions__version_id__visits_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VisitDefinitionResponse"
+                  },
+                  "title": "Response List Visits Api V1 Designer Versions  Version Id  Visits Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/designer/versions/{version_id}/arms": {
       "post": {
         "tags": [
@@ -20742,7 +20852,7 @@
           "studies"
         ],
         "summary": "Transition Study Status",
-        "description": "Transition a study's status along the allowed state machine.\n\nPermission: study.configure\nRequirement 4.3: Draft → UAT → Active → Enrollment Closed → Locked → Archived.",
+        "description": "Transition a study's status along the allowed state machine.\n\nPermission: study.configure\nRequirement 4.3: Draft \u2192 UAT \u2192 Active \u2192 Enrollment Closed \u2192 Locked \u2192 Archived.",
         "operationId": "transition_study_status_api_v1_studies__study_id__transition_post",
         "security": [
           {
@@ -22549,7 +22659,7 @@
           "queries"
         ],
         "summary": "Respond To Query",
-        "description": "Respond to a query — transitions Open/Reopened → Answered.\n\nPermission: query.respond\nRequirement 13.3: Respond appends to message thread and transitions status.",
+        "description": "Respond to a query \u2014 transitions Open/Reopened \u2192 Answered.\n\nPermission: query.respond\nRequirement 13.3: Respond appends to message thread and transitions status.",
         "operationId": "respond_to_query_api_v1_queries__query_id__respond_post",
         "security": [
           {
@@ -22608,7 +22718,7 @@
           "queries"
         ],
         "summary": "Close Query",
-        "description": "Close a query — transitions Open/Answered/Reopened → Closed.\n\nPermission: query.close\nRequirement 13.4: Close records the closing actor and timestamp.",
+        "description": "Close a query \u2014 transitions Open/Answered/Reopened \u2192 Closed.\n\nPermission: query.close\nRequirement 13.4: Close records the closing actor and timestamp.",
         "operationId": "close_query_api_v1_queries__query_id__close_post",
         "security": [
           {
@@ -22657,7 +22767,7 @@
           "queries"
         ],
         "summary": "Reopen Query",
-        "description": "Reopen a closed query — transitions Closed → Reopened.\n\nPermission: query.reopen\nRequirement 13.5: Reopen transitions Closed → Reopened.",
+        "description": "Reopen a closed query \u2014 transitions Closed \u2192 Reopened.\n\nPermission: query.reopen\nRequirement 13.5: Reopen transitions Closed \u2192 Reopened.",
         "operationId": "reopen_query_api_v1_queries__query_id__reopen_post",
         "security": [
           {
@@ -22706,7 +22816,7 @@
           "queries"
         ],
         "summary": "Cancel Query",
-        "description": "Cancel a query — transitions Open/Answered → Cancelled.\n\nPermission: query.cancel",
+        "description": "Cancel a query \u2014 transitions Open/Answered \u2192 Cancelled.\n\nPermission: query.cancel",
         "operationId": "cancel_query_api_v1_queries__query_id__cancel_post",
         "security": [
           {
@@ -24845,7 +24955,7 @@
           "study-info"
         ],
         "summary": "Get Status Configuration",
-        "description": "Status Configuration — current status + reachable statuses (R8.1).",
+        "description": "Status Configuration \u2014 current status + reachable statuses (R8.1).",
         "operationId": "get_status_configuration_api_v1_studies__study_id__status_configuration_get",
         "security": [
           {
@@ -24894,7 +25004,7 @@
           "study-info"
         ],
         "summary": "Get Id Configuration",
-        "description": "ID Configuration — design-dependent id formats (R8.1, R8.14).",
+        "description": "ID Configuration \u2014 design-dependent id formats (R8.1, R8.14).",
         "operationId": "get_id_configuration_api_v1_studies__study_id__id_configuration_get",
         "security": [
           {
@@ -26285,8 +26395,8 @@
           },
           "display_order": {
             "type": "integer",
-            "maximum": 999,
-            "minimum": 1,
+            "maximum": 999.0,
+            "minimum": 1.0,
             "title": "Display Order"
           },
           "description": {
@@ -28625,8 +28735,8 @@
           },
           "display_order": {
             "type": "integer",
-            "maximum": 999,
-            "minimum": 1,
+            "maximum": 999.0,
+            "minimum": 1.0,
             "title": "Display Order"
           },
           "visit_definition_ids": {
@@ -29187,7 +29297,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 0
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -29405,7 +29515,7 @@
           "meta"
         ],
         "title": "EnrollmentStatusReport",
-        "description": "Enrollment Status report — subject counts by status within scope (R9.4).\n\nThis report is backed by the Subject operational model, so its rows reflect\nreal stored data filtered to the requesting user's Authorization_Scope."
+        "description": "Enrollment Status report \u2014 subject counts by status within scope (R9.4).\n\nThis report is backed by the Subject operational model, so its rows reflect\nreal stored data filtered to the requesting user's Authorization_Scope."
       },
       "EnrollmentStatusRow": {
         "properties": {
@@ -29432,7 +29542,7 @@
           },
           "subject_count": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Subject Count"
           }
         },
@@ -29469,7 +29579,7 @@
           },
           "target_quantity": {
             "type": "integer",
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Target Quantity"
           },
           "planning_period_start": {
@@ -29671,7 +29781,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "exclusiveMinimum": 0
+                "exclusiveMinimum": 0.0
               },
               {
                 "type": "null"
@@ -29973,7 +30083,7 @@
         },
         "type": "object",
         "title": "ExportFilters",
-        "description": "Filter parameters for an export job.\n\nAll fields optional — only provided filters are applied when generating\nthe export file."
+        "description": "Filter parameters for an export job.\n\nAll fields optional \u2014 only provided filters are applied when generating\nthe export file."
       },
       "ExportListResponse": {
         "properties": {
@@ -30402,7 +30512,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 0
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -30414,7 +30524,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 0
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -30817,7 +30927,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 0
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -30829,7 +30939,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 0
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -33030,7 +33140,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 1
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -33733,15 +33843,15 @@
           },
           "page": {
             "type": "integer",
-            "maximum": 10000,
-            "minimum": 1,
+            "maximum": 10000.0,
+            "minimum": 1.0,
             "title": "Page",
             "default": 1
           },
           "page_size": {
             "type": "integer",
-            "maximum": 1000,
-            "minimum": 1,
+            "maximum": 1000.0,
+            "minimum": 1.0,
             "title": "Page Size",
             "default": 100
           }
@@ -34952,7 +35062,7 @@
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "description": "Number of exported Audit_Events"
           },
@@ -35505,20 +35615,20 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page",
             "description": "1-indexed page number"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 1000,
-            "minimum": 1,
+            "maximum": 1000.0,
+            "minimum": 1.0,
             "title": "Page Size",
             "description": "Items per page, from 1 through 1,000"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "description": "Total number of matching records"
           }
@@ -35543,20 +35653,20 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page",
             "description": "1-indexed page number"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 1000,
-            "minimum": 1,
+            "maximum": 1000.0,
+            "minimum": 1.0,
             "title": "Page Size",
             "description": "Items per page, from 1 through 1,000"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "description": "Total number of matching records"
           }
@@ -35581,20 +35691,20 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page",
             "description": "1-indexed page number"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 1000,
-            "minimum": 1,
+            "maximum": 1000.0,
+            "minimum": 1.0,
             "title": "Page Size",
             "description": "Items per page, from 1 through 1,000"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "description": "Total number of matching records"
           }
@@ -35619,20 +35729,20 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page",
             "description": "1-indexed page number"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 1000,
-            "minimum": 1,
+            "maximum": 1000.0,
+            "minimum": 1.0,
             "title": "Page Size",
             "description": "Items per page, from 1 through 1,000"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "description": "Total number of matching records"
           }
@@ -35657,20 +35767,20 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page",
             "description": "1-indexed page number"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 1000,
-            "minimum": 1,
+            "maximum": 1000.0,
+            "minimum": 1.0,
             "title": "Page Size",
             "description": "Items per page, from 1 through 1,000"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "description": "Total number of matching records"
           }
@@ -35695,20 +35805,20 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page",
             "description": "1-indexed page number"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 1000,
-            "minimum": 1,
+            "maximum": 1000.0,
+            "minimum": 1.0,
             "title": "Page Size",
             "description": "Items per page, from 1 through 1,000"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "description": "Total number of matching records"
           }
@@ -35733,18 +35843,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -35768,18 +35878,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -35803,18 +35913,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -35838,18 +35948,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -35873,18 +35983,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -35908,18 +36018,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -35943,18 +36053,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -35978,18 +36088,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36013,18 +36123,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36048,18 +36158,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36083,18 +36193,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36118,18 +36228,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36153,18 +36263,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36188,18 +36298,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36223,18 +36333,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36258,18 +36368,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36293,18 +36403,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36328,18 +36438,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36363,18 +36473,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36398,18 +36508,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36433,18 +36543,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36468,18 +36578,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36503,18 +36613,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36538,18 +36648,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36573,18 +36683,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -36608,18 +36718,18 @@
           },
           "page": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page"
           },
           "page_size": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Page Size"
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total"
           }
         },
@@ -37268,7 +37378,7 @@
             "type": "number",
             "title": "Average Days Open",
             "description": "Average number of days that currently-open queries have been open",
-            "default": 0
+            "default": 0.0
           }
         },
         "type": "object",
@@ -37457,7 +37567,7 @@
           "system"
         ],
         "title": "QueryType",
-        "description": "Origin of the query — manual or system-generated."
+        "description": "Origin of the query \u2014 manual or system-generated."
       },
       "RawDataVariableSettingCreate": {
         "properties": {
@@ -38050,7 +38160,7 @@
           },
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "description": "Number of in-scope rows returned",
             "default": 0
@@ -38267,21 +38377,21 @@
         "properties": {
           "submitted": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Submitted",
             "description": "Regulatory_Reports whose status is Submitted",
             "default": 0
           },
           "overdue": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Overdue",
             "description": "Not-Submitted Regulatory_Reports whose clock due date is earlier than the current UTC date",
             "default": 0
           },
           "on_time": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "On Time",
             "description": "Not-Submitted Regulatory_Reports whose clock due date is not earlier than the current UTC date",
             "default": 0
@@ -40583,8 +40693,8 @@
           },
           "display_order": {
             "type": "integer",
-            "maximum": 999,
-            "minimum": 1,
+            "maximum": 999.0,
+            "minimum": 1.0,
             "title": "Display Order"
           }
         },
@@ -41521,6 +41631,176 @@
         ],
         "title": "VisitDateRecord",
         "description": "Request body for recording a visit date (Requirement 8.3).\n\nThe optional ``baseline_date`` anchors the day offset used to compute the\nwindow status relative to the definition's ``target_day``. When omitted,\nno window status is computed."
+      },
+      "VisitDefinitionCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "visit_number": {
+            "type": "integer",
+            "maximum": 9999.0,
+            "minimum": 1.0,
+            "title": "Visit Number",
+            "description": "Ordinal number of the visit (1-9999)"
+          },
+          "visit_type": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Visit Type",
+            "description": "e.g. scheduled, unscheduled, screening"
+          },
+          "target_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 99999.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Day",
+            "description": "Day relative to baseline (0-99999; None when not applicable)"
+          },
+          "window_before": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 99999.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Before",
+            "description": "Lower window bound: days before target_day (0-99999)"
+          },
+          "window_after": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 99999.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window After",
+            "description": "Upper window bound: days after target_day (0-99999)"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order",
+            "description": "Sort order within the schedule"
+          },
+          "is_required": {
+            "type": "boolean",
+            "title": "Is Required",
+            "description": "Whether the visit is required",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "visit_number",
+          "visit_type",
+          "display_order"
+        ],
+        "title": "VisitDefinitionCreate",
+        "description": "Request body for defining a study visit (Requirement 4.2).\n\nPersisted against a draft Design_Version. ``target_day`` and the window\nbounds are optional (e.g. for screening or unscheduled visit types); when\nprovided they must fall within the inclusive bounds below. The ordering rule\n(lower window bound \u2264 upper window bound) is enforced in the service so the\nrejection error can identify the invalid window (Requirement 4.3)."
+      },
+      "VisitDefinitionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "study_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Version Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "visit_number": {
+            "type": "integer",
+            "title": "Visit Number"
+          },
+          "visit_type": {
+            "type": "string",
+            "title": "Visit Type"
+          },
+          "target_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Day"
+          },
+          "window_before": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Before"
+          },
+          "window_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window After"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order"
+          },
+          "is_required": {
+            "type": "boolean",
+            "title": "Is Required"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "study_version_id",
+          "name",
+          "visit_number",
+          "visit_type",
+          "display_order",
+          "is_required",
+          "created_at"
+        ],
+        "title": "VisitDefinitionResponse",
+        "description": "Response schema for a visit definition (Requirement 4.2)."
       },
       "VisitInstanceResponse": {
         "properties": {

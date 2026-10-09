@@ -64,6 +64,8 @@ export const PERMISSIONS = {
   DESIGNER_FIELD_CONFIGURE: 'designer.field.configure',
   DESIGNER_EDITCHECK_CONFIGURE: 'designer.editcheck.configure',
   DESIGNER_EDITCHECK_TEST: 'designer.editcheck.test',
+  DESIGNER_VISIT_READ: 'designer.visit.read',
+  DESIGNER_VISIT_CONFIGURE: 'designer.visit.configure',
   DESIGNER_CODELIST_READ: 'designer.codelist.read',
   DESIGNER_CODELIST_CONFIGURE: 'designer.codelist.configure',
   DESIGNER_SUBJECT_PHASE_CONFIGURE: 'designer.subject_phase.configure',
