@@ -59,11 +59,20 @@ api.interceptors.response.use(
           refresh_token: refreshToken,
         });
 
-        localStorage.setItem("access_token", data.access_token);
+        // For Cognito, the ID token is the Bearer credential (it carries the
+        // verified email/name claims the backend needs); fall back to the
+        // access token for the local provider. Keep this consistent with how
+        // the SDK login maps tokens in cognito-sdk.ts.
+        const isCognito =
+          localStorage.getItem("auth_provider") === "cognito";
+        const nextToken =
+          isCognito && data.id_token ? data.id_token : data.access_token;
+
+        localStorage.setItem("access_token", nextToken);
         if (data.refresh_token) {
           localStorage.setItem("refresh_token", data.refresh_token);
         }
-        originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
+        originalRequest.headers.Authorization = `Bearer ${nextToken}`;
         return api(originalRequest);
       } catch {
         // Refresh failed — clear tokens and redirect to login

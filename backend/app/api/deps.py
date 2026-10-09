@@ -25,6 +25,7 @@ from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.core.request_context import set_actor
 from app.core.security import InvalidTokenError, decode_token
 from app.models.shared.identity import Role, RolePermission, User, UserRole, UserStatus
+from app.services.shared.auth_service import AuthenticationError as ServiceAuthError
 from app.services.shared.auth_service import auth_service
 from app.services.shared.permission_service import PermissionService
 
@@ -81,6 +82,12 @@ async def get_current_user(
             user = await auth_service.validate_external_token(session, token)
         except InvalidTokenError:
             raise AuthenticationError("Invalid or expired token") from None
+        except ServiceAuthError as exc:
+            # AuthService raises its own AuthenticationError (a plain Exception,
+            # not a core DomainError), e.g. when a valid Cognito token maps to no
+            # internal user. Re-raise as the core DomainError so it is mapped to
+            # a 401 envelope instead of escaping as an unhandled 500.
+            raise AuthenticationError(str(exc)) from None
         if user is None:
             raise AuthenticationError("Invalid or expired token") from None
         user_id = user.id

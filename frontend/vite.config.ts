@@ -13,6 +13,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    // `amazon-cognito-identity-js` references the Node `global` object, which
+    // does not exist in the browser. Alias it to `globalThis` so the SDK loads
+    // instead of throwing "global is not defined" at module init (blank screen).
+    define: {
+      global: 'globalThis',
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

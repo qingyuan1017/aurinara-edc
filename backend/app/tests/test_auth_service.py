@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pyotp
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.database import Base
@@ -20,6 +21,7 @@ from app.core.security import (
     decode_token,
     hash_password,
 )
+from app.models.shared.audit import AuditEvent
 from app.models.shared.identity import (
     Permission,
     Role,
@@ -457,3 +459,184 @@ class TestValidateExternalToken:
         )
         with pytest.raises(AuthenticationError, match="Account is inactive"):
             await auth_service.validate_external_token(db_session, "access-token")
+
+
+# ---------------------------------------------------------------------------
+# JIT provisioning tests
+# ---------------------------------------------------------------------------
+
+
+def _id_token_payload(
+    *,
+    sub: str = "new-cognito-subject",
+    email: str = "newuser@example.com",
+    email_verified: bool = True,
+    given_name: str | None = None,
+    family_name: str | None = None,
+    name: str | None = None,
+) -> CognitoTokenPayload:
+    """Build a verified ID-token payload for provisioning tests."""
+    return CognitoTokenPayload(
+        sub=sub,
+        email=email,
+        email_verified=email_verified,
+        token_use="id",
+        iss="https://issuer",
+        exp=datetime.now(UTC) + timedelta(minutes=5),
+        audience="client",
+        given_name=given_name,
+        family_name=family_name,
+        name=name,
+    )
+
+
+async def _count(db_session: AsyncSession, model) -> int:
+    """Return the number of rows for the given model."""
+    result = await db_session.execute(select(func.count()).select_from(model))
+    return result.scalar_one()
+
+
+class TestJitProvisioning:
+    """Test AuthService.validate_external_token JIT provisioning of new users."""
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_verified_id_token_provisions_active_roleless_user(
+        self, validate, auth_service, db_session
+    ):
+        validate.return_value = _id_token_payload(given_name="Grace", family_name="Hopper")
+        user = await auth_service.validate_external_token(db_session, "id-token")
+
+        assert user is not None
+        assert user.external_identity_provider == "cognito"
+        assert user.external_subject == "new-cognito-subject"
+        assert user.email == "newuser@example.com"
+        assert user.status == UserStatus.active
+        assert user.password_hash is None
+        # Zero roles is the deliberate security default.
+        assert await _count(db_session, UserRole) == 0
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_provisioned_user_has_names_from_given_family_claims(
+        self, validate, auth_service, db_session
+    ):
+        validate.return_value = _id_token_payload(given_name="Grace", family_name="Hopper")
+        user = await auth_service.validate_external_token(db_session, "id-token")
+        assert user.first_name == "Grace"
+        assert user.last_name == "Hopper"
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_names_fall_back_to_split_name_claim(self, validate, auth_service, db_session):
+        validate.return_value = _id_token_payload(name="Jane Q Doe")
+        user = await auth_service.validate_external_token(db_session, "id-token")
+        assert user.first_name == "Jane"
+        assert user.last_name == "Q Doe"
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_names_fall_back_to_email_local_part(self, validate, auth_service, db_session):
+        validate.return_value = _id_token_payload(email="johnny@example.com")
+        user = await auth_service.validate_external_token(db_session, "id-token")
+        assert user.first_name == "johnny"
+        assert user.last_name == "johnny"
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_partial_name_claims_combine_sources(self, validate, auth_service, db_session):
+        # given_name present, family_name missing -> last_name from email local-part.
+        validate.return_value = _id_token_payload(email="smith@example.com", given_name="Ada")
+        user = await auth_service.validate_external_token(db_session, "id-token")
+        assert user.first_name == "Ada"
+        assert user.last_name == "smith"
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_access_token_unknown_subject_does_not_provision(
+        self, validate, auth_service, db_session
+    ):
+        validate.return_value = CognitoTokenPayload(
+            sub="access-only-subject",
+            email="noone@example.com",
+            email_verified=True,
+            token_use="access",
+            iss="https://issuer",
+            exp=datetime.now(UTC) + timedelta(minutes=5),
+            client_id="client",
+        )
+        before = await _count(db_session, User)
+        with pytest.raises(AuthenticationError, match="No internal user mapped"):
+            await auth_service.validate_external_token(db_session, "access-token")
+        assert await _count(db_session, User) == before
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_unverified_id_token_does_not_provision(self, validate, auth_service, db_session):
+        validate.return_value = _id_token_payload(email_verified=False)
+        before = await _count(db_session, User)
+        with pytest.raises(AuthenticationError, match="No internal user mapped"):
+            await auth_service.validate_external_token(db_session, "id-token")
+        assert await _count(db_session, User) == before
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_id_token_without_email_does_not_provision(
+        self, validate, auth_service, db_session
+    ):
+        payload = _id_token_payload()
+        payload.email = None
+        validate.return_value = payload
+        before = await _count(db_session, User)
+        with pytest.raises(AuthenticationError, match="No internal user mapped"):
+            await auth_service.validate_external_token(db_session, "id-token")
+        assert await _count(db_session, User) == before
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_provisioning_is_idempotent(self, validate, auth_service, db_session):
+        validate.return_value = _id_token_payload(given_name="Grace", family_name="Hopper")
+        first = await auth_service.validate_external_token(db_session, "id-token")
+        second = await auth_service.validate_external_token(db_session, "id-token")
+        assert first.id == second.id
+        assert await _count(db_session, User) == 1
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_provisioning_writes_sanitized_audit_event(
+        self, validate, auth_service, db_session
+    ):
+        validate.return_value = _id_token_payload(given_name="Grace", family_name="Hopper")
+        user = await auth_service.validate_external_token(db_session, "id-token")
+
+        result = await db_session.execute(
+            select(AuditEvent).where(AuditEvent.action == "provision_external")
+        )
+        events = result.scalars().all()
+        assert len(events) == 1
+        event = events[0]
+        assert event.entity_id == user.id
+        assert event.entity_type == "user"
+        assert event.actor_id is None
+        assert event.actor_kind == "external"
+        assert "new-cognito-subject" in event.new_value
+        assert "id-token" not in event.new_value
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_inactive_provisioned_user_not_reactivated(
+        self, validate, auth_service, db_session, inactive_user
+    ):
+        # An existing inactive user already linked by subject is still rejected;
+        # JIT never touches an existing row.
+        inactive_user.external_identity_provider = "cognito"
+        inactive_user.external_subject = "inactive-id-subject"
+        await db_session.flush()
+        validate.return_value = _id_token_payload(
+            sub="inactive-id-subject", email=inactive_user.email
+        )
+        with pytest.raises(AuthenticationError, match="Account is inactive"):
+            await auth_service.validate_external_token(db_session, "id-token")
+
+    @patch("app.services.shared.auth_service.validate_cognito_token")
+    async def test_existing_subject_match_still_works(
+        self, validate, auth_service, db_session, active_user
+    ):
+        active_user.external_identity_provider = "cognito"
+        active_user.external_subject = "existing-subject"
+        await db_session.flush()
+        before = await _count(db_session, User)
+        validate.return_value = _id_token_payload(sub="existing-subject", email=active_user.email)
+        mapped = await auth_service.validate_external_token(db_session, "id-token")
+        assert mapped.id == active_user.id
+        # No provisioning occurred.
+        assert await _count(db_session, User) == before

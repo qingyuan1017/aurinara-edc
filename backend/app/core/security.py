@@ -274,7 +274,12 @@ def check_inactivity(last_activity: datetime | None, timeout_minutes: int | None
 
 
 class CognitoTokenPayload(BaseModel):
-    """Claims extracted from a validated Cognito JWT."""
+    """Claims extracted from a validated Cognito JWT.
+
+    ``given_name``, ``family_name``, and ``name`` are optional display claims
+    present on ID tokens only. They are never used to gate validation; access
+    tokens simply leave them ``None``.
+    """
 
     sub: str
     email: str | None = None
@@ -284,6 +289,9 @@ class CognitoTokenPayload(BaseModel):
     exp: datetime
     client_id: str | None = None
     audience: str | list[str] | None = None
+    given_name: str | None = None
+    family_name: str | None = None
+    name: str | None = None
 
 
 # Bounded process-local cache. A key miss forces one refresh for Cognito rotation.
@@ -386,6 +394,9 @@ def validate_cognito_token(token: str) -> CognitoTokenPayload | None:
             exp=datetime.fromtimestamp(payload["exp"], tz=UTC),
             client_id=payload.get("client_id"),
             audience=audience,
+            given_name=payload.get("given_name"),
+            family_name=payload.get("family_name"),
+            name=payload.get("name"),
         )
     except InvalidTokenError:
         raise

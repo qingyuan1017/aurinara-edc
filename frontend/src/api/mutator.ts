@@ -1,6 +1,6 @@
 import type { AxiosError, AxiosRequestConfig } from "axios";
 
-import { api } from "@/lib/api";
+import { api, API_BASE_URL } from "@/lib/api";
 
 /**
  * Custom Axios instance for Orval-generated API clients.
@@ -22,9 +22,30 @@ export const customInstance = <T>(
 ): Promise<T> => {
   const controller = new AbortController();
 
+  // Orval bakes the full OpenAPI server path (including the `/api/v1` prefix)
+  // into every generated URL, but the shared `api` instance already applies
+  // that prefix via its `baseURL`. Without normalization the two concatenate
+  // into `/api/v1/api/v1/...` and 404. Strip a single leading `/api/v1` (or
+  // whatever prefix the configured base URL already carries) so generated and
+  // hand-written calls resolve to the same place.
+  const basePath = (() => {
+    try {
+      // API_BASE_URL may be relative ("/api/v1") or absolute; take the path.
+      return new URL(API_BASE_URL, "http://x").pathname.replace(/\/$/, "");
+    } catch {
+      return "";
+    }
+  })();
+
+  let url = config.url ?? "";
+  if (basePath && url.startsWith(`${basePath}/`)) {
+    url = url.slice(basePath.length);
+  }
+
   const promise = api({
     ...config,
     ...options,
+    url,
     signal: config.signal ?? options?.signal ?? controller.signal,
   }).then(({ data }) => data as T);
 
