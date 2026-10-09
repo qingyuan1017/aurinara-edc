@@ -42,6 +42,7 @@ from app.api.routes.designer.study_versions import (
     versions_router,
 )
 from app.api.routes.designer.subject_phases import router as subject_phases_router
+from app.api.routes.designer.visits import router as visits_router
 
 DESIGNER_ROUTE_PACKAGE = "app.api.routes.designer"
 
@@ -62,6 +63,7 @@ for resource_router in (
     subject_phases_router,
     schedule_of_assessment_router,
     cycles_router,
+    visits_router,
     arms_router,
     crf_access_router,
     raw_data_variables_router,

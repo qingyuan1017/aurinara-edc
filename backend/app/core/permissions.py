@@ -56,6 +56,8 @@ PERMISSION_CODES: set[str] = {
     "designer.soa.read",
     "designer.soa.configure",
     "designer.cycle.configure",
+    "designer.visit.read",
+    "designer.visit.configure",
     "designer.arm.configure",
     "designer.crf_access.configure",
     "designer.raw_data_variable.configure",
@@ -184,6 +186,8 @@ DESIGNER_PERMISSION_CODES: frozenset[str] = frozenset(
         "designer.soa.read",
         "designer.soa.configure",
         "designer.cycle.configure",
+        "designer.visit.read",
+        "designer.visit.configure",
         "designer.arm.configure",
         "designer.crf_access.configure",
         "designer.raw_data_variable.configure",
@@ -471,9 +475,7 @@ async def seed_roles_and_permissions(session: AsyncSession) -> None:
 
     # Build code -> Permission lookup (includes both pre-existing and newly added)
     all_perms_result = await session.execute(select(Permission))
-    perm_by_code: dict[str, Permission] = {
-        p.code: p for p in all_perms_result.scalars().all()
-    }
+    perm_by_code: dict[str, Permission] = {p.code: p for p in all_perms_result.scalars().all()}
 
     # --- Seed roles and role-permission associations ---
     existing_roles_result = await session.execute(select(Role))
@@ -498,9 +500,7 @@ async def seed_roles_and_permissions(session: AsyncSession) -> None:
         existing_permission_ids = set(
             (
                 await session.execute(
-                    select(RolePermission.permission_id).where(
-                        RolePermission.role_id == role.id
-                    )
+                    select(RolePermission.permission_id).where(RolePermission.role_id == role.id)
                 )
             )
             .scalars()
@@ -509,8 +509,6 @@ async def seed_roles_and_permissions(session: AsyncSession) -> None:
         for perm_code in permission_codes:
             perm = perm_by_code.get(perm_code)
             if perm is not None and perm.id not in existing_permission_ids:
-                session.add(
-                    RolePermission(role_id=role.id, permission_id=perm.id)
-                )
+                session.add(RolePermission(role_id=role.id, permission_id=perm.id))
 
         await session.flush()

@@ -29,6 +29,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit_service
@@ -151,6 +152,29 @@ class VisitDefinitionService:
             actor_id,
         )
         return definition
+
+    async def list_definitions(
+        self,
+        session: AsyncSession,
+        version_id: UUID,
+    ) -> list[VisitDefinition]:
+        """List a version's Visit_Definitions ordered by display order.
+
+        Reads are not audited (matching the other Designer list reads).
+
+        Args:
+            session: Active async database session.
+            version_id: The owning Design_Version id.
+
+        Returns:
+            The version's VisitDefinitions ordered by ``display_order``.
+        """
+        result = await session.execute(
+            select(VisitDefinition)
+            .where(VisitDefinition.study_version_id == version_id)
+            .order_by(VisitDefinition.display_order)
+        )
+        return list(result.scalars().all())
 
 
 # Module-level singleton for convenience
