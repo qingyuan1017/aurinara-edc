@@ -85,6 +85,14 @@ class Query(Base):
         Uuid, ForeignKey("subjects.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Bound published design version (not-null after backfill — R2.7, R7.3, R11.2)
+    design_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("study_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Binds this operational record to a published design version",
+    )
+
     # Exactly-one affected object (Requirement 13.1)
     target_type: Mapped[str] = mapped_column(
         String(30),
@@ -155,6 +163,7 @@ class Query(Base):
         Index("ix_queries_study_id", "study_id"),
         Index("ix_queries_target_type_target_id", "target_type", "target_id"),
         Index("ix_queries_status", "status"),
+        Index("ix_queries_design_version_id", "design_version_id"),
     )
 
     def __repr__(self) -> str:

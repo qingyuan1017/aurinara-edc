@@ -24,7 +24,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.database import Base
 from app.core.exceptions import AuthenticationError
+from app.models.edc.form_data import FormInstance, FormInstanceStatus
+from app.models.edc.form_metadata import FormDefinition
 from app.models.edc.signature import Signature, SignatureObjectType, SignatureStatus
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject, SubjectStatus
 from app.models.shared.identity import User, UserStatus
 from app.services.edc.signature_service import SignatureService
 
@@ -96,6 +101,58 @@ class TestSignatureProperties:
 
         async with session_factory() as session:
             session.add(actor)
+            await session.flush()
+
+            # Seed the owning operational chain so the SignatureService can
+            # resolve the published-design binding (design_version_id) for the
+            # signed form object. The FormInstance id IS the signed object_id.
+            study = Study(
+                id=uuid.uuid4(),
+                study_code=f"SIG-{uuid.uuid4().hex[:8]}",
+                title="Signature Study",
+                status=StudyStatus.active,
+                created_by=actor.id,
+            )
+            version = StudyVersion(
+                id=uuid.uuid4(),
+                study_id=study.id,
+                version_number="1.0",
+                status=StudyVersionStatus.published.value,
+                published_by=actor.id,
+            )
+            site = Site(
+                id=uuid.uuid4(),
+                study_id=study.id,
+                site_number=f"{uuid.uuid4().int % 100000:05d}",
+                name="Signature Site",
+                status=SiteStatus.active,
+            )
+            form_definition = FormDefinition(
+                id=uuid.uuid4(),
+                study_version_id=version.id,
+                name="Signed Form",
+                form_code="SIG",
+                display_order=1,
+            )
+            subject = Subject(
+                id=uuid.uuid4(),
+                study_id=study.id,
+                site_id=site.id,
+                study_version_id=version.id,
+                subject_number=f"S-{uuid.uuid4().hex[:8]}",
+                status=SubjectStatus.enrolled,
+                created_by=actor.id,
+            )
+            form_instance = FormInstance(
+                id=object_id,
+                subject_id=subject.id,
+                form_definition_id=form_definition.id,
+                design_version_id=version.id,
+                status=FormInstanceStatus.submitted,
+            )
+            session.add_all(
+                [study, version, site, form_definition, subject, form_instance]
+            )
             await session.flush()
 
             # The verifier is called by the real service for both attempts; its

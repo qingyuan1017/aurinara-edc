@@ -5,7 +5,7 @@ import { invalidateCTMSCoordinationRemediation } from '@/features/ctms/cache'
 describe('CTMS coordination remediation cache policy', () => {
   it('invalidates coordination and affected operational queries without EDC keys', async () => {
     const queryClient = new QueryClient()
-    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(true)
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined)
 
     await invalidateCTMSCoordinationRemediation(queryClient, 'study-1', {
       id: 'task-1',
@@ -15,9 +15,10 @@ describe('CTMS coordination remediation cache policy', () => {
       conflict_type: 'VERSION_MISMATCH',
       status: 'open',
       sanitized_details: {},
+      created_at: '2026-02-01T09:00:00Z',
     })
 
-    const keys = invalidateQueries.mock.calls.map(([options]) => JSON.stringify(options.queryKey))
+    const keys = invalidateQueries.mock.calls.map(([options]) => JSON.stringify(options?.queryKey))
     expect(keys.some((key) => key.includes('failed-events'))).toBe(true)
     expect(keys.some((key) => key.includes('conflicts'))).toBe(true)
     expect(keys.some((key) => key.includes('events'))).toBe(true)

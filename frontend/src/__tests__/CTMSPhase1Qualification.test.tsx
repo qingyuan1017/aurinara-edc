@@ -84,7 +84,7 @@ describe('CTMS Phase 1 qualification workspace', () => {
     expect(await screen.findByText('Study operations')).toBeInTheDocument()
     expect(screen.getByText('CTMS operational workspace')).toBeInTheDocument()
     expect(screen.getByText('Canonical EDC identifiers remain read-only; CTMS owns operational records.')).toBeInTheDocument()
-    expect(await screen.findByText(/\"target\":25/)).toBeInTheDocument()
+    expect(await screen.findByText(/"target":25/)).toBeInTheDocument()
   })
 
   it('keeps the EDC fallback visible when the Phase 1 capability is disabled', async () => {

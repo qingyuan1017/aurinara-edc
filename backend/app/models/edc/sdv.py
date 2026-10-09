@@ -61,6 +61,14 @@ class SDVStatus(Base):
         comment="ID of the scoped entity (field_value, form_instance, visit_instance, or subject)",
     )
 
+    # Bound published design version (not-null after backfill — R2.7, R7.3, R11.2)
+    design_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("study_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Binds this operational record to a published design version",
+    )
+
     # Verification state
     is_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
@@ -91,6 +99,7 @@ class SDVStatus(Base):
         UniqueConstraint("scope_type", "scope_id", name="uq_sdv_status_scope"),
         Index("ix_sdv_status_scope_type_scope_id", "scope_type", "scope_id"),
         Index("ix_sdv_status_verified_by", "verified_by"),
+        Index("ix_sdv_status_design_version_id", "design_version_id"),
     )
 
     def __repr__(self) -> str:

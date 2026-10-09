@@ -53,9 +53,19 @@ class SiteService:
             The created Site instance.
 
         Raises:
-            ConflictError: If the site_number already exists within the study (Req 6.2).
+            ConflictError: If a Site with the same ``site_number`` already
+                exists within the study. ``Site`` is the canonical, shared
+                identity (R1.5); the canonical site identity key is
+                ``site_number`` scoped to its ``study_id`` (see the
+                ``uq_study_site_number`` constraint). A second row claiming the
+                same key would mint a competing identity, so the attempt is
+                rejected and the error details identify the conflicting
+                identity — the ``site_number``, ``study_id``, and the existing
+                site ``id`` (R1.6, Req 6.2).
         """
-        # Check uniqueness of site_number within the study (Req 6.2)
+        # Reject a competing canonical Site identity (R1.6). The canonical Site
+        # identity key is (study_id, site_number); a pre-existing row with the
+        # same key is the conflicting identity.
         existing = await session.execute(
             select(Site).where(
                 Site.study_id == study_id,
@@ -63,10 +73,17 @@ class SiteService:
                 Site.deleted_at.is_(None),
             )
         )
-        if existing.scalars().first() is not None:
+        conflicting = existing.scalars().first()
+        if conflicting is not None:
             raise ConflictError(
                 message="Site number already exists within this study",
-                details={"site_number": data.site_number, "study_id": str(study_id)},
+                details={
+                    "reason": "SITE_IDENTITY_CONFLICT",
+                    "identity": "site",
+                    "site_number": data.site_number,
+                    "study_id": str(study_id),
+                    "conflicting_site_id": str(conflicting.id),
+                },
             )
 
         # Create the Site (Req 6.1)

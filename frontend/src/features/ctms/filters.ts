@@ -75,7 +75,10 @@ export function serializeCTMSSearch(state: CTMSSearchState): Record<string, stri
 }
 
 export function filtersFromSearch(search: CTMSSearchState): CTMSFilterState {
-  const { page: _page, pageSize: _pageSize, cursor: _cursor, ...filters } = search
+  const { page, pageSize, cursor, ...filters } = search
+  void page
+  void pageSize
+  void cursor
   return filters
 }
 

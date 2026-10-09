@@ -5,6 +5,7 @@ import {
   CTMS_CAPABILITY_CODES,
   isCTMSActionAvailable,
   normalizeCTMSCapabilities,
+  type CTMSActionRouteDescriptor,
 } from '@/features/ctms/capabilities'
 import {
   ctmsApi,
@@ -85,7 +86,7 @@ function availableOperationalActions() {
     capabilities: Object.values(CTMS_CAPABILITY_CODES),
     platform_capabilities: { health_observability: true },
   })
-  const permissions = Object.values(CTMS_ACTION_ROUTE_MAP)
+  const permissions = (Object.values(CTMS_ACTION_ROUTE_MAP) as CTMSActionRouteDescriptor[])
     .flatMap((descriptor) => descriptor.permission ? [descriptor.permission] : [])
 
   return Object.values(CTMS_ACTION_ROUTE_MAP).filter((descriptor) => isCTMSActionAvailable(state, descriptor, permissions))

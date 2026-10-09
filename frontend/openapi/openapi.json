@@ -36,6 +36,7 @@
       "module": [
         "EDC",
         "CTMS",
+        "DESIGNER",
         "PV"
       ],
       "ownership_state": [
@@ -356,6 +357,7 @@
       "module": [
         "EDC",
         "CTMS",
+        "DESIGNER",
         "PV"
       ],
       "pv_phase": [
@@ -18751,6 +18753,1732 @@
         ]
       }
     },
+    "/api/v1/designer/studies/{study_id}/versions": {
+      "post": {
+        "tags": [
+          "designer-versions"
+        ],
+        "summary": "Create Version",
+        "description": "Create a new draft Design_Version for a study.\n\nPermission: designer.study_version.create (Designer_Role only)\nRequirement 2.1: Create a new draft Design_Version.",
+        "operationId": "create_version_api_v1_designer_studies__study_id__versions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudyVersionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyVersionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/studies/{study_id}/amend": {
+      "post": {
+        "tags": [
+          "designer-versions"
+        ],
+        "summary": "Create Amendment",
+        "description": "Create a draft amendment from the latest published version.\n\nPermission: designer.study_version.amend (Designer_Role only)\nRequirement 2.9: Amend a published version, creating exactly one new draft.",
+        "operationId": "create_amendment_api_v1_designer_studies__study_id__amend_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudyAmendmentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyVersionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/publish": {
+      "post": {
+        "tags": [
+          "designer-versions"
+        ],
+        "summary": "Publish Version",
+        "description": "Publish a draft Design_Version (draft -> published).\n\nPermission: designer.version.publish (Designer_Role only)\nRequirement 2.1: Transition draft -> published, recording actor and timestamp.",
+        "operationId": "publish_version_api_v1_designer_versions__version_id__publish_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyVersionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/studies/{study_id}/forms": {
+      "get": {
+        "tags": [
+          "designer-forms"
+        ],
+        "summary": "List Forms",
+        "description": "List form definitions for a study's specified or latest draft version.\n\nPermission: designer.form.read (Designer_Role only)",
+        "operationId": "list_forms_api_v1_designer_studies__study_id__forms_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "study_version_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Specific study version ID. Defaults to the latest draft.",
+              "title": "Study Version Id"
+            },
+            "description": "Specific study version ID. Defaults to the latest draft."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FormDefinitionResponse"
+                  },
+                  "title": "Response List Forms Api V1 Designer Studies  Study Id  Forms Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "designer-forms"
+        ],
+        "summary": "Create Form",
+        "description": "Create a form definition on a draft Design_Version.\n\nPermission: designer.form.configure (Designer_Role only)",
+        "operationId": "create_form_api_v1_designer_studies__study_id__forms_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "study_version_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target study version ID. Defaults to the latest draft.",
+              "title": "Study Version Id"
+            },
+            "description": "Target study version ID. Defaults to the latest draft."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormDefinitionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/forms/{form_id}": {
+      "get": {
+        "tags": [
+          "designer-forms"
+        ],
+        "summary": "Get Form",
+        "description": "Get a form definition with sections and fields.\n\nPermission: designer.form.read (Designer_Role only)",
+        "operationId": "get_form_api_v1_designer_forms__form_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "form_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Form Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "designer-forms"
+        ],
+        "summary": "Update Form",
+        "description": "Update a form definition (partial PATCH).\n\nPermission: designer.form.configure (Designer_Role only)",
+        "operationId": "update_form_api_v1_designer_forms__form_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "form_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Form Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormDefinitionUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "designer-forms"
+        ],
+        "summary": "Delete Form",
+        "description": "Delete a form definition.\n\nPermission: designer.form.configure (Designer_Role only)",
+        "operationId": "delete_form_api_v1_designer_forms__form_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "form_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Form Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/forms/{form_id}/sections": {
+      "post": {
+        "tags": [
+          "designer-forms"
+        ],
+        "summary": "Create Section",
+        "description": "Create a section within a form.\n\nPermission: designer.form.configure (Designer_Role only)",
+        "operationId": "create_section_api_v1_designer_forms__form_id__sections_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "form_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Form Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormSectionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormSectionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/forms/{form_id}/fields": {
+      "post": {
+        "tags": [
+          "designer-forms"
+        ],
+        "summary": "Create Field",
+        "description": "Create a field within a form (target section via query param).\n\nPermission: designer.field.configure (Designer_Role only)",
+        "operationId": "create_field_api_v1_designer_forms__form_id__fields_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "form_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Form Id"
+            }
+          },
+          {
+            "name": "section_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The section ID to add the field to.",
+              "title": "Section Id"
+            },
+            "description": "The section ID to add the field to."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FieldDefinitionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/fields/{field_id}": {
+      "patch": {
+        "tags": [
+          "designer-forms"
+        ],
+        "summary": "Update Field",
+        "description": "Update a field definition (partial PATCH).\n\nPermission: designer.field.configure (Designer_Role only)",
+        "operationId": "update_field_api_v1_designer_fields__field_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "field_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Field Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FieldDefinitionUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "designer-forms"
+        ],
+        "summary": "Delete Field",
+        "description": "Delete a field definition.\n\nPermission: designer.field.configure (Designer_Role only)",
+        "operationId": "delete_field_api_v1_designer_fields__field_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "field_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Field Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/studies/{study_id}/edit-checks": {
+      "get": {
+        "tags": [
+          "designer-edit-checks"
+        ],
+        "summary": "List Edit Checks",
+        "description": "List edit checks for a study version within the caller's study scope.",
+        "operationId": "list_edit_checks_api_v1_designer_studies__study_id__edit_checks_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "study_version_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Specific study version; defaults to the latest draft.",
+              "title": "Study Version Id"
+            },
+            "description": "Specific study version; defaults to the latest draft."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EditCheckResponse"
+                  },
+                  "title": "Response List Edit Checks Api V1 Designer Studies  Study Id  Edit Checks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "designer-edit-checks"
+        ],
+        "summary": "Create Edit Check",
+        "description": "Create a validated edit check on a mutable study version.",
+        "operationId": "create_edit_check_api_v1_designer_studies__study_id__edit_checks_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "study_version_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target draft version; defaults to the latest draft.",
+              "title": "Study Version Id"
+            },
+            "description": "Target draft version; defaults to the latest draft."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditCheckCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/studies/{study_id}/edit-checks/run": {
+      "post": {
+        "tags": [
+          "designer-edit-checks"
+        ],
+        "summary": "Run Edit Checks",
+        "description": "Evaluate active checks against selected or all study form instances.",
+        "operationId": "run_edit_checks_api_v1_designer_studies__study_id__edit_checks_run_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/EditCheckRunRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditCheckRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/edit-checks/{edit_check_id}": {
+      "get": {
+        "tags": [
+          "designer-edit-checks"
+        ],
+        "summary": "Get Edit Check",
+        "description": "Get an edit check after checking its owning study scope.",
+        "operationId": "get_edit_check_api_v1_designer_edit_checks__edit_check_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "edit_check_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Edit Check Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "designer-edit-checks"
+        ],
+        "summary": "Update Edit Check",
+        "description": "Update a rule only while its owning study version is mutable.",
+        "operationId": "update_edit_check_api_v1_designer_edit_checks__edit_check_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "edit_check_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Edit Check Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditCheckUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/edit-checks/{edit_check_id}/test": {
+      "post": {
+        "tags": [
+          "designer-edit-checks"
+        ],
+        "summary": "Test Edit Check",
+        "description": "Evaluate sample data without creating clinical or validation records.",
+        "operationId": "test_edit_check_api_v1_designer_edit_checks__edit_check_id__test_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "edit_check_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Edit Check Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditCheckTestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditCheckTestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/studies/{study_id}/codelists": {
+      "get": {
+        "tags": [
+          "designer-codelists"
+        ],
+        "summary": "List Codelists",
+        "description": "List codelists for a study's specified or latest draft version.\n\nPermission: designer.codelist.read (Designer_Role only)",
+        "operationId": "list_codelists_api_v1_designer_studies__study_id__codelists_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "study_version_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Specific study version ID. Defaults to the latest draft.",
+              "title": "Study Version Id"
+            },
+            "description": "Specific study version ID. Defaults to the latest draft."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CodelistResponse"
+                  },
+                  "title": "Response List Codelists Api V1 Designer Studies  Study Id  Codelists Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "designer-codelists"
+        ],
+        "summary": "Create Codelist",
+        "description": "Create a codelist (with items) on a draft Design_Version.\n\nPermission: designer.codelist.configure (Designer_Role only)",
+        "operationId": "create_codelist_api_v1_designer_studies__study_id__codelists_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "study_version_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target study version ID. Defaults to the latest draft.",
+              "title": "Study Version Id"
+            },
+            "description": "Target study version ID. Defaults to the latest draft."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodelistCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodelistResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/codelists/{codelist_id}": {
+      "get": {
+        "tags": [
+          "designer-codelists"
+        ],
+        "summary": "Get Codelist",
+        "description": "Get a codelist with its items.\n\nPermission: designer.codelist.read (Designer_Role only)",
+        "operationId": "get_codelist_api_v1_designer_codelists__codelist_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "codelist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Codelist Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodelistResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/subject-phases": {
+      "post": {
+        "tags": [
+          "designer-subject-phases"
+        ],
+        "summary": "Create Subject Phase",
+        "description": "Create a Subject_Phase_Definition within a draft Design_Version.\n\nPermission: designer.subject_phase.configure (Designer_Role only)",
+        "operationId": "create_subject_phase_api_v1_designer_versions__version_id__subject_phases_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubjectPhaseDefinitionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectPhaseDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/schedule-of-assessment": {
+      "get": {
+        "tags": [
+          "designer-schedule-of-assessment"
+        ],
+        "summary": "Get Schedule Of Assessment",
+        "description": "Get the schedule of assessment for a Design_Version.\n\nPermission: designer.soa.read (Designer_Role only)",
+        "operationId": "get_schedule_of_assessment_api_v1_designer_versions__version_id__schedule_of_assessment_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOfAssessmentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "designer-schedule-of-assessment"
+        ],
+        "summary": "Create Schedule Of Assessment",
+        "description": "Create the schedule of assessment for a draft Design_Version.\n\nPermission: designer.soa.configure (Designer_Role only)",
+        "operationId": "create_schedule_of_assessment_api_v1_designer_versions__version_id__schedule_of_assessment_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleOfAssessmentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOfAssessmentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/cycles": {
+      "post": {
+        "tags": [
+          "designer-cycles"
+        ],
+        "summary": "Create Cycle",
+        "description": "Create a Cycle_Definition within a draft Design_Version.\n\nPermission: study.configure",
+        "operationId": "create_cycle_api_v1_designer_versions__version_id__cycles_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CycleDefinitionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CycleDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/arms": {
+      "post": {
+        "tags": [
+          "designer-arms"
+        ],
+        "summary": "Create Arm",
+        "description": "Create an Arm_Definition within a draft Design_Version.\n\nPermission: study.configure",
+        "operationId": "create_arm_api_v1_designer_versions__version_id__arms_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArmDefinitionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArmDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/crf-access": {
+      "post": {
+        "tags": [
+          "designer-crf-access"
+        ],
+        "summary": "Create Crf Access",
+        "description": "Create a Crf_Access_Definition within a draft Design_Version.\n\nPermission: study.configure",
+        "operationId": "create_crf_access_api_v1_designer_versions__version_id__crf_access_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrfAccessDefinitionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrfAccessDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/raw-data-variables": {
+      "post": {
+        "tags": [
+          "designer-raw-data-variables"
+        ],
+        "summary": "Create Raw Data Variable",
+        "description": "Create a Raw_Data_Variable_Setting within a draft Design_Version.\n\nPermission: study.configure",
+        "operationId": "create_raw_data_variable_api_v1_designer_versions__version_id__raw_data_variables_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RawDataVariableSettingCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RawDataVariableSettingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/coding-settings": {
+      "post": {
+        "tags": [
+          "designer-coding-settings"
+        ],
+        "summary": "Create Coding Setting",
+        "description": "Create a Coding_Setting within a draft Design_Version.\n\nPermission: study.configure",
+        "operationId": "create_coding_setting_api_v1_designer_versions__version_id__coding_settings_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodingSettingCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingSettingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/studies": {
       "get": {
         "tags": [
@@ -19103,171 +20831,6 @@
                     "$ref": "#/components/schemas/StudyVersionResponse"
                   },
                   "title": "Response List Versions Api V1 Studies  Study Id  Versions Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "studies"
-        ],
-        "summary": "Create Version",
-        "description": "Create a new draft Study_Version for a study.\n\nPermission: study.configure\nRequirement 5.3: Create a new draft version (amendment) with reason.",
-        "operationId": "create_version_api_v1_studies__study_id__versions_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "study_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Study Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StudyVersionCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StudyVersionResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/studies/{study_id}/amend": {
-      "post": {
-        "tags": [
-          "studies"
-        ],
-        "summary": "Create Amendment",
-        "description": "Create a draft amendment from the latest published version.\n\nPermission: study.configure\nRequirements 5.3 and 5.4: retain published history and record the reason.",
-        "operationId": "create_amendment_api_v1_studies__study_id__amend_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "study_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Study Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StudyAmendmentCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StudyVersionResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/versions/{version_id}/publish": {
-      "post": {
-        "tags": [
-          "versions"
-        ],
-        "summary": "Publish Version",
-        "description": "Publish a draft Study_Version (draft → published).\n\nPermission: version.publish\nRequirement 5.1: Transition draft → published, recording actor and timestamp.",
-        "operationId": "publish_version_api_v1_versions__version_id__publish_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "version_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Version Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StudyVersionResponse"
                 }
               }
             }
@@ -20351,529 +21914,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/studies/{study_id}/forms": {
-      "get": {
-        "tags": [
-          "forms"
-        ],
-        "summary": "List Forms",
-        "description": "List form definitions for a study's specified or latest draft version.\n\nPermission: form.read\nRequirement 9.1: Form definitions within a version.",
-        "operationId": "list_forms_api_v1_studies__study_id__forms_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "study_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Study Id"
-            }
-          },
-          {
-            "name": "study_version_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Specific study version ID. Defaults to the latest draft version.",
-              "title": "Study Version Id"
-            },
-            "description": "Specific study version ID. Defaults to the latest draft version."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/FormDefinitionResponse"
-                  },
-                  "title": "Response List Forms Api V1 Studies  Study Id  Forms Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "forms"
-        ],
-        "summary": "Create Form",
-        "description": "Create a form definition on a study version.\n\nPermission: form.configure\nRequirement 9.1: Create form definitions while version is draft.",
-        "operationId": "create_form_api_v1_studies__study_id__forms_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "study_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Study Id"
-            }
-          },
-          {
-            "name": "study_version_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Target study version ID. Defaults to the latest draft version.",
-              "title": "Study Version Id"
-            },
-            "description": "Target study version ID. Defaults to the latest draft version."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FormDefinitionCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FormDefinitionResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/forms/{form_id}": {
-      "get": {
-        "tags": [
-          "forms"
-        ],
-        "summary": "Get Form",
-        "description": "Get a form definition with sections and fields.\n\nPermission: form.read\nRequirement 9.1: Retrieve form definition metadata.",
-        "operationId": "get_form_api_v1_forms__form_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "form_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Form Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FormDefinitionResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "forms"
-        ],
-        "summary": "Update Form",
-        "description": "Update a form definition (partial PATCH).\n\nPermission: form.configure\nRequirement 9.1: Edit form definitions while version is draft.",
-        "operationId": "update_form_api_v1_forms__form_id__patch",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "form_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Form Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FormDefinitionUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FormDefinitionResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "forms"
-        ],
-        "summary": "Delete Form",
-        "description": "Delete a form definition.\n\nPermission: form.configure\nRequirement 9.1: Delete form definitions while version is draft.",
-        "operationId": "delete_form_api_v1_forms__form_id__delete",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "form_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Form Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/forms/{form_id}/sections": {
-      "post": {
-        "tags": [
-          "forms"
-        ],
-        "summary": "Create Section",
-        "description": "Create a section within a form.\n\nPermission: form.configure\nRequirement 9.2: Create sections within a form definition.",
-        "operationId": "create_section_api_v1_forms__form_id__sections_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "form_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Form Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FormSectionCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FormSectionResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/forms/{form_id}/fields": {
-      "post": {
-        "tags": [
-          "forms"
-        ],
-        "summary": "Create Field",
-        "description": "Create a field within a form (specifying target section via query param).\n\nPermission: form.configure\nRequirement 9.2: Create fields within a form section.",
-        "operationId": "create_field_api_v1_forms__form_id__fields_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "form_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Form Id"
-            }
-          },
-          {
-            "name": "section_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "The section ID to add the field to.",
-              "title": "Section Id"
-            },
-            "description": "The section ID to add the field to."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FieldDefinitionCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FieldDefinitionResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/fields/{field_id}": {
-      "patch": {
-        "tags": [
-          "forms"
-        ],
-        "summary": "Update Field",
-        "description": "Update a field definition (partial PATCH).\n\nPermission: form.configure\nRequirement 9.2: Edit field definitions while version is draft.",
-        "operationId": "update_field_api_v1_fields__field_id__patch",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "field_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Field Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FieldDefinitionUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FieldDefinitionResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "forms"
-        ],
-        "summary": "Delete Field",
-        "description": "Delete a field definition.\n\nPermission: form.configure\nRequirement 9.2: Delete field definitions while version is draft.",
-        "operationId": "delete_field_api_v1_fields__field_id__delete",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "field_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Field Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -22219,385 +23259,6 @@
         }
       }
     },
-    "/api/v1/studies/{study_id}/edit-checks": {
-      "get": {
-        "tags": [
-          "edit-checks"
-        ],
-        "summary": "List Edit Checks",
-        "description": "List edit checks for a study version within the caller's study scope.",
-        "operationId": "list_edit_checks_api_v1_studies__study_id__edit_checks_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "study_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Study Id"
-            }
-          },
-          {
-            "name": "study_version_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Specific study version; defaults to the latest draft.",
-              "title": "Study Version Id"
-            },
-            "description": "Specific study version; defaults to the latest draft."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/EditCheckResponse"
-                  },
-                  "title": "Response List Edit Checks Api V1 Studies  Study Id  Edit Checks Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "edit-checks"
-        ],
-        "summary": "Create Edit Check",
-        "description": "Create a validated edit check on a mutable study version.",
-        "operationId": "create_edit_check_api_v1_studies__study_id__edit_checks_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "study_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Study Id"
-            }
-          },
-          {
-            "name": "study_version_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Target draft version; defaults to the latest draft.",
-              "title": "Study Version Id"
-            },
-            "description": "Target draft version; defaults to the latest draft."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EditCheckCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EditCheckResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/studies/{study_id}/edit-checks/run": {
-      "post": {
-        "tags": [
-          "edit-checks"
-        ],
-        "summary": "Run Edit Checks",
-        "description": "Evaluate active checks against selected or all study form instances.",
-        "operationId": "run_edit_checks_api_v1_studies__study_id__edit_checks_run_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "study_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Study Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/EditCheckRunRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EditCheckRunResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/edit-checks/{edit_check_id}": {
-      "get": {
-        "tags": [
-          "edit-checks"
-        ],
-        "summary": "Get Edit Check",
-        "description": "Get an edit check after checking its owning study scope.",
-        "operationId": "get_edit_check_api_v1_edit_checks__edit_check_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "edit_check_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Edit Check Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EditCheckResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "edit-checks"
-        ],
-        "summary": "Update Edit Check",
-        "description": "Update a rule only while its owning study version is mutable.",
-        "operationId": "update_edit_check_api_v1_edit_checks__edit_check_id__patch",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "edit_check_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Edit Check Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EditCheckUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EditCheckResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/edit-checks/{edit_check_id}/test": {
-      "post": {
-        "tags": [
-          "edit-checks"
-        ],
-        "summary": "Test Edit Check",
-        "description": "Evaluate sample data without creating clinical or validation records.",
-        "operationId": "test_edit_check_api_v1_edit_checks__edit_check_id__test_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "edit_check_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Edit Check Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EditCheckTestRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EditCheckTestResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/studies/{study_id}/dashboard": {
       "get": {
         "tags": [
@@ -23686,6 +24347,1223 @@
           }
         }
       }
+    },
+    "/api/v1/studies/{study_id}/reports/data-summary": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Get Data Summary",
+        "description": "Data Summary report for a study (R9.1), scope-filtered server-side.",
+        "operationId": "get_data_summary_api_v1_studies__study_id__reports_data_summary_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "section",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Data Summary section",
+              "default": "summary",
+              "title": "Section"
+            },
+            "description": "Data Summary section"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/reports/crf-status": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Get Crf Status",
+        "description": "CRF Status report for a study (R9.2), scope-filtered server-side.",
+        "operationId": "get_crf_status_api_v1_studies__study_id__reports_crf_status_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "section",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "CRF Status section",
+              "default": "status_summary",
+              "title": "Section"
+            },
+            "description": "CRF Status section"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/reports/query-report": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Get Query Report",
+        "description": "Query Report for a study (R9.3), scope-filtered server-side.",
+        "operationId": "get_query_report_api_v1_studies__study_id__reports_query_report_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "section",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Query Report section",
+              "default": "all",
+              "title": "Section"
+            },
+            "description": "Query Report section"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/reports/enrollment-status": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Get Enrollment Status",
+        "description": "Enrollment Status report for a single study (R9.4).\n\nPermission: study.read\nRequirement 9.8/9.9: Only in-scope records; empty when nothing is in scope.\nAn out-of-scope study yields an empty report rather than disclosing it.",
+        "operationId": "get_enrollment_status_api_v1_studies__study_id__reports_enrollment_status_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentStatusReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/reports/ecoa-ediary": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Get Ecoa Ediary Report",
+        "description": "eCOA/eDiary Report for a study (R9.5), scope-filtered server-side.",
+        "operationId": "get_ecoa_ediary_report_api_v1_studies__study_id__reports_ecoa_ediary_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "section",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "eCOA/eDiary section",
+              "default": "completion_rate",
+              "title": "Section"
+            },
+            "description": "eCOA/eDiary section"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/reports/operational": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Get Operational Report",
+        "description": "On-Demand/KRI/SDV-SDR Workload/Data Analysis/Comment/Source Doc Tracker (R9.6).",
+        "operationId": "get_operational_report_api_v1_studies__study_id__reports_operational_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "section",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Operational report section",
+              "default": "on_demand",
+              "title": "Section"
+            },
+            "description": "Operational report section"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/reports/end-of-study": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Get End Of Study Report",
+        "description": "End of Study report for a study (R9.7), scope-filtered server-side.",
+        "operationId": "get_end_of_study_report_api_v1_studies__study_id__reports_end_of_study_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "section",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "End of Study section",
+              "default": "overview",
+              "title": "Section"
+            },
+            "description": "End of Study section"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/enrollment-status": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Get Enrollment Status All",
+        "description": "Enrollment Status across every study within the user's scope.\n\nPermission: study.read\nRequirement 9.4: Enrollment Status reports.\nRequirement 9.8/9.9: Only in-scope records; empty when nothing is in scope.",
+        "operationId": "get_enrollment_status_all_api_v1_reports_enrollment_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentStatusReport"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/studies/{study_id}/study-information": {
+      "get": {
+        "tags": [
+          "study-info"
+        ],
+        "summary": "Get Study Information",
+        "description": "Operational Study Information summary (R8.1). Permission: study.read.",
+        "operationId": "get_study_information_api_v1_studies__study_id__study_information_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudyInformation"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/status-configuration": {
+      "get": {
+        "tags": [
+          "study-info"
+        ],
+        "summary": "Get Status Configuration",
+        "description": "Status Configuration — current status + reachable statuses (R8.1).",
+        "operationId": "get_status_configuration_api_v1_studies__study_id__status_configuration_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusConfiguration"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/id-configuration": {
+      "get": {
+        "tags": [
+          "study-info"
+        ],
+        "summary": "Get Id Configuration",
+        "description": "ID Configuration — design-dependent id formats (R8.1, R8.14).",
+        "operationId": "get_id_configuration_api_v1_studies__study_id__id_configuration_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdConfiguration"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/crf-version-history": {
+      "get": {
+        "tags": [
+          "crf-version"
+        ],
+        "summary": "Get Version History",
+        "description": "CRF Version History for a study (R8.2). Permission: study.read.",
+        "operationId": "get_version_history_api_v1_studies__study_id__crf_version_history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrfVersionHistory"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/subjects/{subject_id}/version-upgrade": {
+      "post": {
+        "tags": [
+          "crf-version"
+        ],
+        "summary": "Upgrade Subject Version",
+        "description": "Rebind a Subject's Operational_Records to a newer Published_Design.\n\nTransactional (R8.3, R8.15): on success all affected records are rebound and\nthe upgrade is audited; on failure the records stay on their prior design\nversion, the failed attempt is audited, and an error is returned.\n\nPermission: subject.update",
+        "operationId": "upgrade_subject_version_api_v1_studies__study_id__subjects__subject_id__version_upgrade_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionUpgradeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionUpgradeResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/sites/{site_id}/version-upgrade": {
+      "post": {
+        "tags": [
+          "crf-version"
+        ],
+        "summary": "Upgrade Site Version",
+        "description": "Rebind every Subject of a Site to a newer Published_Design.\n\nTransactional (R8.3, R8.15): on success all affected records of the site's\nsubjects are rebound and the upgrade is audited; on failure no subject of\nthe site is rebound, the failed attempt is audited, and an error is returned.\n\nPermission: subject.update",
+        "operationId": "upgrade_site_version_api_v1_studies__study_id__sites__site_id__version_upgrade_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "site_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Site Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionUpgradeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionUpgradeResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/design-versions/{design_version_id}/edit-check-testing-cases": {
+      "get": {
+        "tags": [
+          "crf-version"
+        ],
+        "summary": "Get Edit Check Testing Cases",
+        "description": "Edit Check Testing Case list for a design version (R8.2, R8.14).",
+        "operationId": "get_edit_check_testing_cases_api_v1_design_versions__design_version_id__edit_check_testing_cases_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "design_version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Design Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditCheckTestingCases"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/design-versions/{design_version_id}/access-control": {
+      "get": {
+        "tags": [
+          "crf-version"
+        ],
+        "summary": "Get Access Control",
+        "description": "Access Control matrix for a design version (R8.2, R8.14).",
+        "operationId": "get_access_control_api_v1_design_versions__design_version_id__access_control_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "design_version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Design Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessControl"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/alerts": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Get Alerts",
+        "description": "Alerts surface for a study (R8.5). Permission: study.read.",
+        "operationId": "get_alerts_api_v1_studies__study_id__alerts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAreaSurface"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/sdr": {
+      "get": {
+        "tags": [
+          "sdr"
+        ],
+        "summary": "Get Sdr",
+        "description": "SDR surface for a study (R8.8). Permission: study.read.",
+        "operationId": "get_sdr_api_v1_studies__study_id__sdr_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAreaSurface"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/lab": {
+      "get": {
+        "tags": [
+          "lab"
+        ],
+        "summary": "Get Lab",
+        "description": "Lab surface for a study (R8.9). Permission: study.read.",
+        "operationId": "get_lab_api_v1_studies__study_id__lab_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAreaSurface"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/external-data-source": {
+      "get": {
+        "tags": [
+          "external-data-source"
+        ],
+        "summary": "Get External Data Source",
+        "description": "External Data Source surface for a study (R8.10). Permission: study.read.",
+        "operationId": "get_external_data_source_api_v1_studies__study_id__external_data_source_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAreaSurface"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/adjudication": {
+      "get": {
+        "tags": [
+          "adjudication"
+        ],
+        "summary": "Get Adjudication",
+        "description": "Adjudication surface for a study (R8.11, where enabled). study.read.",
+        "operationId": "get_adjudication_api_v1_studies__study_id__adjudication_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAreaSurface"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/saes": {
+      "get": {
+        "tags": [
+          "saes"
+        ],
+        "summary": "Get Saes",
+        "description": "SAEs surface for a study (R8.12). Permission: study.read.",
+        "operationId": "get_saes_api_v1_studies__study_id__saes_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAreaSurface"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studies/{study_id}/integrations": {
+      "get": {
+        "tags": [
+          "integrations"
+        ],
+        "summary": "Get Integrations",
+        "description": "Conversion/Data Validation/System Integration/eDiary/eCOA/Workflow/Site\nPayment/Translation/IRT Integration surface for a study (R8.13).",
+        "operationId": "get_integrations_api_v1_studies__study_id__integrations_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAreaSurface"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -23876,6 +25754,76 @@
         ],
         "title": "AIQuerySummaryRequest",
         "description": "Input for summarizing a query or query-shaped clinical context."
+      },
+      "AccessControl": {
+        "properties": {
+          "design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Design Version Id"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/AccessControlEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "design_version_id"
+        ],
+        "title": "AccessControl",
+        "description": "Access Control matrix for a design version (R8.2)."
+      },
+      "AccessControlEntry": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "form_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Form Definition Id"
+          },
+          "field_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Definition Id"
+          },
+          "can_read": {
+            "type": "boolean",
+            "title": "Can Read"
+          },
+          "can_write": {
+            "type": "boolean",
+            "title": "Can Write"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "can_read",
+          "can_write"
+        ],
+        "title": "AccessControlEntry",
+        "description": "One design-time CRF access entry projected for operational review (R8.2)."
       },
       "AccessTokenResponse": {
         "properties": {
@@ -24326,6 +26274,98 @@
         ],
         "title": "AdverseEventResponse",
         "description": "An Adverse_Event_Record as returned by the API."
+      },
+      "ArmDefinitionCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "display_order": {
+            "type": "integer",
+            "maximum": 999,
+            "minimum": 1,
+            "title": "Display Order"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "display_order"
+        ],
+        "title": "ArmDefinitionCreate",
+        "description": "Request body for creating an Arm_Definition in a Draft_Design."
+      },
+      "ArmDefinitionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "study_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Version Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "study_version_id",
+          "name",
+          "display_order",
+          "created_at"
+        ],
+        "title": "ArmDefinitionResponse",
+        "description": "Response schema for a persisted Arm_Definition."
       },
       "AssessmentResponse": {
         "properties": {
@@ -25297,6 +27337,194 @@
         "title": "ChangeValueRequest",
         "description": "Request body for post-submission field change with reason.\n\nRequirement 10.5: Post-submission changes require a Reason_For_Change."
       },
+      "CodelistCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Code"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CodelistItemCreate"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Optional initial code list items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "code"
+        ],
+        "title": "CodelistCreate",
+        "description": "Request body for creating a code list (Requirement 6.1)."
+      },
+      "CodelistItemCreate": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order",
+            "description": "Sort order within the code list"
+          },
+          "normal_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normal Low"
+          },
+          "normal_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normal High"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label",
+          "display_order"
+        ],
+        "title": "CodelistItemCreate",
+        "description": "Request body for creating a code list item (Requirement 6.1).\n\nOptional ``normal_low`` / ``normal_high`` carry lab reference-range bounds."
+      },
+      "CodelistItemResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "codelist_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Codelist Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order"
+          },
+          "normal_low": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normal Low"
+          },
+          "normal_high": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normal High"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "codelist_id",
+          "code",
+          "label",
+          "display_order"
+        ],
+        "title": "CodelistItemResponse",
+        "description": "Response schema for a code list item (Requirement 6.1)."
+      },
+      "CodelistResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "study_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Version Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CodelistItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "study_version_id",
+          "name",
+          "code"
+        ],
+        "title": "CodelistResponse",
+        "description": "Response schema for a code list (Requirement 6.1)."
+      },
       "CodingResponse": {
         "properties": {
           "id": {
@@ -25366,6 +27594,110 @@
         ],
         "title": "CodingResponse",
         "description": "A coding assignment as returned by the API."
+      },
+      "CodingSettingCreate": {
+        "properties": {
+          "dictionary_reference": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Dictionary Reference"
+          },
+          "coding_rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coding Rule"
+          },
+          "field_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Definition Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dictionary_reference"
+        ],
+        "title": "CodingSettingCreate",
+        "description": "Request body for creating a Coding_Setting in a Draft_Design."
+      },
+      "CodingSettingResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Design Version Id"
+          },
+          "dictionary_reference": {
+            "type": "string",
+            "title": "Dictionary Reference"
+          },
+          "coding_rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coding Rule"
+          },
+          "field_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Definition Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "design_version_id",
+          "dictionary_reference",
+          "created_at"
+        ],
+        "title": "CodingSettingResponse",
+        "description": "Response schema for a persisted Coding_Setting."
       },
       "CognitoCodeExchangeRequest": {
         "properties": {
@@ -25753,7 +28085,7 @@
           "coded_term"
         ],
         "title": "ControlType",
-        "description": "The field control types supported by the form builder (Requirement 9.3)."
+        "description": "The field control types supported by the form builder (Requirement 4.2)."
       },
       "CoordinationConflictResponse": {
         "properties": {
@@ -26051,6 +28383,190 @@
         ],
         "title": "CoordinationReplayRequest"
       },
+      "CrfAccessDefinitionCreate": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Role"
+          },
+          "can_read": {
+            "type": "boolean",
+            "title": "Can Read",
+            "default": false
+          },
+          "can_write": {
+            "type": "boolean",
+            "title": "Can Write",
+            "default": false
+          },
+          "form_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Form Definition Id"
+          },
+          "field_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Definition Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "CrfAccessDefinitionCreate",
+        "description": "Request body for creating a Crf_Access_Definition in a Draft_Design."
+      },
+      "CrfAccessDefinitionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Design Version Id"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "can_read": {
+            "type": "boolean",
+            "title": "Can Read"
+          },
+          "can_write": {
+            "type": "boolean",
+            "title": "Can Write"
+          },
+          "form_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Form Definition Id"
+          },
+          "field_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Definition Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "design_version_id",
+          "role",
+          "can_read",
+          "can_write",
+          "created_at"
+        ],
+        "title": "CrfAccessDefinitionResponse",
+        "description": "Response schema for a persisted Crf_Access_Definition."
+      },
+      "CrfVersionHistory": {
+        "properties": {
+          "study_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Id"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CrfVersionHistoryEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "study_id"
+        ],
+        "title": "CrfVersionHistory",
+        "description": "Version History for a study's CRF design (R8.2)."
+      },
+      "CrfVersionHistoryEntry": {
+        "properties": {
+          "design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Design Version Id"
+          },
+          "version_number": {
+            "type": "string",
+            "title": "Version Number"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "design_version_id",
+          "version_number",
+          "status"
+        ],
+        "title": "CrfVersionHistoryEntry",
+        "description": "One Design_Version in a study's version history (R8.2)."
+      },
       "CurrentUserResponse": {
         "properties": {
           "id": {
@@ -26098,6 +28614,84 @@
         ],
         "title": "CurrentUserResponse",
         "description": "User identity + resolved authorization scope."
+      },
+      "CycleDefinitionCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "display_order": {
+            "type": "integer",
+            "maximum": 999,
+            "minimum": 1,
+            "title": "Display Order"
+          },
+          "visit_definition_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Visit Definition Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "display_order"
+        ],
+        "title": "CycleDefinitionCreate",
+        "description": "Request body for creating a Cycle_Definition in a Draft_Design."
+      },
+      "CycleDefinitionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "study_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Version Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "study_version_id",
+          "name",
+          "display_order",
+          "created_at"
+        ],
+        "title": "CycleDefinitionResponse",
+        "description": "Response schema for a persisted Cycle_Definition."
       },
       "DashboardQueryCreate": {
         "properties": {
@@ -26462,6 +29056,58 @@
         "title": "EditCheckTestResponse",
         "description": "The deterministic result of a non-persistent edit-check test."
       },
+      "EditCheckTestingCase": {
+        "properties": {
+          "edit_check_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Edit Check Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "edit_check_id",
+          "name",
+          "severity",
+          "is_active"
+        ],
+        "title": "EditCheckTestingCase",
+        "description": "A design-defined edit-check rule exposed for operational test review (R8.2).\n\nRead-only projection of the bound Published_Design's edit-check rules\nthrough the Design_Consumption_Contract (R8.14)."
+      },
+      "EditCheckTestingCases": {
+        "properties": {
+          "design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Design Version Id"
+          },
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/EditCheckTestingCase"
+            },
+            "type": "array",
+            "title": "Cases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "design_version_id"
+        ],
+        "title": "EditCheckTestingCases",
+        "description": "Edit Check Testing Case list for a design version (R8.2)."
+      },
       "EditCheckUpdate": {
         "properties": {
           "name": {
@@ -26740,6 +29386,64 @@
           "updated_at"
         ],
         "title": "EnrollmentPlanResponse"
+      },
+      "EnrollmentStatusReport": {
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/ReportMeta"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/EnrollmentStatusRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meta"
+        ],
+        "title": "EnrollmentStatusReport",
+        "description": "Enrollment Status report — subject counts by status within scope (R9.4).\n\nThis report is backed by the Subject operational model, so its rows reflect\nreal stored data filtered to the requesting user's Authorization_Scope."
+      },
+      "EnrollmentStatusRow": {
+        "properties": {
+          "study_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Id"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "subject_count": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Subject Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "study_id",
+          "status",
+          "subject_count"
+        ],
+        "title": "EnrollmentStatusRow",
+        "description": "A single row of the Enrollment Status report (R9.4)."
       },
       "EnrollmentTargetCreate": {
         "properties": {
@@ -27772,7 +30476,7 @@
           "display_order"
         ],
         "title": "FieldDefinitionCreate",
-        "description": "Request body for creating a field definition (Requirements 9.2, 9.3, 9.4).\n\nSupports every control type (Req 9.3) and field attribute (Req 9.4)."
+        "description": "Request body for creating a field definition (Requirement 4.2).\n\nSupports every control type and field attribute."
       },
       "FieldDefinitionResponse": {
         "properties": {
@@ -27958,7 +30662,7 @@
           "display_order"
         ],
         "title": "FieldDefinitionResponse",
-        "description": "Response schema for a field definition (Requirements 9.2, 9.3, 9.4)."
+        "description": "Response schema for a field definition (Requirement 4.2)."
       },
       "FieldDefinitionUpdate": {
         "properties": {
@@ -28192,7 +30896,7 @@
         },
         "type": "object",
         "title": "FieldDefinitionUpdate",
-        "description": "Request body for editing a field definition (Requirements 9.3, 9.4).\n\nAll fields are optional so clients can send partial payloads."
+        "description": "Request body for editing a field definition (Requirement 4.2).\n\nAll fields are optional so clients can send partial payloads."
       },
       "FieldValueResponse": {
         "properties": {
@@ -28549,7 +31253,7 @@
           "display_order"
         ],
         "title": "FormDefinitionCreate",
-        "description": "Request body for creating a form definition (Requirement 9.1)."
+        "description": "Request body for creating a form definition (Requirement 4.1)."
       },
       "FormDefinitionResponse": {
         "properties": {
@@ -28602,7 +31306,7 @@
           "created_at"
         ],
         "title": "FormDefinitionResponse",
-        "description": "Response schema for a form definition (Requirement 9.1)."
+        "description": "Response schema for a form definition (Requirement 4.1)."
       },
       "FormDefinitionUpdate": {
         "properties": {
@@ -28657,7 +31361,7 @@
         },
         "type": "object",
         "title": "FormDefinitionUpdate",
-        "description": "Request body for editing a form definition (Requirement 9.1)."
+        "description": "Request body for editing a form definition (Requirement 4.1)."
       },
       "FormInstanceResponse": {
         "properties": {
@@ -28977,7 +31681,7 @@
           "display_order"
         ],
         "title": "FormSectionCreate",
-        "description": "Request body for creating a form section (Requirement 9.2)."
+        "description": "Request body for creating a form section (Requirement 4.2)."
       },
       "FormSectionResponse": {
         "properties": {
@@ -29015,7 +31719,7 @@
           "display_order"
         ],
         "title": "FormSectionResponse",
-        "description": "Response schema for a form section (Requirement 9.2)."
+        "description": "Response schema for a form section (Requirement 4.2)."
       },
       "FreezeLockObjectType": {
         "type": "string",
@@ -29278,6 +31982,55 @@
         "title": "ICSRProduceResponse",
         "description": "The produced E2B(R3) message."
       },
+      "IdConfiguration": {
+        "properties": {
+          "study_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Id"
+          },
+          "design_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Design Version Id"
+          },
+          "subject_id_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id Format"
+          },
+          "screening_id_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screening Id Format"
+          }
+        },
+        "type": "object",
+        "required": [
+          "study_id"
+        ],
+        "title": "IdConfiguration",
+        "description": "ID Configuration (subject/screening id formats) for a study (R8.1).\n\nDesign-dependent id formatting is resolved from the bound Published_Design\nwhere available; absent a configured format, the structured default shape\nis returned so the surface stays stable."
+      },
       "InvitationAcceptRequest": {
         "properties": {
           "token": {
@@ -29516,6 +32269,7 @@
         "enum": [
           "EDC",
           "CTMS",
+          "DESIGNER",
           "PV"
         ],
         "title": "Module",
@@ -34705,6 +37459,86 @@
         "title": "QueryType",
         "description": "Origin of the query — manual or system-generated."
       },
+      "RawDataVariableSettingCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "data_type": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Data Type"
+          },
+          "attributes": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Attributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "data_type"
+        ],
+        "title": "RawDataVariableSettingCreate",
+        "description": "Request body for creating a Raw_Data_Variable_Setting in a Draft_Design."
+      },
+      "RawDataVariableSettingResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Design Version Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "data_type": {
+            "type": "string",
+            "title": "Data Type"
+          },
+          "attributes": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Attributes"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "design_version_id",
+          "name",
+          "data_type",
+          "created_at"
+        ],
+        "title": "RawDataVariableSettingResponse",
+        "description": "Response schema for a persisted Raw_Data_Variable_Setting."
+      },
       "ReadinessCriterionCreate": {
         "properties": {
           "name": {
@@ -35184,6 +38018,52 @@
         "title": "RegulatoryReportResponse",
         "description": "A Regulatory_Report as returned by the API."
       },
+      "ReportMeta": {
+        "properties": {
+          "report_key": {
+            "type": "string",
+            "title": "Report Key",
+            "description": "Stable identifier of the report family and section"
+          },
+          "report_group": {
+            "type": "string",
+            "title": "Report Group",
+            "description": "The Report_Area group this report belongs to"
+          },
+          "study_ids_in_scope": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Study Ids In Scope",
+            "description": "Studies within the requesting user's authorization scope"
+          },
+          "site_ids_in_scope": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Site Ids In Scope",
+            "description": "Sites within the requesting user's authorization scope"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Total",
+            "description": "Number of in-scope rows returned",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "report_key",
+          "report_group"
+        ],
+        "title": "ReportMeta",
+        "description": "Shared metadata describing a scope-filtered report response.\n\n``study_ids_in_scope`` lists the studies the requesting user was authorized\nto see within the requested scope. An empty list means nothing was in scope\nand the ``rows`` collection is therefore empty (R9.9)."
+      },
       "ReportQueryCreate": {
         "properties": {
           "name": {
@@ -35302,6 +38182,27 @@
           "updated_at"
         ],
         "title": "ReportQueryResponse"
+      },
+      "ReportResponse": {
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/ReportMeta"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meta"
+        ],
+        "title": "ReportResponse",
+        "description": "Generic read-only report envelope.\n\n``rows`` holds the scope-filtered report rows. Each row is a free-form\nmapping so a single envelope can carry any report family's columns while a\nbacking data model is not yet available for every section. The scope and\nauthorization behavior is real regardless of the row shape (R9.8-R9.10)."
       },
       "ReportStatus": {
         "type": "string",
@@ -36054,6 +38955,203 @@
         "title": "SafetyStudyDashboard",
         "description": "Study-scoped PV safety dashboard metrics (Requirements 13.1, 13.2)."
       },
+      "ScheduleEntryCreate": {
+        "properties": {
+          "form_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Form Definition Id"
+          },
+          "procedure_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Procedure Name"
+          },
+          "visit_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Definition Id"
+          },
+          "cycle_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Definition Id"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "title": "ScheduleEntryCreate",
+        "description": "One form/procedure-to-visit/cycle mapping within an SoA.\n\nExactly one of ``form_definition_id`` or ``procedure_name`` identifies what\nis collected; at least one of ``visit_definition_id`` or\n``cycle_definition_id`` identifies when it is collected. The service\nvalidates these invariants."
+      },
+      "ScheduleEntryResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "schedule_of_assessment_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Schedule Of Assessment Id"
+          },
+          "form_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Form Definition Id"
+          },
+          "procedure_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Procedure Name"
+          },
+          "visit_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Definition Id"
+          },
+          "cycle_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Definition Id"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "schedule_of_assessment_id",
+          "display_order",
+          "created_at"
+        ],
+        "title": "ScheduleEntryResponse",
+        "description": "Response schema for a persisted SoA entry."
+      },
+      "ScheduleOfAssessmentCreate": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleEntryCreate"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "title": "ScheduleOfAssessmentCreate",
+        "description": "Request body for creating a Schedule_of_Assessment in a Draft_Design."
+      },
+      "ScheduleOfAssessmentResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Design Version Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleEntryResponse"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "design_version_id",
+          "created_at"
+        ],
+        "title": "ScheduleOfAssessmentResponse",
+        "description": "Response schema for a persisted Schedule_of_Assessment."
+      },
       "SeriousnessCriterion": {
         "type": "string",
         "enum": [
@@ -36549,6 +39647,33 @@
         "title": "SiteUserResponse",
         "description": "Response schema for a StudySiteUser assignment."
       },
+      "StatusConfiguration": {
+        "properties": {
+          "study_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Id"
+          },
+          "current_status": {
+            "type": "string",
+            "title": "Current Status"
+          },
+          "allowed_transitions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Transitions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "study_id",
+          "current_status"
+        ],
+        "title": "StatusConfiguration",
+        "description": "Status Configuration for a study (R8.1).\n\nReports the current status and the operational statuses reachable from it."
+      },
       "StudyAmendmentCreate": {
         "properties": {
           "reason": {
@@ -36682,6 +39807,80 @@
         "type": "object",
         "title": "StudyDashboard",
         "description": "Study-level dashboard metrics (Requirement 20.1)."
+      },
+      "StudyInformation": {
+        "properties": {
+          "study_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Id"
+          },
+          "study_code": {
+            "type": "string",
+            "title": "Study Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "sponsor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sponsor"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "therapeutic_area": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Therapeutic Area"
+          },
+          "indication": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indication"
+          }
+        },
+        "type": "object",
+        "required": [
+          "study_id",
+          "study_code",
+          "title",
+          "status"
+        ],
+        "title": "StudyInformation",
+        "description": "Operational study information summary (R8.1)."
       },
       "StudyOperationalMilestoneResponse": {
         "properties": {
@@ -37194,7 +40393,7 @@
           "version_number"
         ],
         "title": "StudyVersionCreate",
-        "description": "Schema for creating a new draft Study_Version."
+        "description": "Schema for creating a new draft Design_Version."
       },
       "StudyVersionResponse": {
         "properties": {
@@ -37276,7 +40475,74 @@
           "created_at"
         ],
         "title": "StudyVersionResponse",
-        "description": "Response schema for a Study_Version."
+        "description": "Response schema for a Design_Version."
+      },
+      "SubAreaItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "SubAreaItem",
+        "description": "A single structured item within an operational sub-area surface."
+      },
+      "SubAreaSurface": {
+        "properties": {
+          "study_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Study Id"
+          },
+          "design_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Design Version Id"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "default": true
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SubAreaItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "SubAreaSurface",
+        "description": "A structured operational sub-area surface response.\n\nUsed by sub-areas whose operational data model is not yet established. The\nresponse is a stable, typed shape (never a bare ``null``) so each sub-area\nendpoint is mountable and smoke-testable as the operational surface\nboundary. ``design_version_id`` is populated for design-dependent reads\nresolved through the Design_Consumption_Contract (R8.14)."
       },
       "SubjectCreate": {
         "properties": {
@@ -37306,6 +40572,76 @@
         ],
         "title": "SubjectCreate",
         "description": "Request body for creating a new Subject (Requirement 7.1, 7.2).\n\nThe site under which the subject is enrolled is supplied separately\n(path/route or explicit argument). ``subject_number`` is optional: when\nomitted, the Subject_Service generates the identifier by the configured\nrule. When provided, it is used as-is (and still enforced unique within\nthe study)."
+      },
+      "SubjectPhaseDefinitionCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "display_order": {
+            "type": "integer",
+            "maximum": 999,
+            "minimum": 1,
+            "title": "Display Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "display_order"
+        ],
+        "title": "SubjectPhaseDefinitionCreate",
+        "description": "Request body for creating a Subject_Phase_Definition in a Draft_Design."
+      },
+      "SubjectPhaseDefinitionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Design Version Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "design_version_id",
+          "name",
+          "display_order",
+          "created_at"
+        ],
+        "title": "SubjectPhaseDefinitionResponse",
+        "description": "Response schema for a persisted Subject_Phase_Definition."
       },
       "SubjectResponse": {
         "properties": {
@@ -38080,6 +41416,83 @@
         ],
         "title": "ValidationResultResponse",
         "description": "A failed edit-check result produced by a runtime run."
+      },
+      "VersionUpgradeRequest": {
+        "properties": {
+          "target_design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Design Version Id",
+            "description": "Published Design_Version to rebind affected records to"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_design_version_id"
+        ],
+        "title": "VersionUpgradeRequest",
+        "description": "Request to upgrade a Subject (or a Site's subjects) to a newer design.\n\n``target_design_version_id`` must identify a *published* Design_Version of\nthe same study as the upgraded Subject/Site; a draft or missing target is\nrejected (R8.3)."
+      },
+      "VersionUpgradeResult": {
+        "properties": {
+          "scope_type": {
+            "type": "string",
+            "title": "Scope Type",
+            "description": "One of: subject, site"
+          },
+          "scope_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Scope Id",
+            "description": "Id of the upgraded Subject or Site"
+          },
+          "study_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Id"
+          },
+          "from_design_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Design Version Id",
+            "description": "Prior bound Design_Version (None when a Site's subjects were on mixed versions)"
+          },
+          "to_design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "To Design Version Id"
+          },
+          "rebound_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Rebound Counts",
+            "description": "Rebound Operational_Record count per table"
+          },
+          "rebound_total": {
+            "type": "integer",
+            "title": "Rebound Total",
+            "description": "Total Operational_Records rebound",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope_type",
+          "scope_id",
+          "study_id",
+          "to_design_version_id"
+        ],
+        "title": "VersionUpgradeResult",
+        "description": "Outcome of a successful Version Upgrade rebind (R8.3).\n\nReports the scope that was upgraded, the versions involved, and how many\nOperational_Records were rebound per table so the caller can confirm the\nrebind was complete."
       },
       "VisitDateRecord": {
         "properties": {

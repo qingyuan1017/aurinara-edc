@@ -64,9 +64,9 @@ export function useCTMSMutation<TData = unknown, TError = unknown, TVariables = 
   const mutation = useMutation({
     ...options,
     mutationFn: mutationFn
-      ? async (variables: TVariables) => {
+      ? async (variables, context) => {
           assertCTMSMutationAllowed({ isOnline, method })
-          return mutationFn(variables)
+          return mutationFn(variables, context)
         }
       : undefined,
   })

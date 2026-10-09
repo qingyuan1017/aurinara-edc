@@ -27,7 +27,7 @@ from app.models.edc.form_data import FieldValue, FormInstance
 from app.models.edc.form_metadata import FieldDefinition, FormDefinition, FormSection
 from app.models.edc.lock import FreezeLockObjectType, FreezeLockType
 from app.models.edc.site import Site
-from app.models.edc.study import Study, StudyVersion
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject
 from app.models.edc.visit import VisitInstance
 from app.models.shared.identity import User, UserStatus
@@ -87,6 +87,9 @@ async def _clinical_graph(session):
         id=uuid.uuid4(),
         study_id=study.id,
         version_number="1.0",
+        status=StudyVersionStatus.published.value,
+        published_by=actor.id,
+        published_at=now,
         created_at=now,
     )
     subject = Subject(
@@ -101,6 +104,7 @@ async def _clinical_graph(session):
     visit = VisitInstance(
         id=uuid.uuid4(),
         subject_id=subject.id,
+        design_version_id=version.id,
         name="Visit 1",
         created_at=now,
     )
@@ -132,9 +136,9 @@ async def _clinical_graph(session):
         subject_id=subject.id,
         visit_instance_id=visit.id,
         form_definition_id=form_definition.id,
+        design_version_id=version.id,
         created_at=now,
     )
-
     session.add_all(
         [
             actor,

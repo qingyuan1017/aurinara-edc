@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.exceptions import ValidationError
 from app.models.edc.lock import FreezeLock, FreezeLockObjectType, FreezeLockType
+from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
 from app.models.shared.audit import AuditEvent
 from app.models.shared.identity import User, UserStatus
 from app.services.edc.lock_service import LockService
@@ -96,6 +97,29 @@ async def test_unlock_requires_nonblank_reason_clears_control_and_records_reason
         created_at=now,
     )
     db_session.add(actor)
+    await db_session.flush()
+
+    # The locked object is a study-scope control; seed a real study with a
+    # published design version (study.id == target_id) so the LockService can
+    # resolve the published-design binding (design_version_id) for the control.
+    study = Study(
+        id=target_id,
+        study_code=f"LK-{uuid.uuid4().hex[:8]}",
+        title="Unlock Study",
+        status=StudyStatus.active,
+        created_by=actor_id,
+        created_at=now,
+    )
+    version = StudyVersion(
+        id=uuid.uuid4(),
+        study_id=study.id,
+        version_number="1.0",
+        status=StudyVersionStatus.published.value,
+        published_by=actor_id,
+        published_at=now,
+        created_at=now,
+    )
+    db_session.add_all([study, version])
     await db_session.flush()
 
     service = LockService()

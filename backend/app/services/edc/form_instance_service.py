@@ -84,6 +84,7 @@ class FormInstanceService:
                     visit_instance_id=visit_instance.id,
                     form_definition_id=form_def.id,
                     status=FormInstanceStatus.not_started,
+                    design_version_id=subject.study_version_id,
                 )
                 session.add(form_instance)
                 instances.append(form_instance)

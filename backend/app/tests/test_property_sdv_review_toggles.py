@@ -127,6 +127,7 @@ async def test_sdv_and_review_toggle_round_trips_and_progress_counts(
             id=uuid.uuid4(),
             subject_id=subject.id,
             form_definition_id=form_definition.id,
+            design_version_id=version_id,
             status=FormInstanceStatus.submitted,
             created_at=now,
         )

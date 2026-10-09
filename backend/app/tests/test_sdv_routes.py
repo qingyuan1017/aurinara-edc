@@ -170,6 +170,7 @@ async def seeded(db_session: AsyncSession):
         id=uuid.uuid4(),
         subject_id=subject.id,
         form_definition_id=form.id,
+        design_version_id=version.id,
         status=FormInstanceStatus.in_progress,
         created_at=datetime.now(UTC),
     )
@@ -177,6 +178,7 @@ async def seeded(db_session: AsyncSession):
         id=uuid.uuid4(),
         form_instance_id=form_instance.id,
         field_definition_id=field.id,
+        design_version_id=version.id,
         value="72",
         created_at=datetime.now(UTC),
     )

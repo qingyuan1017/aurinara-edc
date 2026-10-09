@@ -74,7 +74,7 @@ export function isCTMSUnauthorizedError(error: unknown): boolean {
 export function isCTMSUnavailableError(error: unknown): boolean {
   const status = responseStatus(error)
   const code = errorCode(error)
-  return status === 408 || status === 429 || status >= 500 || code === 'NETWORK_ERROR' || code === 'SERVICE_UNAVAILABLE'
+  return status === 408 || status === 429 || (status !== undefined && status >= 500) || code === 'NETWORK_ERROR' || code === 'SERVICE_UNAVAILABLE'
 }
 
 export function isCTMSWorkerUnavailable(status?: string | null): boolean {

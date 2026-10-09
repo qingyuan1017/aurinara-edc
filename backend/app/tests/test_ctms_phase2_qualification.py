@@ -118,10 +118,11 @@ async def _context(session: AsyncSession) -> tuple[User, User, Study, Site, Subj
     site = Site(study_id=study.id, site_number="001", name="Qualification site")
     session.add(site)
     await session.flush()
+    design_version_id = uuid4()
     subject = Subject(
         study_id=study.id,
         site_id=site.id,
-        study_version_id=uuid4(),
+        study_version_id=design_version_id,
         subject_number="SUB-002",
         status=SubjectStatus.enrolled,
         created_by=actor.id,
@@ -130,6 +131,7 @@ async def _context(session: AsyncSession) -> tuple[User, User, Study, Site, Subj
     await session.flush()
     visit = VisitInstance(
         subject_id=subject.id,
+        design_version_id=design_version_id,
         name="Week 4",
         visit_date=date(2026, 2, 1),
         window_status="in_window",
@@ -139,6 +141,7 @@ async def _context(session: AsyncSession) -> tuple[User, User, Study, Site, Subj
         study_id=study.id,
         site_id=site.id,
         subject_id=subject.id,
+        design_version_id=design_version_id,
         target_type=QueryTargetType.subject.value,
         target_id=subject.id,
         text="EDC query text remains clinical authority",
@@ -205,6 +208,7 @@ async def test_phase2_monitoring_work_attachment_and_notification_boundary(db_se
         FreezeLock(
             object_type="visit",
             object_id=visit.id,
+            design_version_id=visit.design_version_id,
             lock_type=FreezeLockType.freeze.value,
             is_active=True,
             locked_by=actor.id,
@@ -216,6 +220,7 @@ async def test_phase2_monitoring_work_attachment_and_notification_boundary(db_se
         FreezeLock(
             object_type="visit",
             object_id=visit.id,
+            design_version_id=visit.design_version_id,
             lock_type=FreezeLockType.lock.value,
             is_active=True,
             locked_by=actor.id,

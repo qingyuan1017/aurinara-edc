@@ -38,6 +38,14 @@ class ReviewStatus(Base):
         Uuid, ForeignKey("form_instances.id", ondelete="CASCADE"), nullable=False
     )
 
+    # Bound published design version (not-null after backfill — R2.7, R7.3, R11.2)
+    design_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("study_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Binds this operational record to a published design version",
+    )
+
     # Review state
     is_reviewed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
@@ -71,6 +79,7 @@ class ReviewStatus(Base):
         UniqueConstraint("form_instance_id", name="uq_review_status_form_instance_id"),
         Index("ix_review_status_form_instance_id", "form_instance_id"),
         Index("ix_review_status_reviewed_by", "reviewed_by"),
+        Index("ix_review_status_design_version_id", "design_version_id"),
     )
 
     def __repr__(self) -> str:

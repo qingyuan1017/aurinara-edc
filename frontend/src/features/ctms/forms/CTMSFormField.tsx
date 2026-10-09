@@ -11,8 +11,8 @@ export interface CTMSSelectOption {
   label: string
 }
 
-export interface CTMSFormFieldProps<T extends FieldValues> {
-  control: Control<T>
+export interface CTMSFormFieldProps<T extends FieldValues, TTransformed = T> {
+  control: Control<T, unknown, TTransformed>
   name: Path<T>
   label: string
   type?: CTMSFormFieldType
@@ -38,7 +38,7 @@ function fieldValue(value: unknown): string | number {
  * metadata for file inputs only; file content is intentionally not persisted
  * by this component or in local storage.
  */
-export function CTMSFormField<T extends FieldValues>({
+export function CTMSFormField<T extends FieldValues, TTransformed = T>({
   control,
   name,
   label,
@@ -50,7 +50,7 @@ export function CTMSFormField<T extends FieldValues>({
   options = [],
   accept,
   className,
-}: CTMSFormFieldProps<T>) {
+}: CTMSFormFieldProps<T, TTransformed>) {
   const { field, fieldState } = useController({ control, name })
   const id = fieldId(String(name))
   const descriptionId = description ? `${id}-description` : undefined

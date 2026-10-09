@@ -63,16 +63,29 @@ class StudyService:
             The created Study instance.
 
         Raises:
-            ConflictError: If the study_code already exists (Req 4.2).
+            ConflictError: If a Study with the same ``study_code`` already
+                exists. ``Study`` is the canonical, shared identity (R1.5), so
+                a second row claiming the same ``study_code`` would mint a
+                competing identity. The attempt is rejected and the error
+                details identify the conflicting identity — the existing
+                ``study_code`` and the existing study ``id`` (R1.6, Req 4.2).
         """
-        # Check uniqueness of study_code (Req 4.2)
+        # Reject a competing canonical Study identity (R1.6). The canonical
+        # Study identity key is ``study_code``; a pre-existing row with the same
+        # code is the conflicting identity.
         existing = await session.execute(
             select(Study).where(Study.study_code == data.study_code)
         )
-        if existing.scalars().first() is not None:
+        conflicting = existing.scalars().first()
+        if conflicting is not None:
             raise ConflictError(
                 message="Study code already exists",
-                details={"study_code": data.study_code},
+                details={
+                    "reason": "STUDY_IDENTITY_CONFLICT",
+                    "identity": "study",
+                    "study_code": data.study_code,
+                    "conflicting_study_id": str(conflicting.id),
+                },
             )
 
         # Create the Study (Req 4.1)

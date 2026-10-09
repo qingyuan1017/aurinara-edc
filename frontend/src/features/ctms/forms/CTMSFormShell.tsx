@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button'
 import { CTMSMutationFeedback, type CTMSMutationFeedbackStatus } from '../components/CTMSMutationFeedback'
 import { cn } from '@/lib/utils'
 
-export interface CTMSFormShellProps<T extends FieldValues> {
-  methods: UseFormReturn<T>
+export interface CTMSFormShellProps<T extends FieldValues, TTransformed = T> {
+  methods: UseFormReturn<T, unknown, TTransformed>
   title: string
   children: React.ReactNode
-  onSubmit: SubmitHandler<T>
+  onSubmit: SubmitHandler<TTransformed>
   onCancel?: () => void
   open?: boolean
   description?: string
@@ -45,7 +45,7 @@ function firstErrorPath(errors: FieldErrors, prefix = ''): string | undefined {
  * Accessible CTMS form/dialog shell. It deliberately keeps drafts in RHF
  * memory only; no localStorage or other client persistence is used.
  */
-export function CTMSFormShell<T extends FieldValues>({
+export function CTMSFormShell<T extends FieldValues, TTransformed = T>({
   methods,
   title,
   children,
@@ -61,7 +61,7 @@ export function CTMSFormShell<T extends FieldValues>({
   returnFocusRef,
   formMessage,
   mutation,
-}: CTMSFormShellProps<T>) {
+}: CTMSFormShellProps<T, TTransformed>) {
   const dialogRef = React.useRef<HTMLDivElement>(null)
   const previousFocusRef = React.useRef<HTMLElement | null>(null)
 

@@ -257,14 +257,48 @@ class SDVService:
         )
         status = result.scalars().first()
         if status is None:
+            design_version_id = await self._resolve_design_version_id(
+                session, target
+            )
             status = SDVStatus(
                 scope_type=target.scope_type.value,
                 scope_id=target.scope_id,
                 is_verified=False,
+                design_version_id=design_version_id,
             )
             session.add(status)
             await session.flush()
         return status
+
+    @staticmethod
+    async def _resolve_design_version_id(
+        session: AsyncSession,
+        target: _SDVTarget,
+    ) -> UUID | None:
+        """Resolve the published-design binding for a scoped SDV target.
+
+        The binding is inherited from the owning subject/form/visit/field row
+        (R2.7/7.3/11.2): subject scope reads ``Subject.study_version_id`` while
+        the lower scopes read the ``design_version_id`` already stamped on the
+        owning operational row.
+        """
+        scope = target.scope_type
+        if scope == SDVScopeType.subject:
+            column = Subject.study_version_id
+            model: Any = Subject
+        elif scope == SDVScopeType.visit:
+            column = VisitInstance.design_version_id
+            model = VisitInstance
+        elif scope == SDVScopeType.form:
+            column = FormInstance.design_version_id
+            model = FormInstance
+        else:  # SDVScopeType.field
+            column = FieldValue.design_version_id
+            model = FieldValue
+        result = await session.execute(
+            select(column).where(model.id == target.scope_id)
+        )
+        return result.scalar_one_or_none()
 
     def _count_query(
         self,

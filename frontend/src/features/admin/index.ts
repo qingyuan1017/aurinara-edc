@@ -4,3 +4,4 @@
  */
 export { UserListPage } from './UserListPage'
 export { AuditViewerPage } from './AuditViewerPage'
+export { AssignRolesDialog } from './AssignRolesDialog'

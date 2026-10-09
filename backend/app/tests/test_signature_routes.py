@@ -67,7 +67,7 @@ async def seeded(db_session: AsyncSession):
     form_definition = FormDefinition(id=uuid.uuid4(), study_version_id=version.id, name="Vitals", form_code="VS", display_order=1, created_at=datetime.now(UTC))
     db_session.add_all([study, version, site, subject, form_definition])
     await db_session.flush()
-    form_instance = FormInstance(id=uuid.uuid4(), subject_id=subject.id, form_definition_id=form_definition.id, status=FormInstanceStatus.submitted, data_jsonb={"weight": "70"}, created_at=datetime.now(UTC))
+    form_instance = FormInstance(id=uuid.uuid4(), subject_id=subject.id, form_definition_id=form_definition.id, design_version_id=version.id, status=FormInstanceStatus.submitted, data_jsonb={"weight": "70"}, created_at=datetime.now(UTC))
     db_session.add(form_instance)
     await db_session.flush()
     return {"user": user, "subject": subject, "form_instance": form_instance}

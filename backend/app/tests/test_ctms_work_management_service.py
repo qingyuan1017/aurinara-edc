@@ -24,7 +24,7 @@ from app.models.ctms.work import (
 )
 from app.models.edc.query import Query, QueryStatus, QueryTargetType
 from app.models.edc.site import Site
-from app.models.edc.study import Study
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
 from app.models.shared.audit import AuditEvent
 from app.models.shared.identity import User, UserStatus
 from app.models.shared.notification import Notification
@@ -60,10 +60,19 @@ async def _context(session: AsyncSession) -> tuple[User, User, Study, Site, Quer
     study = Study(study_code=f"WORK-{uuid4()}", title="Work study", created_by=actor.id)
     session.add(study)
     await session.flush()
+    version = StudyVersion(
+        study_id=study.id,
+        version_number="1.0",
+        status=StudyVersionStatus.published.value,
+        published_by=actor.id,
+    )
+    session.add(version)
+    await session.flush()
     site = Site(study_id=study.id, site_number=f"{uuid4().int % 100000:05d}", name="Work site")
     query = Query(
         study_id=study.id,
         site_id=None,
+        design_version_id=version.id,
         target_type=QueryTargetType.subject.value,
         target_id=uuid4(),
         text="clinical query text must never be copied",

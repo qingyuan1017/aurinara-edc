@@ -73,6 +73,14 @@ class FreezeLock(Base):
         comment="ID of the target object",
     )
 
+    # Bound published design version (not-null after backfill — R2.7, R7.3, R11.2)
+    design_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("study_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Binds this operational record to a published design version",
+    )
+
     # Lock type
     lock_type: Mapped[str] = mapped_column(
         String(10),
@@ -126,6 +134,7 @@ class FreezeLock(Base):
         Index("ix_freezes_locks_object_type_object_id", "object_type", "object_id"),
         Index("ix_freezes_locks_lock_type", "lock_type"),
         Index("ix_freezes_locks_is_active", "is_active"),
+        Index("ix_freezes_locks_design_version_id", "design_version_id"),
     )
 
     def __repr__(self) -> str:

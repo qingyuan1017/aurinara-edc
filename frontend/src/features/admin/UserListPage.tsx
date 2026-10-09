@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
+import { AssignRolesDialog } from './AssignRolesDialog'
 
 interface User { id: string; email: string; first_name: string; last_name: string; status: string; created_at: string }
 interface InviteUserPayload { email: string; first_name: string; last_name: string; role_id: string }
@@ -25,8 +26,10 @@ export function UserListPage() {
   const queryClient = useQueryClient()
   const canCreate = usePermission(PERMISSIONS.USER_CREATE)
   const canDeactivate = usePermission(PERMISSIONS.USER_DEACTIVATE)
+  const canAssign = usePermission(PERMISSIONS.USER_ASSIGN)
   const [page, setPage] = useState(1)
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [assignUser, setAssignUser] = useState<User | null>(null)
   const [formData, setFormData] = useState<InviteUserPayload>({ email: '', first_name: '', last_name: '', role_id: '' })
   const [error, setError] = useState<string | null>(null)
 
@@ -51,8 +54,8 @@ export function UserListPage() {
       <DataTableShell label="Users" loading={isLoading} error={Boolean(queryError)} errorMessage="Users could not be loaded." empty={data?.items.length === 0} emptyTitle="No users found.">
         <Table>
           <caption className="sr-only">Users</caption>
-          <TableHeader>{table.getHeaderGroups().map((headerGroup) => <TableRow key={headerGroup.id}>{headerGroup.headers.map((header) => <TableHead key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</TableHead>)}{canDeactivate ? <TableHead>Actions</TableHead> : null}</TableRow>)}</TableHeader>
-          <TableBody>{table.getRowModel().rows.map((row) => <TableRow key={row.id}>{row.getVisibleCells().map((cell) => <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}{canDeactivate ? <TableCell>{row.original.status === 'active' ? <Button type="button" variant="link" size="sm" pending={deactivateMutation.isPending} onClick={() => deactivateMutation.mutate(row.original.id)}>Deactivate</Button> : null}</TableCell> : null}</TableRow>)}</TableBody>
+          <TableHeader>{table.getHeaderGroups().map((headerGroup) => <TableRow key={headerGroup.id}>{headerGroup.headers.map((header) => <TableHead key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</TableHead>)}{canDeactivate || canAssign ? <TableHead>Actions</TableHead> : null}</TableRow>)}</TableHeader>
+          <TableBody>{table.getRowModel().rows.map((row) => <TableRow key={row.id}>{row.getVisibleCells().map((cell) => <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}{canDeactivate || canAssign ? <TableCell><div className="flex gap-2">{canAssign ? <Button type="button" variant="link" size="sm" onClick={() => setAssignUser(row.original)}>Assign roles</Button> : null}{canDeactivate && row.original.status === 'active' ? <Button type="button" variant="link" size="sm" pending={deactivateMutation.isPending} onClick={() => deactivateMutation.mutate(row.original.id)}>Deactivate</Button> : null}</div></TableCell> : null}</TableRow>)}</TableBody>
         </Table>
       </DataTableShell>
 
@@ -70,6 +73,8 @@ export function UserListPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {assignUser ? <AssignRolesDialog user={assignUser} open={assignUser !== null} onOpenChange={(open) => { if (!open) setAssignUser(null) }} /> : null}
     </PageContainer>
   )
 }

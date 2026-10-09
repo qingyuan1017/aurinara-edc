@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { getCTMSErrorMessage } from '@/features/ctms/api'
-import { formatCTMSMutationMessage } from '@/features/ctms/components/CTMSMutationFeedback'
+import { formatCTMSMutationMessage } from '@/features/ctms/components/feedbackMessage'
 import { cn } from '@/lib/utils'
 
 export type MutationFeedbackStatus = 'idle' | 'pending' | 'success' | 'error'

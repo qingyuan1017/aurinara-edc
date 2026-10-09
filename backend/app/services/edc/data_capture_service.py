@@ -540,6 +540,7 @@ class DataCaptureService:
                 field_definition_id=field_definition_id,
                 value=serialized,
                 updated_by=actor_id,
+                design_version_id=form_instance.design_version_id,
             )
             session.add(field_value)
             await session.flush()
@@ -921,6 +922,7 @@ class DataCaptureService:
                 form_instance_id=form_instance.id,
                 field_definition_id=field_definition_id,
                 value=None,
+                design_version_id=form_instance.design_version_id,
             )
             session.add(field_value)
             await session.flush()

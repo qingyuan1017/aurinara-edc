@@ -30,7 +30,7 @@ from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatu
 from app.models.edc.form_metadata import FieldDefinition, FormDefinition, FormSection
 from app.models.edc.lock import FreezeLock, FreezeLockObjectType, FreezeLockType
 from app.models.edc.site import Site
-from app.models.edc.study import Study, StudyVersion
+from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject
 from app.models.edc.visit import VisitInstance
 
@@ -267,6 +267,9 @@ class LockService:
         )
         control = result.scalars().first()
         if control is None:
+            design_version_id = await self._resolve_design_version_id(
+                session, target_ref
+            )
             control = FreezeLock(
                 object_type=target_ref.object_type.value,
                 object_id=target_ref.object_id,
@@ -274,6 +277,7 @@ class LockService:
                 is_active=True,
                 locked_by=actor_id,
                 locked_at=datetime.now(UTC),
+                design_version_id=design_version_id,
             )
             session.add(control)
             await session.flush()
@@ -304,6 +308,103 @@ class LockService:
             actor_id,
         )
         return control
+
+    @staticmethod
+    async def _resolve_design_version_id(
+        session: AsyncSession,
+        target_ref: _Target,
+    ) -> UUID | None:
+        """Resolve the published-design binding for a freeze/lock target.
+
+        Subject-reachable scopes inherit the owning row's binding
+        (R2.7/7.3/11.2): field/form read the ``design_version_id`` already on
+        the owning ``field_value``/``form_instance``, visit reads it from the
+        owning ``visit_instance``, and subject reads ``study_version_id``. The
+        site/study scopes have no single subject and fall back to the study's
+        current published version (latest ``published_at``), mirroring the 0049
+        backfill.
+        """
+        obj_type = target_ref.object_type
+        obj_id = target_ref.object_id
+
+        if obj_type == FreezeLockObjectType.field:
+            # A field-scope control is keyed by field_definition_id (the same
+            # contract DataCaptureService uses when guarding modifications before
+            # a FieldValue row exists). Resolve the binding first by FieldValue
+            # id, then by field_definition_id so the lookup succeeds whether the
+            # caller passed a persisted value id or the field definition id.
+            resolved = (
+                await session.execute(
+                    select(FieldValue.design_version_id).where(
+                        FieldValue.id == obj_id
+                    )
+                )
+            ).scalar_one_or_none()
+            if resolved is None:
+                resolved = (
+                    await session.execute(
+                        select(FieldValue.design_version_id)
+                        .where(FieldValue.field_definition_id == obj_id)
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+            if resolved is None:
+                # No persisted FieldValue yet (a field can be locked before any
+                # value is captured). Resolve the binding from the field's
+                # owning design: FieldDefinition -> FormSection -> FormDefinition
+                # carries the study_version_id this field was authored under.
+                resolved = (
+                    await session.execute(
+                        select(FormDefinition.study_version_id)
+                        .join(
+                            FormSection,
+                            FormSection.form_definition_id == FormDefinition.id,
+                        )
+                        .join(
+                            FieldDefinition,
+                            FieldDefinition.form_section_id == FormSection.id,
+                        )
+                        .where(FieldDefinition.id == obj_id)
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+            return resolved
+        elif obj_type == FreezeLockObjectType.form:
+            column, model = FormInstance.design_version_id, FormInstance
+        elif obj_type == FreezeLockObjectType.visit:
+            column, model = VisitInstance.design_version_id, VisitInstance
+        elif obj_type == FreezeLockObjectType.subject:
+            column, model = Subject.study_version_id, Subject
+        else:
+            # site / study scope — resolve the study's current published version
+            if obj_type == FreezeLockObjectType.study:
+                study_id: UUID | None = obj_id
+            else:  # site
+                study_id = (
+                    await session.execute(
+                        select(Site.study_id).where(Site.id == obj_id)
+                    )
+                ).scalar_one_or_none()
+            if study_id is None:
+                return None
+            return (
+                await session.execute(
+                    select(StudyVersion.id)
+                    .where(
+                        StudyVersion.study_id == study_id,
+                        StudyVersion.status == StudyVersionStatus.published.value,
+                    )
+                    .order_by(
+                        StudyVersion.published_at.desc().nullslast(),
+                        StudyVersion.id.desc(),
+                    )
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+
+        return (
+            await session.execute(select(column).where(model.id == obj_id))
+        ).scalar_one_or_none()
 
     @staticmethod
     def _normalize_lock_type(lock_type: FreezeLockType | str) -> FreezeLockType:

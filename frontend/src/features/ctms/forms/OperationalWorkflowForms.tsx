@@ -23,7 +23,8 @@ import {
 } from '../api'
 import { useCTMSMutation } from '../offline'
 import { useCTMSStatusTransition } from '../hooks'
-import { CTMSMutationFeedback, getCTMSMutationMetadata } from '../components/CTMSMutationFeedback'
+import { CTMSMutationFeedback } from '../components/CTMSMutationFeedback'
+import { getCTMSMutationMetadata } from '../components/feedbackMessage'
 import { GuardedCTMSAction, ReadOnlyIndicator } from '../components/OwnershipPresentation'
 import { CTMSFormField } from './CTMSFormField'
 import { CTMSFormShell } from './CTMSFormShell'
@@ -53,6 +54,7 @@ const planSchema = z.object({
   monitoring_strategy: optionalOwnedStringSchema({ label: 'Monitoring strategy', maxLength: 4000 }),
 })
 type PlanValues = z.infer<typeof planSchema>
+type PlanInput = z.input<typeof planSchema>
 
 const versionSchema = z.object({
   reason: transitionReasonSchema,
@@ -66,6 +68,7 @@ const versionSchema = z.object({
   monitoring_strategy: optionalOwnedStringSchema({ label: 'Monitoring strategy', maxLength: 4000 }),
 })
 type VersionValues = z.infer<typeof versionSchema>
+type VersionInput = z.input<typeof versionSchema>
 
 const activitySchema = z.object({
   plan_id: ownedStringSchema({ label: 'Monitoring plan ID', maxLength: 200 }),
@@ -76,6 +79,7 @@ const activitySchema = z.object({
   edc_visit_instance_id: optionalId,
 })
 type ActivityValues = z.infer<typeof activitySchema>
+type ActivityInput = z.input<typeof activitySchema>
 
 const taskSchema = z.object({
   title: ownedStringSchema({ label: 'Task title', maxLength: 255 }),
@@ -86,6 +90,7 @@ const taskSchema = z.object({
   priority: optionalOwnedStringSchema({ label: 'Priority', maxLength: 50 }),
 })
 type TaskValues = z.infer<typeof taskSchema>
+type TaskInput = z.input<typeof taskSchema>
 
 const followUpSchema = z.object({
   title: optionalOwnedStringSchema({ label: 'Follow-up title', maxLength: 255 }),
@@ -95,6 +100,7 @@ const followUpSchema = z.object({
   priority: optionalOwnedStringSchema({ label: 'Priority', maxLength: 50 }),
 })
 type FollowUpValues = z.infer<typeof followUpSchema>
+type FollowUpInput = z.input<typeof followUpSchema>
 
 const contactSchema = z.object({
   name: ownedStringSchema({ label: 'Contact name', maxLength: 255 }),
@@ -104,6 +110,7 @@ const contactSchema = z.object({
   owner_id: optionalId,
 })
 type ContactValues = z.infer<typeof contactSchema>
+type ContactInput = z.input<typeof contactSchema>
 
 const actionSchema = z.object({
   assigned_cra_id: optionalId,
@@ -113,6 +120,7 @@ const actionSchema = z.object({
   notes: optionalOwnedStringSchema({ label: 'Completion notes', maxLength: 4000 }),
 })
 type ActionValues = z.infer<typeof actionSchema>
+type ActionInput = z.input<typeof actionSchema>
 
 function toIso(value: string | undefined): string | undefined {
   if (!value) return undefined
@@ -150,7 +158,7 @@ export interface CTMSFormCallbacks<T> {
 
 export function MonitoringPlanForm({ studyId, initial, onSaved, onCancel, correlationId }: CTMSFormCallbacks<CTMSMonitoringPlan> & { studyId: string; initial?: CTMSMonitoringPlan }) {
   const client = useQueryClient()
-  const methods = useForm<PlanValues>({
+  const methods = useForm<PlanInput, unknown, PlanValues>({
     resolver: zodResolver(planSchema),
     defaultValues: {
       name: initial?.name ?? '', description: initial?.description ?? '', site_id: initial?.site_id ?? '',
@@ -183,7 +191,7 @@ export function MonitoringPlanForm({ studyId, initial, onSaved, onCancel, correl
 
 export function MonitoringPlanVersionForm({ planId, onSaved, onCancel, correlationId }: CTMSFormCallbacks<unknown> & { planId: string }) {
   const client = useQueryClient()
-  const methods = useForm<VersionValues>({ resolver: zodResolver(versionSchema), defaultValues: { reason: '', objectives: '', activity_types: '', frequency: '', frequency_value: undefined, frequency_unit: '', completion_criteria: '', risk_level: '', monitoring_strategy: '' } })
+  const methods = useForm<VersionInput, unknown, VersionValues>({ resolver: zodResolver(versionSchema), defaultValues: { reason: '', objectives: '', activity_types: '', frequency: '', frequency_value: undefined, frequency_unit: '', completion_criteria: '', risk_level: '', monitoring_strategy: '' } })
   const mutation = useCTMSMutation({
     mutationFn: (values: VersionValues) => {
       const payload: CTMSMonitoringPlanAmendPayload = { reason: values.reason, changes: versionPayload(values), correlation_id: correlationId }
@@ -205,7 +213,7 @@ export function MonitoringPlanVersionActions({ planId, canManage = true, onChang
 
 export function MonitoringActivityForm({ studyId, initial, onSaved, onCancel, correlationId }: CTMSFormCallbacks<CTMSMonitoringActivity> & { studyId: string; initial?: CTMSMonitoringActivity }) {
   const client = useQueryClient()
-  const methods = useForm<ActivityValues>({ resolver: zodResolver(activitySchema), defaultValues: { plan_id: initial?.plan_version_id ?? '', activity_type: initial?.activity_type ?? '', planned_date: initial?.planned_date?.slice(0, 16) ?? '', site_id: initial?.site_id ?? '', assigned_cra_id: initial?.assigned_cra_id ?? '', edc_visit_instance_id: initial?.edc_visit_instance_id ?? '' } })
+  const methods = useForm<ActivityInput, unknown, ActivityValues>({ resolver: zodResolver(activitySchema), defaultValues: { plan_id: initial?.plan_version_id ?? '', activity_type: initial?.activity_type ?? '', planned_date: initial?.planned_date?.slice(0, 16) ?? '', site_id: initial?.site_id ?? '', assigned_cra_id: initial?.assigned_cra_id ?? '', edc_visit_instance_id: initial?.edc_visit_instance_id ?? '' } })
   const mutation = useCTMSMutation({
     mutationFn: (values: ActivityValues) => {
       const payload: CTMSMonitoringActivityPayload = { plan_id: values.plan_id, activity_type: values.activity_type, planned_date: toIso(values.planned_date) ?? values.planned_date, site_id: optional(values.site_id), assigned_cra_id: optional(values.assigned_cra_id), edc_visit_instance_id: optional(values.edc_visit_instance_id), correlation_id: correlationId }
@@ -220,13 +228,13 @@ export function MonitoringActivityForm({ studyId, initial, onSaved, onCancel, co
 export function MonitoringActivityActions({ activity, onChanged }: { activity: CTMSMonitoringActivity; onChanged?: () => void }) {
   const client = useQueryClient()
   const [mode, setMode] = React.useState<'assign' | 'reschedule' | 'complete' | 'cancel' | null>(null)
-  const methods = useForm<ActionValues>({ resolver: zodResolver(actionSchema), defaultValues: { assigned_cra_id: activity.assigned_cra_id ?? '', planned_date: activity.planned_date.slice(0, 16), reason: '', evidence: '', notes: '' } })
+  const methods = useForm<ActionInput, unknown, ActionValues>({ resolver: zodResolver(actionSchema), defaultValues: { assigned_cra_id: activity.assigned_cra_id ?? '', planned_date: activity.planned_date.slice(0, 16), reason: '', evidence: '', notes: '' } })
   const mutation = useCTMSMutation({
     mutationFn: (values: ActionValues) => {
       if (mode === 'assign') return ctmsApi.assignMonitoringActivity(activity.id, { assigned_cra_id: values.assigned_cra_id ?? '' })
-      if (mode === 'reschedule') return ctmsApi.rescheduleMonitoringActivity(activity.id, { planned_date: toIso(values.planned_date) ?? values.planned_date, reason: values.reason })
-      if (mode === 'complete') return ctmsApi.completeMonitoringActivity(activity.id, { evidence: values.evidence, notes: optional(values.notes) })
-      return ctmsApi.cancelMonitoringActivity(activity.id, { reason: values.reason })
+      if (mode === 'reschedule') return ctmsApi.rescheduleMonitoringActivity(activity.id, { planned_date: toIso(values.planned_date) ?? values.planned_date ?? '', reason: values.reason ?? '' })
+      if (mode === 'complete') return ctmsApi.completeMonitoringActivity(activity.id, { evidence: values.evidence ?? '', notes: optional(values.notes) })
+      return ctmsApi.cancelMonitoringActivity(activity.id, { reason: values.reason ?? '' })
     },
     onSuccess: () => { void client.invalidateQueries({ queryKey: ctmsKeys.monitoringActivities(activity.study_id) }); setMode(null); onChanged?.() },
     onError: (error) => { applyCTMSServerErrors(error, methods.setError) },
@@ -243,7 +251,7 @@ export function MonitoringActivityActions({ activity, onChanged }: { activity: C
 
 export function OperationalTaskForm({ studyId, initial, onSaved, onCancel, correlationId }: CTMSFormCallbacks<CTMSTask> & { studyId: string; initial?: CTMSTask }) {
   const client = useQueryClient()
-  const methods = useForm<TaskValues>({ resolver: zodResolver(taskSchema), defaultValues: { title: initial?.title ?? '', description: initial?.description ?? '', site_id: initial?.site_id ?? '', owner_id: initial?.owner_id ?? '', due_date: initial?.due_date?.slice(0, 16) ?? '', priority: initial?.priority ?? 'normal' } })
+  const methods = useForm<TaskInput, unknown, TaskValues>({ resolver: zodResolver(taskSchema), defaultValues: { title: initial?.title ?? '', description: initial?.description ?? '', site_id: initial?.site_id ?? '', owner_id: initial?.owner_id ?? '', due_date: initial?.due_date?.slice(0, 16) ?? '', priority: initial?.priority ?? 'normal' } })
   const mutation = useCTMSMutation({
     mutationFn: (values: TaskValues) => {
       const base = { title: values.title, description: optional(values.description), owner_id: optional(values.owner_id), due_date: toIso(values.due_date), priority: optional(values.priority), correlation_id: correlationId }
@@ -257,7 +265,7 @@ export function OperationalTaskForm({ studyId, initial, onSaved, onCancel, corre
 
 export function QueryFollowUpForm({ queryId, studyId, onSaved, onCancel }: CTMSFormCallbacks<CTMSTask> & { queryId: string; studyId?: string }) {
   const client = useQueryClient()
-  const methods = useForm<FollowUpValues>({ resolver: zodResolver(followUpSchema), defaultValues: { title: '', approved_summary: '', owner_id: '', due_date: '', priority: 'normal' } })
+  const methods = useForm<FollowUpInput, unknown, FollowUpValues>({ resolver: zodResolver(followUpSchema), defaultValues: { title: '', approved_summary: '', owner_id: '', due_date: '', priority: 'normal' } })
   const mutation = useCTMSMutation({
     mutationFn: (values: FollowUpValues) => ctmsApi.createQueryFollowUp(queryId, { title: optional(values.title), approved_summary: optional(values.approved_summary), owner_id: optional(values.owner_id), due_date: toIso(values.due_date), priority: optional(values.priority) }),
     onSuccess: (value) => { if (studyId) { void client.invalidateQueries({ queryKey: ctmsKeys.tasks(studyId) }); void client.invalidateQueries({ queryKey: ctmsKeys.dashboard(studyId) }) } onSaved?.(value) },
@@ -272,7 +280,7 @@ export function OperationalTaskStatusForm({ task, transitionOptions, onSaved, on
     recordId: task.id,
     studyId: task.study_id,
     currentStatus: task.status,
-    mutationFn: async (payload) => ctmsApi.transitionTask(task.id, payload),
+    mutationFn: async (payload) => ctmsApi.transitionTask(task.id, { status: payload.status, reason: payload.reason ?? '' }),
   })
   return <CTMSStatusTransitionForm
     currentStatus={mutation.currentStatus ?? task.status}
@@ -288,7 +296,7 @@ export function OperationalTaskStatusForm({ task, transitionOptions, onSaved, on
 
 export function OperationalContactForm({ studyId, initial, onSaved, onCancel, correlationId }: CTMSFormCallbacks<CTMSContact> & { studyId: string; initial?: CTMSContact }) {
   const client = useQueryClient()
-  const methods = useForm<ContactValues>({ resolver: zodResolver(contactSchema), defaultValues: { name: initial?.name ?? '', site_id: initial?.site_id ?? '', role: initial?.role ?? '', organization: initial?.organization ?? '', owner_id: initial?.owner_id ?? '' } })
+  const methods = useForm<ContactInput, unknown, ContactValues>({ resolver: zodResolver(contactSchema), defaultValues: { name: initial?.name ?? '', site_id: initial?.site_id ?? '', role: initial?.role ?? '', organization: initial?.organization ?? '', owner_id: initial?.owner_id ?? '' } })
   const mutation = useCTMSMutation({
     mutationFn: (values: ContactValues) => {
       const payload: CTMSContactPayload = { name: values.name, site_id: optional(values.site_id), role: optional(values.role), organization: optional(values.organization), owner_id: optional(values.owner_id), correlation_id: correlationId }
@@ -306,7 +314,7 @@ export function OperationalContactStatusForm({ contact, transitionOptions, onSav
     recordId: contact.id,
     studyId: contact.study_id,
     currentStatus: contact.status,
-    mutationFn: async (payload) => ctmsApi.transitionContact(contact.id, payload),
+    mutationFn: async (payload) => ctmsApi.transitionContact(contact.id, { status: payload.status, reason: payload.reason ?? '' }),
   })
   return <CTMSStatusTransitionForm
     currentStatus={mutation.currentStatus ?? contact.status}

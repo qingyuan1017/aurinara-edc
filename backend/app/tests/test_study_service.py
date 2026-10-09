@@ -83,6 +83,42 @@ class TestCreateStudy:
         assert "already exists" in exc_info.value.message
         assert exc_info.value.details["study_code"] == "STUDY-001"
 
+    async def test_create_study_rejects_competing_identity_with_conflicting_identity(
+        self, service, mock_session, study_create_data, actor_id
+    ):
+        """A competing canonical Study identity is rejected, and the error
+        identifies the conflicting identity: the study_code and the existing
+        study id (R1.6). ``Study`` is the canonical, shared identity (R1.5)."""
+        existing_study = _make_study()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = existing_study
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with pytest.raises(ConflictError) as exc_info:
+            await service.create_study(mock_session, study_create_data, actor_id)
+
+        details = exc_info.value.details
+        # The error must identify the conflicting identity (R1.6).
+        assert details["reason"] == "STUDY_IDENTITY_CONFLICT"
+        assert details["identity"] == "study"
+        assert details["study_code"] == "STUDY-001"
+        assert details["conflicting_study_id"] == str(existing_study.id)
+
+    async def test_create_study_competing_identity_does_not_persist(
+        self, service, mock_session, study_create_data, actor_id
+    ):
+        """When a competing Study identity is rejected, no new identity is
+        minted — the service never adds or flushes a Study (R1.6)."""
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = _make_study()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with pytest.raises(ConflictError):
+            await service.create_study(mock_session, study_create_data, actor_id)
+
+        mock_session.add.assert_not_called()
+        mock_session.flush.assert_not_awaited()
+
     async def test_create_study_persists_metadata(self, service, mock_session, study_create_data, actor_id):
         """create_study creates a Study with correct metadata and Draft status (Req 4.1)."""
         # Mock: no existing study

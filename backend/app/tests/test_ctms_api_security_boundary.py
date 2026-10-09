@@ -192,11 +192,13 @@ async def seeded(db_session: AsyncSession) -> dict[str, Any]:
         created_by=admin.id, created_at=now,
     )
     visit = VisitInstance(
-        id=uuid4(), subject_id=subject.id, name="Week 4", visit_date=date(2025, 2, 1),
+        id=uuid4(), subject_id=subject.id, design_version_id=version.id, name="Week 4",
+        visit_date=date(2025, 2, 1),
         window_status="in_window", status=VisitInstanceStatus.scheduled, created_at=now,
     )
     query = Query(
         id=uuid4(), study_id=study.id, site_id=site.id, subject_id=subject.id,
+        design_version_id=version.id,
         target_type=QueryTargetType.subject.value, target_id=subject.id,
         text="EDC-owned query text must never become CTMS data", status=QueryStatus.open,
         created_by=admin.id, created_at=now,

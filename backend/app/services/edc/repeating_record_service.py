@@ -76,6 +76,7 @@ class RepeatingRecordService:
             sequence_number=sequence_number,
             data_jsonb=dict(values) if values is not None else None,
             created_at=datetime.now(UTC),
+            design_version_id=form_instance.design_version_id,
         )
         session.add(record)
         await session.flush()

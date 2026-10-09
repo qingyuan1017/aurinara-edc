@@ -216,6 +216,7 @@ async def visit_instance(
         id=uuid.uuid4(),
         subject_id=subject.id,
         visit_definition_id=visit_definition.id,
+        design_version_id=subject.study_version_id,
         name="Week 4",
         status=VisitInstanceStatus.scheduled,
         created_at=datetime.now(UTC),

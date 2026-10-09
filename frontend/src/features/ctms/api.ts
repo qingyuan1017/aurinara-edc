@@ -1159,7 +1159,7 @@ const safeRemediationDetailKeys = new Set([
 export function sanitizeCTMSRemediationDetails(value: unknown): Record<string, string | number | boolean> {
   const record = asRecord(value)
   if (!record) return {}
-  return Object.fromEntries(Object.entries(record).flatMap(([key, entry]) => {
+  return Object.fromEntries(Object.entries(record).flatMap(([key, entry]): [string, string | number | boolean][] => {
     if (!safeRemediationDetailKeys.has(key.toLowerCase())) return []
     if (typeof entry === 'string') return entry.length <= 500 ? [[key, entry]] : []
     if (typeof entry === 'number' || typeof entry === 'boolean') return [[key, entry]]

@@ -19,6 +19,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.exceptions import AuthenticationError, AuthorizationError, ValidationError
+from app.core.permissions import permission_module
 from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
 from app.services.shared.ai_assistant_service import AIAssistantService
 
@@ -77,6 +78,14 @@ def ai_confirmation_scenario(draw):
                         permission_code=permission,
                         study_id=grant_study,
                         site_id=grant_site,
+                        # These are EDC operational codes; tag the grant with
+                        # operational module ownership so the Requirement 10
+                        # module gate treats this as an operational user.
+                        role_modules=(
+                            (module,)
+                            if (module := permission_module(permission)) is not None
+                            else ()
+                        ),
                     )
                     for permission in permissions
                 ]

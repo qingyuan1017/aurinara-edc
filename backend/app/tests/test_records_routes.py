@@ -137,6 +137,7 @@ async def seeded(db_session: AsyncSession) -> dict:
         id=uuid.uuid4(),
         subject_id=subject.id,
         form_definition_id=form_definition.id,
+        design_version_id=version.id,
         status=FormInstanceStatus.in_progress,
         created_at=datetime.now(UTC),
     )
@@ -208,6 +209,7 @@ class TestRecordsRoutes:
         record = FormRecord(
             id=uuid.uuid4(),
             form_instance_id=seeded["form_instance"].id,
+            design_version_id=seeded["form_instance"].design_version_id,
             sequence_number=1,
             data_jsonb={"term": "Headache"},
             created_at=datetime.now(UTC),

@@ -16,6 +16,7 @@ from app.core.exceptions import (
 from app.core.exceptions import (
     ValidationError as DomainValidationError,
 )
+from app.core.permissions import permission_module
 from app.main import create_app
 from app.schemas.shared.ai_assistant import (
     AIChatRequest,
@@ -119,6 +120,9 @@ def test_ai_request_schemas_reject_empty_prompts():
 
 
 def _scoped_user(study_id, *, site_id=None, permissions=("form.read", "form.enter")):
+    # Tag each grant with the module its code belongs to so the module-scoped
+    # separation-of-duties gate (Requirement 10) treats this as an operational
+    # user holding real EDC write permissions.
     return SimpleNamespace(
         id=uuid4(),
         authorization_scope=AuthorizationScope(
@@ -127,6 +131,11 @@ def _scoped_user(study_id, *, site_id=None, permissions=("form.read", "form.ente
                     permission_code=permission,
                     study_id=study_id,
                     site_id=site_id,
+                    role_modules=(
+                        (module,)
+                        if (module := permission_module(permission)) is not None
+                        else ()
+                    ),
                 )
                 for permission in permissions
             ]

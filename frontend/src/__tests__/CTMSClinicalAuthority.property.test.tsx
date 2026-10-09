@@ -55,7 +55,9 @@ function generator(seed: number) {
 
 function clinicalDescriptors(index: number): CTMSActionRouteDescriptor[] {
   const capability = CTMS_CAPABILITY_CODES.ctmsOperationalProjections
-  return [
+  // These descriptors intentionally violate the CTMS-only descriptor contract
+  // (owner: 'EDC', clinicalMutation: true) to prove the guard rejects them.
+  return ([
     {
       kind: 'action',
       route: `/edc/subjects/subject-${index}/clinical-status`,
@@ -88,7 +90,7 @@ function clinicalDescriptors(index: number): CTMSActionRouteDescriptor[] {
       owner: 'EDC',
       clinicalMutation: true,
     },
-  ]
+  ] as unknown as CTMSActionRouteDescriptor[])
 }
 
 afterEach(() => {

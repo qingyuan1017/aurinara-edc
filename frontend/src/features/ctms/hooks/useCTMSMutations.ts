@@ -5,7 +5,7 @@ import {
   ctmsKeys,
   type CTMSCorrelationMetadata,
   type CTMSMonitoringActivity,
-  type CTMSMonitoringPlan,
+  type CTMSMonitoringPlanVersion,
   type CTMSQueryContext,
   type CTMSStatusTransitionPayload,
   type CTMSTransitionOption,
@@ -69,7 +69,7 @@ export function getCTMSStatusTransitionInvalidationKeys(
     case 'site-profile':
       if (siteId) {
         addKey(keys, ctmsKeys.siteProfile(siteId, context))
-        addKey(keys, ctmsKeys.siteDashboard(siteId, studyId, context))
+        addKey(keys, ctmsKeys.siteDashboard(siteId, { ...context, studyId: context.studyId ?? studyId }))
       }
       break
     case 'plans':
@@ -82,7 +82,7 @@ export function getCTMSStatusTransitionInvalidationKeys(
       if (siteId) {
         addKey(keys, ctmsKeys.activation(siteId, context))
         addKey(keys, ctmsKeys.siteProfile(siteId, context))
-        addKey(keys, ctmsKeys.siteDashboard(siteId, studyId, context))
+        addKey(keys, ctmsKeys.siteDashboard(siteId, { ...context, studyId: context.studyId ?? studyId }))
       }
       break
     case 'targets':
@@ -202,17 +202,19 @@ export function useCTMSActivationTransition({ actionId, ...options }: UseCTMSAct
   })
 }
 
-export interface UseCTMSMonitoringPlanTransitionOptions extends Omit<UseCTMSStatusTransitionOptions<CTMSMonitoringPlan>, 'resource' | 'mutationFn' | 'recordId'> {
+export interface UseCTMSMonitoringPlanTransitionOptions extends Omit<UseCTMSStatusTransitionOptions<CTMSMonitoringPlanVersion>, 'resource' | 'mutationFn' | 'recordId'> {
   planId: string
   action: 'publish' | 'amend'
 }
 
 export function useCTMSMonitoringPlanTransition({ planId, action, ...options }: UseCTMSMonitoringPlanTransitionOptions) {
-  return useCTMSStatusTransition({
+  return useCTMSStatusTransition<CTMSMonitoringPlanVersion>({
     ...options,
     resource: 'monitoring-plans',
     recordId: planId,
-    mutationFn: (payload) => action === 'publish' ? ctmsApi.publishMonitoringPlan(planId, payload) : ctmsApi.amendMonitoringPlan(planId, payload),
+    mutationFn: (payload) => action === 'publish'
+      ? ctmsApi.publishMonitoringPlan(planId)
+      : ctmsApi.amendMonitoringPlan(planId, { reason: payload.reason ?? '', changes: {} }),
   })
 }
 
@@ -220,18 +222,19 @@ export interface UseCTMSMonitoringActivityTransitionOptions extends Omit<UseCTMS
   activityId: string
   action: 'reschedule' | 'complete' | 'cancel'
   plannedDate?: string
+  evidence?: Record<string, unknown> | string
 }
 
-export function useCTMSMonitoringActivityTransition({ activityId, action, plannedDate, ...options }: UseCTMSMonitoringActivityTransitionOptions) {
-  return useCTMSStatusTransition({
+export function useCTMSMonitoringActivityTransition({ activityId, action, plannedDate, evidence, ...options }: UseCTMSMonitoringActivityTransitionOptions) {
+  return useCTMSStatusTransition<CTMSMonitoringActivity>({
     ...options,
     resource: 'monitoring-activities',
     recordId: activityId,
     mutationFn: (payload) => {
-      const request = plannedDate ? { ...payload, planned_date: plannedDate } : payload
-      if (action === 'reschedule') return ctmsApi.rescheduleMonitoringActivity(activityId, request)
-      if (action === 'complete') return ctmsApi.completeMonitoringActivity(activityId, request)
-      return ctmsApi.cancelMonitoringActivity(activityId, request)
+      const reason = payload.reason ?? ''
+      if (action === 'reschedule') return ctmsApi.rescheduleMonitoringActivity(activityId, { planned_date: plannedDate ?? '', reason })
+      if (action === 'complete') return ctmsApi.completeMonitoringActivity(activityId, { evidence: evidence ?? '', notes: payload.reason })
+      return ctmsApi.cancelMonitoringActivity(activityId, { reason })
     },
   })
 }

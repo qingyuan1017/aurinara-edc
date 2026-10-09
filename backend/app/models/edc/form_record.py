@@ -50,6 +50,14 @@ class FormRecord(Base):
         Uuid, ForeignKey("form_instances.id", ondelete="CASCADE"), nullable=False
     )
 
+    # Bound published design version (not-null after backfill — R2.7, R7.3, R11.2)
+    design_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("study_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Binds this operational record to a published design version",
+    )
+
     # Monotonically assigned sequence number per form_instance (Requirement 11.1)
     sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -88,6 +96,7 @@ class FormRecord(Base):
             "form_instance_id",
             "sequence_number",
         ),
+        Index("ix_form_records_design_version_id", "design_version_id"),
     )
 
     def __repr__(self) -> str:

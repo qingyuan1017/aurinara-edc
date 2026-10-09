@@ -37,7 +37,7 @@ function generatedMutationCases(count: number): GeneratedMutationCase[] {
     const scope = resource === 'site-profile' || resource === 'activation'
       ? { studyId, siteId }
       : { studyId }
-    const expectedKeys = (() => {
+    const expectedKeys = ((): QueryKey[] => {
       switch (resource) {
         case 'study-profile':
           return [
@@ -70,6 +70,8 @@ function generatedMutationCases(count: number): GeneratedMutationCase[] {
             ctmsKeys.dashboard(studyId),
             ctmsKeys.report(studyId, 'operational'),
           ]
+        default:
+          throw new Error(`Unexpected mutation resource in generated case: ${resource}`)
       }
     })()
     const unaffectedCTMSKey = resource === 'site-profile' || resource === 'activation'

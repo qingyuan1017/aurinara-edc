@@ -96,6 +96,44 @@ class TestCreateSite:
         assert "already exists" in exc_info.value.message
         assert exc_info.value.details["site_number"] == "SITE-001"
 
+    async def test_create_site_rejects_competing_identity_with_conflicting_identity(
+        self, service, mock_session, site_create_data, actor_id, study_id
+    ):
+        """A competing canonical Site identity is rejected, and the error
+        identifies the conflicting identity: the site_number, the study id, and
+        the existing site id (R1.6). ``Site`` is the canonical, shared
+        identity (R1.5); its canonical key is (study_id, site_number)."""
+        existing_site = _make_site(study_id)
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = existing_site
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with pytest.raises(ConflictError) as exc_info:
+            await service.create_site(mock_session, study_id, site_create_data, actor_id)
+
+        details = exc_info.value.details
+        # The error must identify the conflicting identity (R1.6).
+        assert details["reason"] == "SITE_IDENTITY_CONFLICT"
+        assert details["identity"] == "site"
+        assert details["site_number"] == "SITE-001"
+        assert details["study_id"] == str(study_id)
+        assert details["conflicting_site_id"] == str(existing_site.id)
+
+    async def test_create_site_competing_identity_does_not_persist(
+        self, service, mock_session, site_create_data, actor_id, study_id
+    ):
+        """When a competing Site identity is rejected, no new identity is
+        minted — the service never adds or flushes a Site (R1.6)."""
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = _make_site(study_id)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with pytest.raises(ConflictError):
+            await service.create_site(mock_session, study_id, site_create_data, actor_id)
+
+        mock_session.add.assert_not_called()
+        mock_session.flush.assert_not_awaited()
+
     async def test_create_site_persists_metadata(
         self, service, mock_session, site_create_data, actor_id, study_id
     ):

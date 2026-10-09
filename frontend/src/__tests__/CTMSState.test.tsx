@@ -63,7 +63,7 @@ describe('CTMS shared state primitives', () => {
 
     function Probe() {
       const mutation = useCTMSMutation({ mutationFn })
-      return <><button type="button" onClick={() => mutation.mutate()}>Submit</button><span>{String(mutation.canMutate)}</span></>
+      return <><button type="button" onClick={() => mutation.mutate(undefined)}>Submit</button><span>{String(mutation.canMutate)}</span></>
     }
 
     render(<QueryClientProvider client={new QueryClient()}><Probe /></QueryClientProvider>)

@@ -24,6 +24,7 @@ from app.api.pagination import paginate
 from app.core.audit import audit_service
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.models.edc.query import Query, QueryMessage, QueryStatus, QueryType
+from app.models.edc.subject import Subject
 from app.schemas.edc.query import QueryFilters
 from app.schemas.shared.base import PaginatedResponse
 from app.services.shared.notification_service import notification_service
@@ -57,6 +58,7 @@ class QueryService:
         subject_id: UUID | None = None,
         query_type: str = QueryType.manual,
         assigned_role: str | None = None,
+        design_version_id: UUID | None = None,
     ) -> Query:
         """Create a new Query with status Open, linked to exactly one affected object.
 
@@ -72,10 +74,18 @@ class QueryService:
             subject_id: Optional subject context.
             query_type: Origin of the query (manual or system).
             assigned_role: Optional role whose in-scope users are notified.
+            design_version_id: Published design version binding (R2.7/7.3/11.2).
+                When omitted it is resolved from the owning subject's bound
+                ``study_version_id``.
 
         Returns:
             The created Query instance with status Open.
         """
+        if design_version_id is None:
+            design_version_id = await self._resolve_design_version_id(
+                session, subject_id
+            )
+
         query = Query(
             study_id=study_id,
             site_id=site_id,
@@ -87,6 +97,7 @@ class QueryService:
             assigned_role=assigned_role,
             status=QueryStatus.open,
             created_by=actor_id,
+            design_version_id=design_version_id,
         )
         session.add(query)
         await session.flush()
@@ -115,6 +126,22 @@ class QueryService:
             actor_id,
         )
         return query
+
+    async def _resolve_design_version_id(
+        self, session: AsyncSession, subject_id: UUID | None
+    ) -> UUID | None:
+        """Resolve the published-design binding from the owning subject.
+
+        Every query belongs to a subject-scoped object, so the binding is the
+        subject's bound ``study_version_id`` (R2.7/7.3/11.2). Returns None when
+        no subject context is available so the caller surfaces the constraint.
+        """
+        if subject_id is None:
+            return None
+        result = await session.execute(
+            select(Subject.study_version_id).where(Subject.id == subject_id)
+        )
+        return result.scalar_one_or_none()
 
     # ------------------------------------------------------------------
     # Respond (Req 13.3, 13.6, 13.7)

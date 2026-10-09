@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog, DetailCard, StatusBadge } from '@/components/patterns'
-import { getCTMSMutationMetadata } from './CTMSMutationFeedback'
+import { getCTMSMutationMetadata } from './feedbackMessage'
 import {
   sanitizeCTMSRemediationDetails,
   type CTMSConflict,

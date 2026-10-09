@@ -22,7 +22,7 @@ const edcNavigation = [
   'Studies',
   'Sites',
   'Subjects',
-  'Forms',
+  'Form Builder',
   'Queries',
   'Data Cleaning',
   'SDV Worklist',
@@ -127,7 +127,7 @@ function expectBaselineEDCNavigation() {
 }
 
 function expectCTMSLink(label: string, expected: boolean) {
-  const links = screen.queryAllByRole('link', { name: label, exact: true })
+  const links = screen.queryAllByRole('link', { name: label })
   const hasCTMSLink = links.some((link) => link.getAttribute('href')?.includes('/ctms'))
   expect(hasCTMSLink).toBe(expected)
 }

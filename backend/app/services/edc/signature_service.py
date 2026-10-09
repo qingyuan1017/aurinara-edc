@@ -29,6 +29,10 @@ from app.core.request_context import get_actor
 from app.core.security import verify_re_auth
 from app.models.edc.form_data import FieldValue, FormInstance
 from app.models.edc.signature import Signature, SignatureObjectType, SignatureStatus
+from app.models.edc.site import Site
+from app.models.edc.study import StudyVersion, StudyVersionStatus
+from app.models.edc.subject import Subject
+from app.models.edc.visit import VisitInstance
 from app.models.shared.identity import User, UserStatus
 
 logger = logging.getLogger(__name__)
@@ -115,6 +119,10 @@ class SignatureService:
         snapshot = signed_data if signed_data is not None else self.snapshot(target)
         data_hash = self.hash_snapshot(snapshot)
 
+        design_version_id = await self._resolve_design_version_id(
+            session, target, target_ref
+        )
+
         signature = Signature(
             object_type=target_ref.object_type.value,
             object_id=target_ref.object_id,
@@ -124,6 +132,7 @@ class SignatureService:
             data_hash=data_hash,
             status=SignatureStatus.valid,
             stale_reason=None,
+            design_version_id=design_version_id,
         )
         session.add(signature)
 
@@ -160,6 +169,70 @@ class SignatureService:
             signer.user_id,
         )
         return signature
+
+    @staticmethod
+    async def _resolve_design_version_id(
+        session: AsyncSession,
+        target: Any,
+        target_ref: _SignedTarget,
+    ) -> UUID | None:
+        """Resolve the published-design binding for a signed target.
+
+        Prefers the binding already carried on the in-scope operational object
+        (field/form/visit instances now stamp ``design_version_id``; a subject
+        carries ``study_version_id``) to avoid an extra query. Otherwise the
+        binding is loaded by scope, mirroring the 0049 backfill — subject
+        scopes resolve through the owning row and site/study scopes fall back to
+        the study's current published version (R2.7/7.3/11.2).
+        """
+        # Fast path: the loaded target already carries the binding.
+        bound = getattr(target, "design_version_id", None) or getattr(
+            target, "study_version_id", None
+        )
+        if bound is not None:
+            return bound
+
+        obj_type = target_ref.object_type
+        obj_id = target_ref.object_id
+
+        if obj_type == SignatureObjectType.field:
+            column, model = FieldValue.design_version_id, FieldValue
+        elif obj_type == SignatureObjectType.form:
+            column, model = FormInstance.design_version_id, FormInstance
+        elif obj_type == SignatureObjectType.visit:
+            column, model = VisitInstance.design_version_id, VisitInstance
+        elif obj_type == SignatureObjectType.subject:
+            column, model = Subject.study_version_id, Subject
+        else:
+            # site / study scope — resolve the study's current published version
+            if obj_type == SignatureObjectType.study:
+                study_id: UUID | None = obj_id
+            else:  # site
+                study_id = (
+                    await session.execute(
+                        select(Site.study_id).where(Site.id == obj_id)
+                    )
+                ).scalar_one_or_none()
+            if study_id is None:
+                return None
+            return (
+                await session.execute(
+                    select(StudyVersion.id)
+                    .where(
+                        StudyVersion.study_id == study_id,
+                        StudyVersion.status == StudyVersionStatus.published.value,
+                    )
+                    .order_by(
+                        StudyVersion.published_at.desc().nullslast(),
+                        StudyVersion.id.desc(),
+                    )
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+
+        return (
+            await session.execute(select(column).where(model.id == obj_id))
+        ).scalar_one_or_none()
 
     async def invalidate_if_changed(
         self,

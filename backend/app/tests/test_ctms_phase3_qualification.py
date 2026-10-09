@@ -82,10 +82,11 @@ async def _clinical_context(session: AsyncSession) -> tuple[User, Study, Site, S
     site = Site(study_id=study.id, site_number="P3-001", name="Qualification site")
     session.add(site)
     await session.flush()
+    design_version_id = uuid4()
     subject = Subject(
         study_id=study.id,
         site_id=site.id,
-        study_version_id=uuid4(),
+        study_version_id=design_version_id,
         subject_number="P3-001-001",
         status=SubjectStatus.enrolled,
         created_by=actor.id,
@@ -96,6 +97,7 @@ async def _clinical_context(session: AsyncSession) -> tuple[User, Study, Site, S
         study_id=study.id,
         site_id=site.id,
         subject_id=subject.id,
+        design_version_id=design_version_id,
         target_type=QueryTargetType.subject.value,
         target_id=subject.id,
         query_type="system",

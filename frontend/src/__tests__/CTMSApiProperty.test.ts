@@ -89,7 +89,7 @@ function parseSearchState(search: string): ParsedSearchState {
   }
 }
 
-function withoutUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
+function withoutUndefined<T extends object>(value: T): Partial<T> {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as Partial<T>
 }
 

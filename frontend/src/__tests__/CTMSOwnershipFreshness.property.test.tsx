@@ -127,8 +127,8 @@ describe('CTMS ownership and freshness presentation properties', () => {
       if (scenario.projection.sourceVersion !== null) {
         expect(within(freshness).getByText(String(scenario.projection.sourceVersion))).toBeInTheDocument()
       }
-      if (scenario.projection.ruleVersion !== null) {
-        expect(within(freshness).getByText(scenario.projection.ruleVersion)).toBeInTheDocument()
+      if (scenario.projection.ruleVersion != null) {
+        expect(within(freshness).getByText(String(scenario.projection.ruleVersion))).toBeInTheDocument()
       }
 
       unmount()

@@ -177,6 +177,7 @@ async def phase1_data(phase1_session: AsyncSession) -> dict[str, Any]:
     await phase1_session.flush()
     visit = VisitInstance(
         id=uuid4(), subject_id=subject.id, visit_definition_id=visit_definition.id,
+        design_version_id=version.id,
         name="Week 4", visit_date=date(2026, 2, 12), window_status="in_window",
         status=VisitInstanceStatus.scheduled, created_at=now,
     )
@@ -197,17 +198,20 @@ async def phase1_data(phase1_session: AsyncSession) -> dict[str, Any]:
     await phase1_session.flush()
     form_instance = FormInstance(
         id=uuid4(), subject_id=subject.id, visit_instance_id=visit.id,
-        form_definition_id=form.id, status=FormInstanceStatus.in_progress,
+        form_definition_id=form.id, design_version_id=version.id,
+        status=FormInstanceStatus.in_progress,
         data_jsonb={"age": 42}, created_at=now,
     )
     phase1_session.add(form_instance)
     await phase1_session.flush()
     field_value = FieldValue(
         id=uuid4(), form_instance_id=form_instance.id, field_definition_id=field.id,
+        design_version_id=version.id,
         value="42", is_not_applicable=False, created_at=now, updated_by=admin.id,
     )
     query = Query(
         id=uuid4(), study_id=study.id, site_id=site.id, subject_id=subject.id,
+        design_version_id=version.id,
         target_type=QueryTargetType.subject.value, target_id=subject.id,
         text="EDC query remains clinical authority", status=QueryStatus.open,
         created_by=admin.id, created_at=now,

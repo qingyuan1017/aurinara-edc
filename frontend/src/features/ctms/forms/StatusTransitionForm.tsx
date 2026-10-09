@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useForm, type SubmitHandler } from 'react-hook-form'
 import type { CTMSMutationFeedbackStatus } from '../components/CTMSMutationFeedback'
 import type { CTMSStatusTransitionPayload, CTMSTransitionOption, CTMSTransitionResult } from '../api'
-import { mapCTMSServerErrors, createStatusTransitionSchema } from './schemas'
+import { mapCTMSServerErrors, createStatusTransitionSchema, statusTransitionSchema } from './schemas'
+import type { z } from 'zod'
 import { CTMSFormField } from './CTMSFormField'
 import { CTMSFormShell } from './CTMSFormShell'
 
@@ -12,6 +13,9 @@ export interface CTMSStatusTransitionValues {
   status: string
   reason?: string
 }
+
+/** Raw form input shape before Zod preprocessing coerces optional fields. */
+type CTMSStatusTransitionInput = z.input<typeof statusTransitionSchema>
 
 export interface CTMSStatusTransitionMutation<T = unknown> {
   status: CTMSMutationFeedbackStatus
@@ -54,7 +58,7 @@ export function CTMSStatusTransitionForm<T = unknown>({
   const serverResult = mutation?.data ?? localResult
   const availableTransitions = serverResult?.allowed_transitions ?? allowedTransitions
   const schema = useMemo(() => createStatusTransitionSchema(availableTransitions), [availableTransitions])
-  const methods = useForm<CTMSStatusTransitionValues>({
+  const methods = useForm<CTMSStatusTransitionInput, unknown, CTMSStatusTransitionValues>({
     resolver: zodResolver(schema),
     defaultValues: { status: '', reason: '' },
   })

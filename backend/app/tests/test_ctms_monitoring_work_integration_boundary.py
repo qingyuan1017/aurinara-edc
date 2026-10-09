@@ -108,6 +108,7 @@ async def _context(
     await session.flush()
     visit = VisitInstance(
         subject_id=subject.id,
+        design_version_id=version.id,
         name="Week 4",
         visit_date=date(2025, 2, 1),
         window_status="in_window",
@@ -117,6 +118,7 @@ async def _context(
         study_id=study.id,
         site_id=site.id,
         subject_id=subject.id,
+        design_version_id=version.id,
         target_type=QueryTargetType.subject.value,
         target_id=subject.id,
         text="Clinical source text must remain EDC-owned",

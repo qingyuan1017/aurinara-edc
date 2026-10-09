@@ -49,7 +49,7 @@ class ReviewService:
             The persisted ``ReviewStatus`` row.
         """
         actor_uuid, actor_email = self._normalize_actor(actor_id)
-        review_status = await self._get_or_create_status(session, form_instance.id)
+        review_status = await self._get_or_create_status(session, form_instance)
         old_reviewed = review_status.is_reviewed
         reviewed_at = datetime.now(UTC)
 
@@ -100,7 +100,7 @@ class ReviewService:
             The persisted ``ReviewStatus`` row.
         """
         actor_uuid, actor_email = self._normalize_actor(actor_id)
-        review_status = await self._get_or_create_status(session, form_instance.id)
+        review_status = await self._get_or_create_status(session, form_instance)
         old_reviewed = review_status.is_reviewed
         cleared_at = datetime.now(UTC)
 
@@ -208,19 +208,20 @@ class ReviewService:
     async def _get_or_create_status(
         self,
         session: AsyncSession,
-        form_instance_id: UUID,
+        form_instance: FormInstance,
     ) -> ReviewStatus:
         """Fetch the unique status row or create its not-reviewed baseline."""
         result = await session.execute(
             select(ReviewStatus).where(
-                ReviewStatus.form_instance_id == form_instance_id
+                ReviewStatus.form_instance_id == form_instance.id
             )
         )
         review_status = result.scalars().first()
         if review_status is None:
             review_status = ReviewStatus(
-                form_instance_id=form_instance_id,
+                form_instance_id=form_instance.id,
                 is_reviewed=False,
+                design_version_id=form_instance.design_version_id,
             )
             session.add(review_status)
             await session.flush()

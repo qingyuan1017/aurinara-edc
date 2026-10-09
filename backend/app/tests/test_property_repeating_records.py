@@ -144,6 +144,7 @@ async def _seed_repeating_form(session: AsyncSession) -> tuple[User, FormInstanc
         id=uuid.uuid4(),
         subject_id=subject.id,
         form_definition_id=form_definition.id,
+        design_version_id=version.id,
         status=FormInstanceStatus.in_progress,
         created_at=datetime.now(UTC),
         # Keep the audit scope available without an async lazy-load in the service.

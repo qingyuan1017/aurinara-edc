@@ -81,6 +81,14 @@ class FormInstance(Base):
         Uuid, ForeignKey("form_definitions.id", ondelete="CASCADE"), nullable=False
     )
 
+    # Bound published design version (not-null after backfill — R2.7, R7.3, R11.2)
+    design_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("study_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Binds this operational record to a published design version",
+    )
+
     # Lifecycle status
     status: Mapped[FormInstanceStatus] = mapped_column(
         String(20), nullable=False, default=FormInstanceStatus.not_started
@@ -125,6 +133,7 @@ class FormInstance(Base):
         Index("ix_form_instances_visit_instance_id", "visit_instance_id"),
         Index("ix_form_instances_form_definition_id", "form_definition_id"),
         Index("ix_form_instances_status", "status"),
+        Index("ix_form_instances_design_version_id", "design_version_id"),
     )
 
     def __repr__(self) -> str:
@@ -154,6 +163,14 @@ class FieldValue(Base):
     # Field definition reference
     field_definition_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("field_definitions.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Bound published design version (not-null after backfill — R2.7, R7.3, R11.2)
+    design_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("study_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Binds this operational record to a published design version",
     )
 
     # Serialized value
@@ -191,6 +208,7 @@ class FieldValue(Base):
     __table_args__ = (
         Index("ix_field_values_form_instance_id", "form_instance_id"),
         Index("ix_field_values_field_definition_id", "field_definition_id"),
+        Index("ix_field_values_design_version_id", "design_version_id"),
     )
 
     def __repr__(self) -> str:
