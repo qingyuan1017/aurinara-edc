@@ -1,46 +1,56 @@
-"""Property-based test for subject binding and instance initialization.
+"""Property-based test for subject single published-design binding.
 
-**Validates: Requirements 7.1, 7.4, 8.2**
+# Feature: designer-edc-refactor, Property 4: Single published-design binding at subject start
 
-Property 12: Subject binding and instance initialization.
+Property 4 (design.md): For all subjects for whom study conduct is started, the
+subject is bound to exactly one Published_Design (identified by its
+Design_Version) and to the selected Site.
 
-Generates random subject creation scenarios (study with published version, site,
-visit definitions, form definitions) and asserts that after create_subject():
-  1. The subject is bound to the published study version (Req 7.1).
-  2. Visit instances are created from the version's visit definitions (Req 8.2).
-  3. Form instances are created from the version's form definitions (Req 7.4).
+The binding happens in ``app/services/edc/subject_service.py`` ``create_subject``,
+which calls ``_get_published_version`` to find the latest Published Design_Version
+and binds the new Subject to it via ``study_version_id``.
 
-Uses in-memory SQLite database with only the needed tables created.
-At least 50 iterations with real DB interaction.
+This test asserts, across studies with varied published/draft version histories:
+
+* When at least one Published_Design exists, ``create_subject`` creates exactly
+  one Subject whose ``study_version_id`` is non-null, references a *published*
+  Design_Version, is the *current/latest* published one (newest ``published_at``),
+  and is bound to the selected Site (R2.7, R7.3).
+* When no Published_Design exists, ``create_subject`` is rejected with a
+  ``BusinessRuleError`` and no Subject row is created, leaving study data
+  unchanged (R2.8 / R7.9).
+
+Study version histories are generated with Hypothesis so a wide range of
+draft/published mixes (including the no-published-version case) is exercised.
+
+**Validates: Requirements 2.7, 7.3**
 """
 
 from __future__ import annotations
 
-import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.core.database import Base
-from app.core.request_context import request_id_var
-from app.core.security import hash_password
-from app.models.edc.form_data import FieldValue, FormInstance
-from app.models.edc.form_metadata import (
-    Codelist,
-    CodelistItem,
-    FieldDefinition,
-    FormDefinition,
-    FormSection,
+from app.core.exceptions import BusinessRuleError
+from app.models.edc.site import Site, SiteStatus
+from app.models.edc.study import (
+    Study,
+    StudyStatus,
+    StudyVersion,
+    StudyVersionStatus,
 )
-from app.models.edc.site import Site, SiteStatus, StudySiteUser
-from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.models.edc.subject import Subject, SubjectStatus
-from app.models.edc.visit import VisitDefinition, VisitInstance
-from app.models.shared.audit import AuditEvent
+from app.models.edc.subject import Subject
 from app.models.shared.identity import User, UserStatus
 from app.schemas.edc.subject import SubjectCreate
 from app.services.edc.subject_service import SubjectService
@@ -49,28 +59,11 @@ from app.services.edc.subject_service import SubjectService
 # Strategies
 # ---------------------------------------------------------------------------
 
-# Number of visit definitions per study version (at least 1 to verify initialization).
-num_visits_strategy = st.integers(min_value=1, max_value=5)
-
-# Number of form definitions per study version (at least 1 to verify initialization).
-num_forms_strategy = st.integers(min_value=1, max_value=4)
-
-# Random subject numbers.
-subject_number_strategy = st.from_regex(r"[0-9]{3}-[0-9]{4}", fullmatch=True)
-
-# Random visit names (printable ASCII, non-empty).
-visit_name_strategy = st.text(
-    min_size=1,
-    max_size=50,
-    alphabet=st.characters(min_codepoint=65, max_codepoint=90),
-).map(lambda s: f"Visit {s[:20]}")
-
-# Random form names (printable ASCII, non-empty).
-form_name_strategy = st.text(
-    min_size=1,
-    max_size=50,
-    alphabet=st.characters(min_codepoint=65, max_codepoint=90),
-).map(lambda s: f"Form {s[:20]}")
+# A version history is a non-empty sequence of booleans: each element is one
+# Design_Version in the study, True => published, False => draft. The ordering
+# fixes the chronological order (and therefore the published_at ordering) of the
+# versions so the "latest published" expectation is deterministic.
+_version_history = st.lists(st.booleans(), min_size=1, max_size=8)
 
 
 # ---------------------------------------------------------------------------
@@ -78,254 +71,180 @@ form_name_strategy = st.text(
 # ---------------------------------------------------------------------------
 
 
-async def _create_engine_and_session():
-    """Create an in-memory SQLite async engine with only the needed tables."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+async def _seed_study_with_history(
+    session: AsyncSession, published_flags: list[bool]
+) -> tuple[Study, Site, User, list[StudyVersion]]:
+    """Create a Study + Site + User and a Design_Version per ``published_flags``.
 
-    tables = [
-        m.__table__
-        for m in (
-            User,
-            Study,
-            StudyVersion,
-            Site,
-            StudySiteUser,
-            Subject,
-            VisitDefinition,
-            VisitInstance,
-            FormDefinition,
-            FormSection,
-            FieldDefinition,
-            Codelist,
-            CodelistItem,
-            FormInstance,
-            FieldValue,
-            AuditEvent,
-        )
-    ]
-    async with engine.begin() as conn:
-        await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=tables))
+    Published versions receive a strictly increasing ``published_at`` following
+    their position in ``published_flags`` so the newest published version is
+    deterministic.
 
-    session_factory = async_sessionmaker(
-        bind=engine, class_=AsyncSession, expire_on_commit=False
-    )
-    return engine, session_factory
-
-
-async def _seed_study_with_definitions(
-    session: AsyncSession,
-    num_visits: int,
-    num_forms: int,
-    visit_names: list[str],
-    form_names: list[str],
-) -> dict:
-    """Seed a user, study with published version, site, visit and form definitions."""
+    Returns the study, its site, the acting user, and the ordered versions.
+    """
     user = User(
-        id=uuid.uuid4(),
-        email=f"actor-{uuid.uuid4().hex[:8]}@test.local",
-        password_hash=hash_password("pw"),
-        first_name="Test",
-        last_name="Actor",
+        email=f"op-{uuid4().hex[:12]}@example.test",
+        first_name="Op",
+        last_name="User",
         status=UserStatus.active,
+        mfa_enabled=False,
     )
     session.add(user)
     await session.flush()
 
     study = Study(
-        id=uuid.uuid4(),
-        study_code=f"STD-{uuid.uuid4().hex[:6]}",
-        title="Test Study",
+        study_code=f"STUDY-{uuid4().hex[:8]}",
+        title="Binding Study",
         status=StudyStatus.active,
         created_by=user.id,
-        created_at=datetime.now(UTC),
     )
     session.add(study)
     await session.flush()
 
-    version = StudyVersion(
-        id=uuid.uuid4(),
-        study_id=study.id,
-        version_number="1.0",
-        status=StudyVersionStatus.published,
-        published_at=datetime.now(UTC),
-        published_by=user.id,
-        created_at=datetime.now(UTC),
-    )
-    session.add(version)
-    await session.flush()
-
     site = Site(
-        id=uuid.uuid4(),
         study_id=study.id,
-        site_number="101",
+        site_number=f"S{uuid4().hex[:4]}",
         name="Test Site",
         status=SiteStatus.active,
-        created_at=datetime.now(UTC),
     )
     session.add(site)
     await session.flush()
 
-    # Create visit definitions
-    visit_defs = []
-    for i in range(num_visits):
-        vd = VisitDefinition(
-            id=uuid.uuid4(),
-            study_version_id=version.id,
-            name=visit_names[i] if i < len(visit_names) else f"Visit {i + 1}",
-            visit_number=i + 1,
-            visit_type="scheduled",
-            target_day=i * 7,
-            window_before=3,
-            window_after=3,
-            display_order=i,
-            is_required=True,
-            created_at=datetime.now(UTC),
+    base_time = datetime(2024, 1, 1, tzinfo=UTC)
+    versions: list[StudyVersion] = []
+    for index, is_published in enumerate(published_flags):
+        if is_published:
+            status = StudyVersionStatus.published
+            published_at = base_time + timedelta(days=index)
+            published_by = user.id
+        else:
+            status = StudyVersionStatus.draft
+            published_at = None
+            published_by = None
+        version = StudyVersion(
+            study_id=study.id,
+            version_number=f"{index + 1}.0",
+            status=status,
+            published_at=published_at,
+            published_by=published_by,
         )
-        session.add(vd)
-        visit_defs.append(vd)
+        session.add(version)
+        versions.append(version)
     await session.flush()
+    return study, site, user, versions
 
-    # Create form definitions
-    form_defs = []
-    for i in range(num_forms):
-        fd = FormDefinition(
-            id=uuid.uuid4(),
-            study_version_id=version.id,
-            name=form_names[i] if i < len(form_names) else f"Form {i + 1}",
-            form_code=f"F{i + 1:02d}",
-            display_order=i,
-            is_repeating=False,
-            created_at=datetime.now(UTC),
-        )
-        session.add(fd)
-        form_defs.append(fd)
-    await session.flush()
 
-    return {
-        "user": user,
-        "study": study,
-        "version": version,
-        "site": site,
-        "visit_defs": visit_defs,
-        "form_defs": form_defs,
-    }
+def _expected_latest_published(
+    published_flags: list[bool], versions: list[StudyVersion]
+) -> StudyVersion | None:
+    """Return the version the subject must bind to: newest published, else None."""
+    published = [
+        version
+        for version, is_published in zip(versions, published_flags, strict=True)
+        if is_published
+    ]
+    if not published:
+        return None
+    # ``published_at`` increases with position, so the last published is newest.
+    return max(published, key=lambda version: version.published_at)
 
 
 # ---------------------------------------------------------------------------
-# Property Tests
+# Property 4
 # ---------------------------------------------------------------------------
 
 
-class TestSubjectBindingAndInitializationProperty:
-    """Property-based tests for subject binding and instance initialization.
+@settings(
+    max_examples=100,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+@given(published_flags=_version_history)
+async def test_subject_binds_to_single_published_design(
+    published_flags: list[bool],
+):
+    """Subject creation binds to exactly one published design, or is rejected.
 
-    **Validates: Requirements 7.1, 7.4, 8.2**
+    For every generated study:
+
+    * If any Design_Version is published, ``create_subject`` persists exactly one
+      Subject bound (via a non-null ``study_version_id``) to the newest published
+      version and to the selected Site.
+    * If no Design_Version is published, ``create_subject`` raises
+      ``BusinessRuleError`` and no Subject is created.
+
+    **Validates: Requirements 2.7, 7.3**
     """
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        factory = async_sessionmaker(
+            engine, class_=AsyncSession, expire_on_commit=False
+        )
+        async with factory() as session:
+            service = SubjectService()
+            study, site, user, versions = await _seed_study_with_history(
+                session, published_flags
+            )
+            expected_version = _expected_latest_published(published_flags, versions)
 
-    @settings(max_examples=50, deadline=None)
-    @given(
-        subject_number=subject_number_strategy,
-        num_visits=num_visits_strategy,
-        num_forms=num_forms_strategy,
-        visit_names=st.lists(visit_name_strategy, min_size=5, max_size=5),
-        form_names=st.lists(form_name_strategy, min_size=4, max_size=4),
-    )
-    @pytest.mark.asyncio
-    async def test_subject_bound_to_published_version_with_instances(
-        self,
-        subject_number: str,
-        num_visits: int,
-        num_forms: int,
-        visit_names: list[str],
-        form_names: list[str],
-    ):
-        """create_subject binds the subject to the published version and
-        initializes visit and form instances.
+            create_data = SubjectCreate(site_id=site.id)
 
-        **Validates: Requirements 7.1, 7.4, 8.2**
-
-        For any combination of visit definitions (1–5) and form definitions (1–4):
-          - The subject's study_version_id matches the published version (Req 7.1).
-          - One VisitInstance per VisitDefinition is created (Req 8.2).
-          - One FormInstance per (VisitInstance × FormDefinition) is created (Req 7.4).
-        """
-        ctx = request_id_var.set(str(uuid.uuid4()))
-        try:
-            engine, session_factory = await _create_engine_and_session()
-            try:
-                async with session_factory() as session:
-                    seeded = await _seed_study_with_definitions(
-                        session, num_visits, num_forms, visit_names, form_names
+            if expected_version is None:
+                # No Published_Design: creation is rejected and nothing persisted.
+                with pytest.raises(BusinessRuleError):
+                    await service.create_subject(
+                        session, study.id, create_data, actor_id=user.id
                     )
 
-                    svc = SubjectService()
-                    data = SubjectCreate(
-                        site_id=seeded["site"].id,
-                        subject_number=subject_number,
+                subject_count = (
+                    await session.execute(
+                        select(func.count())
+                        .select_from(Subject)
+                        .where(Subject.study_id == study.id)
                     )
+                ).scalar_one()
+                assert subject_count == 0
+                return
 
-                    # Act
-                    subject = await svc.create_subject(
-                        session,
-                        study_id=seeded["study"].id,
-                        data=data,
-                        actor_id=seeded["user"].id,
+            # A Published_Design exists: exactly one bound Subject is created.
+            subject = await service.create_subject(
+                session, study.id, create_data, actor_id=user.id
+            )
+
+            # Bound to exactly one Design_Version via a non-null FK (R2.7).
+            assert subject.study_version_id is not None
+            # The bound version is the newest *published* one (R7.3).
+            assert subject.study_version_id == expected_version.id
+            # Bound to the selected Site.
+            assert subject.site_id == site.id
+
+            # Re-read: the binding references a PUBLISHED version and is stable.
+            stored = (
+                await session.execute(
+                    select(Subject).where(Subject.id == subject.id)
+                )
+            ).scalar_one()
+            assert stored.study_version_id == expected_version.id
+
+            bound_version = (
+                await session.execute(
+                    select(StudyVersion).where(
+                        StudyVersion.id == stored.study_version_id
                     )
+                )
+            ).scalar_one()
+            assert bound_version.status == StudyVersionStatus.published
 
-                    # -------------------------------------------------------
-                    # Assert 1: Subject is bound to the published version (Req 7.1)
-                    # -------------------------------------------------------
-                    assert subject.study_version_id == seeded["version"].id
-                    assert subject.status == SubjectStatus.screening
-
-                    # -------------------------------------------------------
-                    # Assert 2: Visit instances created from definitions (Req 8.2)
-                    # -------------------------------------------------------
-                    visit_result = await session.execute(
-                        select(VisitInstance).where(
-                            VisitInstance.subject_id == subject.id
-                        )
-                    )
-                    visit_instances = list(visit_result.scalars().all())
-
-                    assert len(visit_instances) == num_visits
-
-                    # Each visit instance maps to a unique visit definition
-                    visit_def_ids = {
-                        vi.visit_definition_id for vi in visit_instances
-                    }
-                    expected_def_ids = {vd.id for vd in seeded["visit_defs"]}
-                    assert visit_def_ids == expected_def_ids
-
-                    # -------------------------------------------------------
-                    # Assert 3: Form instances created from definitions (Req 7.4)
-                    # -------------------------------------------------------
-                    form_result = await session.execute(
-                        select(FormInstance).where(
-                            FormInstance.subject_id == subject.id
-                        )
-                    )
-                    form_instances = list(form_result.scalars().all())
-
-                    # One form instance per (visit_instance × form_definition)
-                    expected_form_count = num_visits * num_forms
-                    assert len(form_instances) == expected_form_count
-
-                    # Each form instance is linked to a valid visit instance
-                    form_visit_ids = {
-                        fi.visit_instance_id for fi in form_instances
-                    }
-                    actual_visit_ids = {vi.id for vi in visit_instances}
-                    assert form_visit_ids == actual_visit_ids
-
-                    # Each form instance references a valid form definition
-                    form_def_ids = {
-                        fi.form_definition_id for fi in form_instances
-                    }
-                    expected_form_def_ids = {fd.id for fd in seeded["form_defs"]}
-                    assert form_def_ids == expected_form_def_ids
-
-            finally:
-                await engine.dispose()
-        finally:
-            request_id_var.reset(ctx)
+            # Exactly one Subject was created for the study.
+            subject_count = (
+                await session.execute(
+                    select(func.count())
+                    .select_from(Subject)
+                    .where(Subject.study_id == study.id)
+                )
+            ).scalar_one()
+            assert subject_count == 1
+    finally:
+        await engine.dispose()

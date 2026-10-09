@@ -1,10 +1,22 @@
-"""Visit definition and visit instance models.
+"""Visit models — operational visit instances; definition re-exported.
+
+The design-time ``VisitDefinition`` (a Visit_Definition in the Designer_Module)
+was reassigned to the Designer module and now lives in
+``app.models.designer.visit``. It is re-exported here so existing import paths
+(``from app.models.edc.visit import VisitDefinition``) keep working unchanged
+(R11.1 — additive, no breakage) and so the shared ORM registry resolves the
+``VisitInstance.visit_definition`` relationship by name.
+
+The operational ``VisitInstance`` (a visit *occurrence* for a Subject) and its
+lifecycle status enum stay here — they are Operational_Records owned by the EDC
+module (R7, R11.2).
 
 Satisfies Requirements:
-  - 8.1: Visit definitions — name, visit number, visit type, target day, window bounds,
-          display order, required flag.
-  - 8.2: Visit instances created from a bound study version's visit definitions.
-  - 8.3: Visit instances carry a window status (before_window, in_window, after_window).
+  - 4.2-4.4: Visit definitions (now Designer-owned; re-exported).
+  - 7.x / 8.2 / 8.3: Visit instances created from a bound design version's visit
+          definitions, carrying a window status.
+  - 11.1: Ownership reassignment with no table/column renames (stored values
+          preserved); FK to ``study_versions`` kept.
   - 22.1: UUID primary keys.
   - 22.6: Indexed for efficient querying.
 """
@@ -14,18 +26,21 @@ import uuid
 from datetime import UTC, date, datetime
 
 from sqlalchemy import (
-    Boolean,
     Date,
     DateTime,
     ForeignKey,
     Index,
-    Integer,
     String,
     Uuid,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+# Visit definitions are owned by the Designer module. Re-exported here for
+# backward compatibility with existing ``app.models.edc.visit`` imports and so
+# the shared ORM registry resolves ``VisitInstance.visit_definition`` by name.
+from app.models.designer.visit import VisitDefinition
 
 # --- Enums ---
 
@@ -42,68 +57,6 @@ class VisitInstanceStatus(enum.StrEnum):
 
 
 # --- Models ---
-
-
-class VisitDefinition(Base):
-    """Definition of a study visit within a study version (Requirement 8.1).
-
-    Visit definitions belong to a Study_Version and are immutable once the
-    owning version is published.
-    """
-
-    __tablename__ = "visit_definitions"
-
-    # Primary key
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-
-    # Owning study version
-    study_version_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("study_versions.id", ondelete="CASCADE"), nullable=False
-    )
-
-    # Visit metadata
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    visit_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    visit_type: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-        comment="e.g. scheduled, unscheduled, screening",
-    )
-
-    # Window definition (relative to baseline)
-    target_day: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, comment="Day relative to baseline"
-    )
-    window_before: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, comment="Days before target"
-    )
-    window_after: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, comment="Days after target"
-    )
-
-    # Ordering and requirement
-    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
-    is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-
-    # Timestamp
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
-    )
-
-    # Relationships
-    study_version: Mapped["StudyVersion"] = relationship(  # noqa: F821
-        "StudyVersion", lazy="selectin"
-    )
-
-    __table_args__ = (
-        Index("ix_visit_definitions_study_version_id", "study_version_id"),
-    )
-
-    def __repr__(self) -> str:
-        return (
-            f"<VisitDefinition(id={self.id}, name={self.name!r}, "
-            f"visit_number={self.visit_number})>"
-        )
 
 
 class VisitInstance(Base):
@@ -125,6 +78,14 @@ class VisitInstance(Base):
         ForeignKey("visit_definitions.id", ondelete="SET NULL"),
         nullable=True,
         comment="Null for unscheduled visits",
+    )
+
+    # Bound published design version (not-null after backfill — R2.7, R7.3, R11.2)
+    design_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("study_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="Binds this operational record to a published design version",
     )
 
     # Visit metadata
@@ -162,6 +123,7 @@ class VisitInstance(Base):
     __table_args__ = (
         Index("ix_visit_instances_subject_id", "subject_id"),
         Index("ix_visit_instances_status", "status"),
+        Index("ix_visit_instances_design_version_id", "design_version_id"),
     )
 
     def __repr__(self) -> str:
@@ -169,3 +131,10 @@ class VisitInstance(Base):
             f"<VisitInstance(id={self.id}, subject_id={self.subject_id}, "
             f"name={self.name!r}, status={self.status!r})>"
         )
+
+
+__all__ = [
+    "VisitDefinition",
+    "VisitInstance",
+    "VisitInstanceStatus",
+]

@@ -7,15 +7,27 @@ Satisfies Requirements:
   - 2.4: filter_studies/filter_sites return only in-scope resources.
   - 2.5: Object-level access denial for out-of-scope objects.
   - 2.6: Enforcement independent of any frontend permission checks.
+  - 10.1: Designer permissions grantable only to Designer_Roles; operational
+          permissions only to Operational_Roles.
+  - 10.2: Deny designer-definition authoring to users without a Designer_Role.
+  - 10.3: Deny operational-record authoring to users without an Operational_Role.
+  - 10.4: Server-side authorization with default-deny when it cannot be confirmed.
+  - 10.5: Single-role users get only their module's scope, denied the other.
+  - 10.6: Both-role users have each permission set enforced only within its own
+          module scope; one role never authorizes an action in the other module.
   - 23.4: Every protected operation passes through Permission_Service before mutation.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from uuid import UUID
+from uuid import UUID, uuid4
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.ctms import Module
 from app.core.exceptions import AuthenticationError, AuthorizationError
+from app.core.permissions import role_modules
 from app.models.shared.identity import User, UserStatus
 from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
 
@@ -60,13 +72,30 @@ class PermissionService:
             study_id = user_role.study_id
             site_id = user_role.site_id
 
+            role_permission_codes = {
+                role_permission.permission.code
+                for role_permission in role.role_permissions
+            }
+            # Classify which authorization modules this role owns (designer,
+            # operational, both, or neither) from its own permission codes. Each
+            # grant carries this so PermissionService can enforce module-scoped
+            # separation of duties (Requirement 10): a designer code is
+            # effective only through a role owning the designer module and an
+            # operational code only through a role owning the operational
+            # module, for both single- and both-role users.
+            modules = role_modules(role_permission_codes)
+
+            # Emit one grant per RolePermission entry (not per distinct code) so
+            # the resolved scope mirrors the role's assignment exactly. Module
+            # classification above is computed from the distinct code set, which
+            # is correct regardless of per-entry duplication.
             for role_permission in role.role_permissions:
-                permission_code = role_permission.permission.code
                 grants.append(
                     PermissionGrant(
-                        permission_code=permission_code,
+                        permission_code=role_permission.permission.code,
                         study_id=study_id,
                         site_id=site_id,
+                        role_modules=modules,
                     )
                 )
 
@@ -95,6 +124,75 @@ class PermissionService:
                     "site_id": str(site_id) if site_id else None,
                 },
             )
+
+    async def require_audited(
+        self,
+        session: AsyncSession,
+        user: User,
+        permission: str,
+        *,
+        module: Module,
+        action: str,
+        entity_type: str,
+        entity_id: UUID | None = None,
+        study_id: UUID | None = None,
+        site_id: UUID | None = None,
+    ) -> None:
+        """Enforce a create/modify permission and audit any denial exactly once.
+
+        This is the auditing wrapper for ``require`` used on the mutating paths
+        that author a Designer_Definition or an Operational_Record. On success
+        it behaves exactly like ``require`` (no audit event — the mutation's own
+        audit event records the change under R1.7). On denial it records exactly
+        one immutable audit event identifying the actor, the *attempted* module
+        scope, the attempted action, and the denial, then re-raises the original
+        ``AuthorizationError`` so the request is rejected and the target is left
+        unchanged (R10.2, R10.3, R10.7).
+
+        The denial event is written through the shared, append-only audit
+        service within the caller's transaction. Because ``require`` runs its
+        checks *before* any mutation, the only row this transaction commits on a
+        denial is the denial audit event itself — exactly one event per denied
+        action. ``entity_id`` is optional because a denied *create* has no
+        persisted entity yet; a synthetic id is used so the append-only row is
+        still well-formed and attributable to the attempted action.
+
+        Args:
+            session: The active async session (caller's transaction).
+            user: The acting user whose scope is evaluated.
+            permission: The required permission code.
+            module: The attempted module scope (``Module.DESIGNER`` for a
+                Designer_Definition, ``Module.EDC`` for an Operational_Record).
+            action: The attempted action (e.g. ``"create"``, ``"update"``).
+            entity_type: The type of entity the action targeted.
+            entity_id: Optional id of the targeted entity (absent for creates).
+            study_id: Optional study scope used for the permission check.
+            site_id: Optional site scope used for the permission check.
+        """
+        # Imported lazily to avoid a module-load cycle: ``app.core.audit`` pulls
+        # in ``app.api.deps``, which imports this module.
+        from app.core.audit import audit_service
+
+        try:
+            self.require(user, permission, study_id=study_id, site_id=site_id)
+        except AuthorizationError as denial:
+            await audit_service.record(
+                session,
+                entity_type=entity_type,
+                entity_id=entity_id if entity_id is not None else uuid4(),
+                action=action,
+                module=module,
+                actor_id=getattr(user, "id", None),
+                actor_email=getattr(user, "email", None),
+                study_id=study_id,
+                site_id=site_id,
+                new_value="authorization-denied",
+                reason=(
+                    f"required_permission={permission}; "
+                    f"attempted_module={module.value}; attempted_action={action}"
+                ),
+            )
+            raise denial
 
     def filter_studies(self, user: User, study_ids: list[UUID]) -> list[UUID]:
         """Return only the study IDs within the user's scope.

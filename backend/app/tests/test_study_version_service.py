@@ -18,7 +18,7 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.models.edc.study import Study, StudyVersion, StudyVersionStatus
-from app.services.edc.study_version_service import StudyVersionService, study_version_service
+from app.services.designer.study_version_service import StudyVersionService, study_version_service
 
 
 @pytest.fixture
@@ -69,7 +69,7 @@ class TestPublish:
         """publish() should set status to published on a draft version."""
         actor_id = uuid.uuid4()
 
-        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.publish(mock_session, draft_version, actor_id)
 
@@ -79,7 +79,7 @@ class TestPublish:
         """publish() should record published_by and published_at."""
         actor_id = uuid.uuid4()
 
-        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.publish(mock_session, draft_version, actor_id)
 
@@ -90,7 +90,7 @@ class TestPublish:
         """publish() should write an Audit_Event in the same transaction."""
         actor_id = uuid.uuid4()
 
-        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.publish(mock_session, draft_version, actor_id)
 
@@ -112,7 +112,7 @@ class TestPublish:
         """publish() should flush the session (no commit — caller's transaction)."""
         actor_id = uuid.uuid4()
 
-        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.publish(mock_session, draft_version, actor_id)
 
@@ -141,7 +141,7 @@ class TestCreateVersion:
         study_id = uuid.uuid4()
         actor_id = uuid.uuid4()
 
-        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.create_version(
                 mock_session, study_id, "1.0", actor_id=actor_id
@@ -156,7 +156,7 @@ class TestCreateVersion:
         """create_version() should store the amendment reason."""
         study_id = uuid.uuid4()
 
-        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.create_version(
                 mock_session, study_id, "2.0", amendment_reason="Protocol amendment v2"
@@ -169,7 +169,7 @@ class TestCreateVersion:
         study_id = uuid.uuid4()
         actor_id = uuid.uuid4()
 
-        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.create_version(mock_session, study_id, "1.0", actor_id=actor_id)
 
@@ -184,7 +184,7 @@ class TestCreateVersion:
         """create_version() should add the version to the session and flush."""
         study_id = uuid.uuid4()
 
-        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.create_version(mock_session, study_id, "1.0")
 
@@ -266,7 +266,7 @@ class TestCreateAmendment:
         actor_id = uuid.uuid4()
         service = StudyVersionService(amendment_repository)
 
-        with patch("app.services.edc.study_version_service.audit_service") as mock_audit:
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.create_amendment(
                 mock_session, study, "Protocol amendment v2", actor_id
@@ -320,3 +320,182 @@ class TestCreateAmendment:
         assert published_source.status == StudyVersionStatus.published
         assert published_source.published_by is not None
         amendment_repository.add.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Task 3.5 — Edge-case + example tests for publish / amend
+# Requirements: 2.1, 2.2, 2.3, 2.10
+# ---------------------------------------------------------------------------
+
+
+class TestPublishValidActorTimestamp:
+    """Publish a valid draft: records actor and timestamp (R2.1, R2.2)."""
+
+    async def test_valid_draft_transitions_and_records_actor_and_timestamp(
+        self, service, mock_session, draft_version
+    ):
+        """A valid draft publishes to published and records both actor and timestamp.
+
+        Validates: Requirements 2.1, 2.2
+        """
+        actor_id = uuid.uuid4()
+        before = datetime.now(UTC)
+
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            result = await service.publish(mock_session, draft_version, actor_id)
+
+        after = datetime.now(UTC)
+
+        # R2.1: draft → published
+        assert result.status == StudyVersionStatus.published
+        # R2.2: actor recorded
+        assert result.published_by == actor_id
+        # R2.2: timestamp recorded and bounded by the call window
+        assert result.published_at is not None
+        assert before <= result.published_at <= after
+
+
+class TestPublishValidationSuccessFailure:
+    """Publish validation success/failure leaves state consistent (R2.3)."""
+
+    async def test_publish_validation_success(self, service, mock_session, draft_version):
+        """A draft that passes validation publishes successfully (R2.3 success path).
+
+        Validates: Requirements 2.1, 2.3
+        """
+        actor_id = uuid.uuid4()
+
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            result = await service.publish(mock_session, draft_version, actor_id)
+
+        assert result.status == StudyVersionStatus.published
+
+    async def test_publish_validation_failure_leaves_version_as_draft(
+        self, service, mock_session
+    ):
+        """An invalid publish (non-draft) is rejected and the version stays unchanged.
+
+        Validates: Requirements 2.3
+        """
+        actor_id = uuid.uuid4()
+        # A version already published is not a valid publish target.
+        version = MagicMock(spec=StudyVersion)
+        version.id = uuid.uuid4()
+        version.study_id = uuid.uuid4()
+        version.status = StudyVersionStatus.published
+        prior_published_by = uuid.uuid4()
+        prior_published_at = datetime.now(UTC)
+        version.published_by = prior_published_by
+        version.published_at = prior_published_at
+
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            with pytest.raises(BusinessRuleError, match="not in draft status"):
+                await service.publish(mock_session, version, actor_id)
+            # No audit event is written for a rejected publish.
+            mock_audit.record.assert_not_awaited()
+
+        # Version is left unchanged (R2.3).
+        assert version.status == StudyVersionStatus.published
+        assert version.published_by == prior_published_by
+        assert version.published_at == prior_published_at
+
+
+class TestAmendmentReasonBounds:
+    """Amendment-reason length boundaries at 0, 1, 4000, 4001 chars (R2.10, R2.9).
+
+    On reject, NO new draft is created.
+    """
+
+    @pytest.fixture
+    def published_source(self):
+        return StudyVersion(
+            id=uuid.uuid4(),
+            study_id=uuid.uuid4(),
+            version_number="1.0",
+            status=StudyVersionStatus.published,
+            published_at=datetime.now(UTC),
+            published_by=uuid.uuid4(),
+        )
+
+    @pytest.fixture
+    def amendment_repository(self, published_source):
+        repository = MagicMock()
+        repository.latest_published = AsyncMock(return_value=published_source)
+        repository.draft_for_study = AsyncMock(return_value=None)
+        repository.add = AsyncMock(side_effect=lambda session, version: version)
+        return repository
+
+    @pytest.fixture
+    def study(self, published_source):
+        return Study(
+            id=published_source.study_id,
+            study_code="STUDY-001",
+            title="Test Study",
+            created_by=uuid.uuid4(),
+        )
+
+    async def test_reason_zero_chars_rejected_no_draft(
+        self, mock_session, amendment_repository, study
+    ):
+        """0 chars (empty) is rejected and no draft is created (R2.10)."""
+        service = StudyVersionService(amendment_repository)
+
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            with pytest.raises(ValidationError, match="Amendment reason is required"):
+                await service.create_amendment(mock_session, study, "", uuid.uuid4())
+
+        amendment_repository.add.assert_not_awaited()
+        mock_audit.record.assert_not_awaited()
+
+    async def test_reason_one_char_accepted_creates_draft(
+        self, mock_session, amendment_repository, study
+    ):
+        """1 char (lower bound) is accepted and creates exactly one draft (R2.9, R2.10)."""
+        service = StudyVersionService(amendment_repository)
+        reason = "x"
+
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            result = await service.create_amendment(
+                mock_session, study, reason, uuid.uuid4()
+            )
+
+        assert result.status == StudyVersionStatus.draft
+        assert result.amendment_reason == reason
+        amendment_repository.add.assert_awaited_once()
+
+    async def test_reason_four_thousand_chars_accepted_creates_draft(
+        self, mock_session, amendment_repository, study
+    ):
+        """4000 chars (upper bound) is accepted and creates exactly one draft (R2.9, R2.10)."""
+        service = StudyVersionService(amendment_repository)
+        reason = "a" * 4000
+
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            result = await service.create_amendment(
+                mock_session, study, reason, uuid.uuid4()
+            )
+
+        assert result.status == StudyVersionStatus.draft
+        assert len(result.amendment_reason) == 4000
+        amendment_repository.add.assert_awaited_once()
+
+    async def test_reason_four_thousand_one_chars_rejected_no_draft(
+        self, mock_session, amendment_repository, study
+    ):
+        """4001 chars (over bound) is rejected and no draft is created (R2.10)."""
+        service = StudyVersionService(amendment_repository)
+        reason = "a" * 4001
+
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            with pytest.raises(ValidationError, match="must not exceed 4000 characters"):
+                await service.create_amendment(mock_session, study, reason, uuid.uuid4())
+
+        amendment_repository.add.assert_not_awaited()
+        mock_audit.record.assert_not_awaited()

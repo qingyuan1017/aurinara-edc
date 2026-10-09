@@ -1,0 +1,100 @@
+﻿import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+import { PermissionGuard } from '@/components/guards/PermissionGuard'
+import { PERMISSIONS } from '@/lib/permissions'
+import type { CodingSettingCreate, CodingSettingResponse } from '@/api/model'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DataTableShell, FormActions, FormField, PageContainer, PageHeader } from '@/components/patterns'
+import { DraftGate, getApiErrorMessage } from './shared'
+
+function CodingSettingsEditor({ versionId }: { versionId: string }) {
+  const [dictionary, setDictionary] = useState('')
+  const [codingRule, setCodingRule] = useState('')
+  const [fieldId, setFieldId] = useState('')
+  const [created, setCreated] = useState<CodingSettingResponse[]>([])
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  const create = useMutation({
+    mutationFn: async () => {
+      if (!dictionary.trim()) throw new Error('A dictionary reference is required.')
+      const payload: CodingSettingCreate = {
+        dictionary_reference: dictionary.trim(),
+        coding_rule: codingRule.trim() || null,
+        field_definition_id: fieldId.trim() || null,
+      }
+      return (await api.post<CodingSettingResponse>(`/designer/versions/${versionId}/coding-settings`, payload)).data
+    },
+    onSuccess: (data) => {
+      setCreated((prev) => [...prev, data])
+      setDictionary(''); setCodingRule(''); setFieldId('')
+      setError(''); setMessage(`Coding setting for "${data.dictionary_reference}" added.`)
+    },
+    onError: (err) => { setError(getApiErrorMessage(err, 'Could not create the coding setting.')); setMessage('') },
+  })
+
+  return (
+    <PageContainer wide>
+      <PageHeader title="Coding settings" description="Configure medical-dictionary coding for the current draft version." />
+      {message ? <Alert variant="success" className="mb-4"><AlertDescription>{message}</AlertDescription></Alert> : null}
+      {error ? <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert> : null}
+
+      <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
+        <Card>
+          <CardHeader><CardTitle className="text-base">New coding setting</CardTitle></CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); setError(''); create.mutate() }}>
+              <FormField label="Dictionary reference" name="coding-dictionary" required>
+                <Input value={dictionary} onChange={(event) => setDictionary(event.target.value)} placeholder="MedDRA 27.0" required />
+              </FormField>
+              <FormField label="Coding rule" name="coding-rule" description="Optional rule describing how coding is applied.">
+                <Textarea value={codingRule} onChange={(event) => setCodingRule(event.target.value)} placeholder="Auto-code verbatim AE terms." />
+              </FormField>
+              <FormField label="Field definition ID" name="coding-field" description="Optional. Scope the setting to a specific field.">
+                <Input value={fieldId} onChange={(event) => setFieldId(event.target.value)} placeholder="uuid" />
+              </FormField>
+              <FormActions pending={create.isPending} submitLabel="Add setting" pendingLabel="Adding…" />
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Added this session</CardTitle>
+            <span className="text-xs text-muted-foreground">{created.length}</span>
+          </CardHeader>
+          <CardContent>
+            <DataTableShell label="Coding settings" empty={!created.length} emptyTitle="No settings added yet" emptyDescription="Settings you create appear here.">
+              <Table>
+                <caption className="sr-only">Coding settings added this session</caption>
+                <TableHeader><TableRow>{['Dictionary', 'Rule', 'Field'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
+                <TableBody>{created.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="font-medium">{row.dictionary_reference}</TableCell>
+                    <TableCell>{row.coding_rule || '—'}</TableCell>
+                    <TableCell className="max-w-[8rem] truncate" title={row.field_definition_id ?? undefined}>{row.field_definition_id ?? 'All'}</TableCell>
+                  </TableRow>
+                ))}</TableBody>
+              </Table>
+            </DataTableShell>
+          </CardContent>
+        </Card>
+      </div>
+    </PageContainer>
+  )
+}
+
+export function CodingSettingsPage({ studyId }: { studyId: string }) {
+  return (
+    <PermissionGuard permission={PERMISSIONS.DESIGNER_CODING_SETTING_CONFIGURE} studyId={studyId}>
+      <DraftGate studyId={studyId}>
+        {(versionId) => <CodingSettingsEditor versionId={versionId} />}
+      </DraftGate>
+    </PermissionGuard>
+  )
+}

@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from app.api.routes.ctms import router as ctms_router
+from app.api.routes.designer import router as designer_router
 from app.api.routes.edc import router as edc_router
 from app.api.routes.pv import router as pv_router
 from app.api.routes.pv.ai import router as pv_ai_router
@@ -120,6 +121,11 @@ def create_app() -> FastAPI:
         app.include_router(
             pv_ai_router, prefix=f"{settings.api_v1_prefix}/pv"
         )
+    # The Designer aggregate carries its own ``/designer`` prefix, so mounting it
+    # under ``/api/v1`` yields ``/api/v1/designer/...``. It is mounted after
+    # PV/PV-AI and before EDC so design-authoring routes stay isolated from the
+    # operational EDC routes while CTMS/PV mounting is unchanged.
+    app.include_router(designer_router, prefix=settings.api_v1_prefix)
     app.include_router(edc_router, prefix=settings.api_v1_prefix)
 
     return app

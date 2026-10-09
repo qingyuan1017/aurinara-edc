@@ -1,8 +1,17 @@
-"""Visit Pydantic schemas.
+"""Visit Pydantic schemas — operational instance schemas; definition re-exported.
+
+The design-time visit *definition* schemas (``VisitDefinitionCreate``,
+``VisitDefinitionResponse``) were reassigned to the Designer module and now live
+in ``app.schemas.designer.visit``. They are re-exported here so existing import
+paths (``from app.schemas.edc.visit import VisitDefinitionCreate``) keep working
+unchanged (R11.1 — additive, no breakage).
+
+The operational visit *instance* schemas (recording a visit date, creating an
+unscheduled visit, and the instance response) stay here — they describe
+Operational_Records owned by the EDC module.
 
 Satisfies Requirements:
-  - 8.1: Visit definition metadata — name, visit number, visit type, target day,
-          window bounds, display order, required flag.
+  - 4.2: Visit definition metadata (now Designer-owned; re-exported).
   - 8.3: Visit instance window status (before_window, in_window, after_window).
   - 8.4: Unscheduled visit creation.
   - 8.5: Visit instance status (including missed).
@@ -17,56 +26,14 @@ from uuid import UUID
 from pydantic import Field
 
 from app.models.edc.visit import VisitInstanceStatus
+
+# Visit definition schemas are owned by the Designer module. Re-exported here for
+# backward compatibility with existing ``app.schemas.edc.visit`` imports.
+from app.schemas.designer.visit import (
+    VisitDefinitionCreate,
+    VisitDefinitionResponse,
+)
 from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
-
-# ---------------------------------------------------------------------------
-# Visit definition schemas (Requirement 8.1)
-# ---------------------------------------------------------------------------
-
-
-class VisitDefinitionCreate(BaseCreateSchema):
-    """Request body for defining a study visit (Requirement 8.1).
-
-    Persisted against a draft Study_Version. ``target_day`` and the window
-    bounds are optional (e.g. for screening or unscheduled visit types).
-    """
-
-    name: str = Field(..., min_length=1, max_length=255)
-    visit_number: int = Field(..., description="Ordinal number of the visit")
-    visit_type: str = Field(
-        ...,
-        min_length=1,
-        max_length=50,
-        description="e.g. scheduled, unscheduled, screening",
-    )
-    target_day: int | None = Field(
-        None, description="Day relative to baseline (None when not applicable)"
-    )
-    window_before: int | None = Field(
-        None, ge=0, description="Days before target_day still considered in window"
-    )
-    window_after: int | None = Field(
-        None, ge=0, description="Days after target_day still considered in window"
-    )
-    display_order: int = Field(..., description="Sort order within the schedule")
-    is_required: bool = Field(True, description="Whether the visit is required")
-
-
-class VisitDefinitionResponse(BaseSchema):
-    """Response schema for a visit definition (Requirement 8.1)."""
-
-    id: UUID
-    study_version_id: UUID
-    name: str
-    visit_number: int
-    visit_type: str
-    target_day: int | None = None
-    window_before: int | None = None
-    window_after: int | None = None
-    display_order: int
-    is_required: bool
-    created_at: UtcDatetime
-
 
 # ---------------------------------------------------------------------------
 # Visit instance schemas (Requirements 8.3, 8.4, 8.5)
@@ -109,3 +76,12 @@ class VisitInstanceResponse(BaseSchema):
     status: VisitInstanceStatus
     created_at: UtcDatetime
     updated_at: UtcDatetime | None = None
+
+
+__all__ = [
+    "UnscheduledVisitCreate",
+    "VisitDateRecord",
+    "VisitDefinitionCreate",
+    "VisitDefinitionResponse",
+    "VisitInstanceResponse",
+]

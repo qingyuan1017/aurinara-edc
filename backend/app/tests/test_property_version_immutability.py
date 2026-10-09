@@ -101,6 +101,16 @@ def _make_session():
     """Create an AsyncMock session with sync .add() to avoid coroutine warnings."""
     session = AsyncMock()
     session.add = MagicMock()  # session.add is sync in SQLAlchemy
+
+    # create_form re-loads the created form (relationships eager-loaded) before
+    # returning so serialization emits no lazy load; return the added instance.
+    def _execute(*_args, **_kwargs):
+        result = MagicMock()
+        added = session.add.call_args[0][0] if session.add.call_args else None
+        result.scalars.return_value.one.return_value = added
+        return result
+
+    session.execute = AsyncMock(side_effect=_execute)
     return session
 
 
@@ -187,7 +197,7 @@ class TestFormMetadataImmutabilityProperty:
                 await service.create_form(session, version, data, actor_id)
         else:
             # For draft, the DB flush/audit calls will happen — mock them
-            with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+            with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
                 mock_audit.record = AsyncMock()
                 await service.create_form(session, version, data, actor_id)
 
@@ -217,7 +227,7 @@ class TestFormMetadataImmutabilityProperty:
             with pytest.raises(BusinessRuleError):
                 await service.create_section(session, version, form, data, actor_id)
         else:
-            with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+            with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
                 mock_audit.record = AsyncMock()
                 await service.create_section(session, version, form, data, actor_id)
 
@@ -259,7 +269,7 @@ class TestFormMetadataImmutabilityProperty:
             with pytest.raises(BusinessRuleError):
                 await service.create_field(session, version, section, data, actor_id)
         else:
-            with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+            with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
                 mock_audit.record = AsyncMock()
                 await service.create_field(session, version, section, data, actor_id)
 

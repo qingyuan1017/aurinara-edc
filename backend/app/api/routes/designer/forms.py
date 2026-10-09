@@ -1,21 +1,27 @@
-"""Form, section, and field routes — eCRF metadata configuration.
+"""Form, section, and field authoring routes — Designer-owned eCRF metadata.
+
+Moved from ``app.api.routes.edc.forms`` as part of the Designer / EDC refactor.
+These are design-time form/section/field definition authoring handlers; they
+delegate to the Designer ``form_metadata_service`` and operate only while the
+owning Design_Version is a draft.
 
 Satisfies Requirements:
-  - 9.1: CRUD for form definitions within a study version.
-  - 9.2: Create sections and fields within forms.
-  - 21.1: All endpoints mounted under /api/v1.
+  - 4.1: Create, edit, and order form definitions within a Design_Version.
+  - 4.2: Create sections and fields within a form definition.
 
-Endpoints:
-  - GET   /studies/{study_id}/forms         list form definitions (form.read)
-  - POST  /studies/{study_id}/forms         create form definition (form.configure)
-  - GET   /forms/{form_id}                  get form definition with sections/fields (form.read)
-  - PATCH /forms/{form_id}                  update form definition (form.configure)
-  - DELETE /forms/{form_id}                 delete form definition (form.configure)
-  - POST  /forms/{form_id}/sections         create section (form.configure)
-  - POST  /forms/{form_id}/fields           create field (form.configure)
-  - PATCH /fields/{field_id}                update field (form.configure)
-  - DELETE /fields/{field_id}               delete field (form.configure)
+Endpoints (all Designer_Role-only, module-scoped codes):
+  - GET    /studies/{study_id}/forms   list form definitions (designer.form.read)
+  - POST   /studies/{study_id}/forms   create form definition (designer.form.configure)
+  - GET    /forms/{form_id}            get form definition (designer.form.read)
+  - PATCH  /forms/{form_id}            update form definition (designer.form.configure)
+  - DELETE /forms/{form_id}            delete form definition (designer.form.configure)
+  - POST   /forms/{form_id}/sections   create section (designer.form.configure)
+  - POST   /forms/{form_id}/fields     create field (designer.field.configure)
+  - PATCH  /fields/{field_id}          update field (designer.field.configure)
+  - DELETE /fields/{field_id}          delete field (designer.field.configure)
 """
+
+from __future__ import annotations
 
 import logging
 from typing import Annotated
@@ -27,9 +33,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_permission
 from app.core.exceptions import NotFoundError, ValidationError
-from app.models.edc.study import StudyVersion, StudyVersionStatus
+from app.models.designer.study_version import StudyVersion, StudyVersionStatus
 from app.models.shared.identity import User
-from app.schemas.edc.form_metadata import (
+from app.schemas.designer.form_metadata import (
     FieldDefinitionCreate,
     FieldDefinitionResponse,
     FieldDefinitionUpdate,
@@ -39,20 +45,12 @@ from app.schemas.edc.form_metadata import (
     FormSectionCreate,
     FormSectionResponse,
 )
-from app.services.edc.form_metadata_service import form_metadata_service
+from app.services.designer.form_metadata_service import form_metadata_service
 from app.services.edc.study_service import study_service
 
 logger = logging.getLogger(__name__)
 
-# Reusable annotated dependency for DB session
 DbSession = Annotated[AsyncSession, Depends(get_db)]
-
-
-# ---------------------------------------------------------------------------
-# Study-scoped form collection (mounted at /studies)
-# ---------------------------------------------------------------------------
-
-study_forms_router = APIRouter(prefix="/studies", tags=["forms"])
 
 
 async def _get_latest_or_specified_version(
@@ -102,32 +100,29 @@ async def _get_latest_or_specified_version(
     return version
 
 
-@study_forms_router.get(
-    "/{study_id}/forms", response_model=list[FormDefinitionResponse]
-)
+# ---------------------------------------------------------------------------
+# Study-scoped form collection (mounted at /studies)
+# ---------------------------------------------------------------------------
+
+study_forms_router = APIRouter(prefix="/studies", tags=["designer-forms"])
+
+
+@study_forms_router.get("/{study_id}/forms", response_model=list[FormDefinitionResponse])
 async def list_forms(
     study_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.read"))],
+    current_user: Annotated[User, Depends(require_permission("designer.form.read"))],
     study_version_id: Annotated[
         UUID | None,
-        Query(
-            description="Specific study version ID. Defaults to the latest draft version.",
-        ),
+        Query(description="Specific study version ID. Defaults to the latest draft."),
     ] = None,
 ) -> list[FormDefinitionResponse]:
     """List form definitions for a study's specified or latest draft version.
 
-    Permission: form.read
-    Requirement 9.1: Form definitions within a version.
+    Permission: designer.form.read (Designer_Role only)
     """
-    # Ensure study exists
     await study_service.get_study(session, study_id)
-
-    version = await _get_latest_or_specified_version(
-        session, study_id, study_version_id
-    )
-
+    version = await _get_latest_or_specified_version(session, study_id, study_version_id)
     forms = await form_metadata_service.list_forms(session, version.id)
     return [FormDefinitionResponse.model_validate(f) for f in forms]
 
@@ -139,31 +134,20 @@ async def create_form(
     study_id: UUID,
     body: FormDefinitionCreate,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.configure"))],
+    current_user: Annotated[User, Depends(require_permission("designer.form.configure"))],
     study_version_id: Annotated[
         UUID | None,
-        Query(
-            description="Target study version ID. Defaults to the latest draft version.",
-        ),
+        Query(description="Target study version ID. Defaults to the latest draft."),
     ] = None,
 ) -> FormDefinitionResponse:
-    """Create a form definition on a study version.
+    """Create a form definition on a draft Design_Version.
 
-    Permission: form.configure
-    Requirement 9.1: Create form definitions while version is draft.
+    Permission: designer.form.configure (Designer_Role only)
     """
-    # Ensure study exists
     await study_service.get_study(session, study_id)
-
-    version = await _get_latest_or_specified_version(
-        session, study_id, study_version_id
-    )
-
+    version = await _get_latest_or_specified_version(session, study_id, study_version_id)
     form = await form_metadata_service.create_form(
-        session=session,
-        version=version,
-        data=body,
-        actor_id=current_user.id,
+        session=session, version=version, data=body, actor_id=current_user.id
     )
     return FormDefinitionResponse.model_validate(form)
 
@@ -172,19 +156,18 @@ async def create_form(
 # Single form operations (mounted at /forms)
 # ---------------------------------------------------------------------------
 
-router = APIRouter(prefix="/forms", tags=["forms"])
+router = APIRouter(prefix="/forms", tags=["designer-forms"])
 
 
 @router.get("/{form_id}", response_model=FormDefinitionResponse)
 async def get_form(
     form_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.read"))],
+    current_user: Annotated[User, Depends(require_permission("designer.form.read"))],
 ) -> FormDefinitionResponse:
     """Get a form definition with sections and fields.
 
-    Permission: form.read
-    Requirement 9.1: Retrieve form definition metadata.
+    Permission: designer.form.read (Designer_Role only)
     """
     form = await form_metadata_service.get_form(session, form_id)
     return FormDefinitionResponse.model_validate(form)
@@ -195,22 +178,16 @@ async def update_form(
     form_id: UUID,
     body: FormDefinitionUpdate,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.configure"))],
+    current_user: Annotated[User, Depends(require_permission("designer.form.configure"))],
 ) -> FormDefinitionResponse:
     """Update a form definition (partial PATCH).
 
-    Permission: form.configure
-    Requirement 9.1: Edit form definitions while version is draft.
+    Permission: designer.form.configure (Designer_Role only)
     """
     form = await form_metadata_service.get_form(session, form_id)
     version = form.study_version
-
     updated = await form_metadata_service.update_form(
-        session=session,
-        version=version,
-        form=form,
-        data=body,
-        actor_id=current_user.id,
+        session=session, version=version, form=form, data=body, actor_id=current_user.id
     )
     return FormDefinitionResponse.model_validate(updated)
 
@@ -219,89 +196,62 @@ async def update_form(
 async def delete_form(
     form_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.configure"))],
+    current_user: Annotated[User, Depends(require_permission("designer.form.configure"))],
 ) -> None:
     """Delete a form definition.
 
-    Permission: form.configure
-    Requirement 9.1: Delete form definitions while version is draft.
+    Permission: designer.form.configure (Designer_Role only)
     """
     form = await form_metadata_service.get_form(session, form_id)
     version = form.study_version
-
     await form_metadata_service.delete_form(
-        session=session,
-        version=version,
-        form=form,
-        actor_id=current_user.id,
+        session=session, version=version, form=form, actor_id=current_user.id
     )
 
 
-@router.post(
-    "/{form_id}/sections", response_model=FormSectionResponse, status_code=201
-)
+@router.post("/{form_id}/sections", response_model=FormSectionResponse, status_code=201)
 async def create_section(
     form_id: UUID,
     body: FormSectionCreate,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.configure"))],
+    current_user: Annotated[User, Depends(require_permission("designer.form.configure"))],
 ) -> FormSectionResponse:
     """Create a section within a form.
 
-    Permission: form.configure
-    Requirement 9.2: Create sections within a form definition.
+    Permission: designer.form.configure (Designer_Role only)
     """
     form = await form_metadata_service.get_form(session, form_id)
     version = form.study_version
-
     section = await form_metadata_service.create_section(
-        session=session,
-        version=version,
-        form=form,
-        data=body,
-        actor_id=current_user.id,
+        session=session, version=version, form=form, data=body, actor_id=current_user.id
     )
     return FormSectionResponse.model_validate(section)
 
 
-@router.post(
-    "/{form_id}/fields", response_model=FieldDefinitionResponse, status_code=201
-)
+@router.post("/{form_id}/fields", response_model=FieldDefinitionResponse, status_code=201)
 async def create_field(
     form_id: UUID,
     body: FieldDefinitionCreate,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.configure"))],
-    section_id: Annotated[
-        UUID,
-        Query(description="The section ID to add the field to."),
-    ],
+    current_user: Annotated[User, Depends(require_permission("designer.field.configure"))],
+    section_id: Annotated[UUID, Query(description="The section ID to add the field to.")],
 ) -> FieldDefinitionResponse:
-    """Create a field within a form (specifying target section via query param).
+    """Create a field within a form (target section via query param).
 
-    Permission: form.configure
-    Requirement 9.2: Create fields within a form section.
+    Permission: designer.field.configure (Designer_Role only)
     """
     form = await form_metadata_service.get_form(session, form_id)
     version = form.study_version
 
-    # Validate section belongs to this form
     section = await form_metadata_service.get_section(session, section_id)
     if section.form_definition_id != form.id:
         raise ValidationError(
             "Section does not belong to the specified form",
-            details={
-                "section_id": str(section_id),
-                "form_id": str(form_id),
-            },
+            details={"section_id": str(section_id), "form_id": str(form_id)},
         )
 
     field = await form_metadata_service.create_field(
-        session=session,
-        version=version,
-        section=section,
-        data=body,
-        actor_id=current_user.id,
+        session=session, version=version, section=section, data=body, actor_id=current_user.id
     )
     return FieldDefinitionResponse.model_validate(field)
 
@@ -310,7 +260,7 @@ async def create_field(
 # Single field operations (mounted at /fields)
 # ---------------------------------------------------------------------------
 
-fields_router = APIRouter(prefix="/fields", tags=["forms"])
+fields_router = APIRouter(prefix="/fields", tags=["designer-forms"])
 
 
 @fields_router.patch("/{field_id}", response_model=FieldDefinitionResponse)
@@ -318,24 +268,18 @@ async def update_field(
     field_id: UUID,
     body: FieldDefinitionUpdate,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.configure"))],
+    current_user: Annotated[User, Depends(require_permission("designer.field.configure"))],
 ) -> FieldDefinitionResponse:
     """Update a field definition (partial PATCH).
 
-    Permission: form.configure
-    Requirement 9.2: Edit field definitions while version is draft.
+    Permission: designer.field.configure (Designer_Role only)
     """
     field = await form_metadata_service.get_field(session, field_id)
     section = field.form_section
     form = section.form_definition
     version = form.study_version
-
     updated = await form_metadata_service.update_field(
-        session=session,
-        version=version,
-        field=field,
-        data=body,
-        actor_id=current_user.id,
+        session=session, version=version, field=field, data=body, actor_id=current_user.id
     )
     return FieldDefinitionResponse.model_validate(updated)
 
@@ -344,21 +288,19 @@ async def update_field(
 async def delete_field(
     field_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.configure"))],
+    current_user: Annotated[User, Depends(require_permission("designer.field.configure"))],
 ) -> None:
     """Delete a field definition.
 
-    Permission: form.configure
-    Requirement 9.2: Delete field definitions while version is draft.
+    Permission: designer.field.configure (Designer_Role only)
     """
     field = await form_metadata_service.get_field(session, field_id)
     section = field.form_section
     form = section.form_definition
     version = form.study_version
-
     await form_metadata_service.delete_field(
-        session=session,
-        version=version,
-        field=field,
-        actor_id=current_user.id,
+        session=session, version=version, field=field, actor_id=current_user.id
     )
+
+
+__all__ = ["fields_router", "router", "study_forms_router"]

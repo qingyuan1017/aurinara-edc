@@ -1,0 +1,192 @@
+"""EditCheck and ValidationResult models — declarative edit-check rules.
+
+These models were reassigned to the Designer module as part of the Designer /
+EDC refactor (R5, R11.1). ``EditCheck`` is a **Designer_Definition**: a
+declarative edit-check rule authored against a design version. The rule is a
+constrained JSON DSL (boolean trees of and/or/not over conditions) that the
+engine evaluates **without executing any user-provided code** (R5.5); each rule
+binds to exactly one Design_Version via ``study_version_id`` (R5.4).
+
+The move is a code-layer ownership change only — the backing tables
+(``edit_checks``, ``validation_results``) and all columns are unchanged, so
+stored values are preserved and the migration is purely additive (R11.1).
+
+``ValidationResult`` is an operational artifact produced at runtime when a rule
+fires against a form instance; it is kept co-located with the rule definition it
+references.
+
+Satisfies Requirements:
+  - 5.1: Rule validated against the declarative schema before persisting.
+  - 5.4: Edit checks bound to exactly one Design_Version via FK.
+  - 5.5: Rules stored declaratively; the engine never executes user code.
+  - 11.1: Ownership reassignment with no table/column renames.
+  - 22.6: Indexed for efficient querying.
+"""
+
+import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    Uuid,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.core.database import Base
+
+
+class EditCheck(Base):
+    """A declarative edit check rule versioned with its owning Design_Version.
+
+    Rules use a constrained JSON DSL (boolean trees of and/or/not over conditions).
+    The engine never executes user-provided code (Requirement 5.5).
+    """
+
+    __tablename__ = "edit_checks"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+
+    # Owning study version / Design_Version (Requirement 5.4)
+    study_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("study_versions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Descriptive metadata
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Declarative JSON DSL rule definition (Requirement 5.1, 5.5)
+    rule_json: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=False,
+        comment="Declarative JSON DSL rule definition (boolean tree of conditions)",
+    )
+
+    # Severity level
+    severity: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        comment="One of: info, warning, error, query",
+    )
+
+    # Active flag
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Relationships
+    study_version: Mapped["StudyVersion"] = relationship(  # noqa: F821
+        "StudyVersion", lazy="selectin"
+    )
+    validation_results: Mapped[list["ValidationResult"]] = relationship(
+        "ValidationResult", back_populates="edit_check", lazy="noload"
+    )
+
+    __table_args__ = (
+        Index("ix_edit_checks_study_version_id", "study_version_id"),
+        Index("ix_edit_checks_severity", "severity"),
+        Index("ix_edit_checks_is_active", "is_active"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<EditCheck(id={self.id}, name={self.name!r}, "
+            f"severity={self.severity!r}, is_active={self.is_active})>"
+        )
+
+
+class ValidationResult(Base):
+    """A result produced when an edit check fires against a form instance.
+
+    Records the specific rule violation with severity, message, and resolution state.
+    """
+
+    __tablename__ = "validation_results"
+
+    # Primary key
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+
+    # Owning edit check
+    edit_check_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("edit_checks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Target form instance
+    form_instance_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("form_instances.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Severity (copied from edit check at evaluation time)
+    severity: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        comment="One of: info, warning, error, query",
+    )
+
+    # Evaluation outcome. Runtime persistence currently stores failed checks;
+    # retaining the outcome makes the result contract explicit and extensible.
+    outcome: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="failed",
+        comment="One of: passed, failed",
+    )
+
+    # Optional affected row/field context for future repeating-record checks.
+    record_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("form_records.id", ondelete="SET NULL"), nullable=True
+    )
+    field_definition_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("field_definitions.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Human-readable violation message
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Resolution tracking
+    is_resolved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # Timestamp
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+    # Relationships
+    edit_check: Mapped["EditCheck"] = relationship(
+        "EditCheck", back_populates="validation_results", lazy="selectin"
+    )
+    form_instance: Mapped["FormInstance"] = relationship(  # noqa: F821
+        "FormInstance", lazy="selectin"
+    )
+
+    __table_args__ = (
+        Index("ix_validation_results_edit_check_id", "edit_check_id"),
+        Index("ix_validation_results_form_instance_id", "form_instance_id"),
+        Index("ix_validation_results_is_resolved", "is_resolved"),
+        Index("ix_validation_results_outcome", "outcome"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ValidationResult(id={self.id}, edit_check_id={self.edit_check_id}, "
+            f"severity={self.severity!r}, is_resolved={self.is_resolved})>"
+        )

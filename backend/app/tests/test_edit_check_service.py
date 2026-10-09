@@ -61,7 +61,7 @@ async def test_runtime_persists_failed_result_with_severity():
     form = _form()
     check = _check(severity="error")
 
-    with patch("app.services.edc.edit_check_service.audit_service") as audit:
+    with patch("app.services.designer.edit_check_service.audit_service") as audit:
         audit.record = AsyncMock()
         result = await service.evaluate_edit_check(
             session, form, check, actor_id=uuid4(), sample_data=form.data_jsonb
@@ -88,7 +88,7 @@ async def test_query_severity_creates_system_query_linked_to_form():
     check = _check(severity="query")
     actor_id = uuid4()
 
-    with patch("app.services.edc.edit_check_service.audit_service") as audit:
+    with patch("app.services.designer.edit_check_service.audit_service") as audit:
         audit.record = AsyncMock()
         await service.evaluate_edit_check(
             session, form, check, actor_id=actor_id, sample_data=form.data_jsonb

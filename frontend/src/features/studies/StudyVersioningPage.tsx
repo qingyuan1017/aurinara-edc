@@ -50,8 +50,8 @@ function formatDate(value?: string | null): string {
  */
 export function StudyVersioningPage({ studyId }: { studyId: string }) {
   const queryClient = useQueryClient()
-  const canConfigure = usePermission(PERMISSIONS.STUDY_CONFIGURE, studyId)
-  const canPublish = usePermission(PERMISSIONS.VERSION_PUBLISH, studyId)
+  const canConfigure = usePermission(PERMISSIONS.DESIGNER_STUDY_VERSION_AMEND, studyId)
+  const canPublish = usePermission(PERMISSIONS.DESIGNER_VERSION_PUBLISH, studyId)
   const [showAmendmentForm, setShowAmendmentForm] = useState(false)
   const [reason, setReason] = useState('')
   const [validationError, setValidationError] = useState('')
@@ -76,7 +76,7 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
     mutationFn: async () => {
       const trimmedReason = reason.trim()
       if (!trimmedReason) throw new Error('An amendment reason is required.')
-      return api.post<StudyVersion>(`/studies/${studyId}/amend`, { reason: trimmedReason })
+      return api.post<StudyVersion>(`/designer/studies/${studyId}/amend`, { reason: trimmedReason })
     },
     onSuccess: ({ data }) => {
       queryClient.invalidateQueries({ queryKey: ['study-versions', studyId] })
@@ -93,7 +93,7 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
   })
 
   const publish = useMutation({
-    mutationFn: (versionId: string) => api.post<StudyVersion>(`/versions/${versionId}/publish`),
+    mutationFn: (versionId: string) => api.post<StudyVersion>(`/designer/versions/${versionId}/publish`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['study-versions', studyId] })
       queryClient.invalidateQueries({ queryKey: ['study', studyId] })

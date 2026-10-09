@@ -1,11 +1,21 @@
-"""Study and Study Version routes.
+"""Operational study and study-version read routes.
+
+Operational EDC surface only. Design-authoring of study versions (draft
+create and amend) lives in the Designer aggregate at
+``/api/v1/designer/studies/...`` and is intentionally NOT served here
+(one-directional ownership, Requirements 1.1, 11.4). This module keeps the
+operational study CRUD, status transitions, and the study-version read
+(``GET /studies/{study_id}/versions``, Requirement 8).
 
 Satisfies Requirements:
   - 4.1: CRUD for study metadata (code, protocol, title, sponsor, phase, etc.).
   - 4.3: Study status transitions via POST /studies/{study_id}/transition.
-  - 5.1: Publish a draft Study_Version via POST /versions/{version_id}/publish.
+  - 8: Operational study-info read of study versions.
   - 21.1: All endpoints mounted under /api/v1.
   - 21.2: List endpoints return pagination envelope.
+
+Note: ``versions_router`` (publish) is defined here but is excluded from the
+EDC aggregate and left unmounted — publish is a design-authoring action.
 """
 
 import logging
@@ -19,12 +29,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import PaginationParams, get_db, require_permission
 from app.core.audit import audit_service
 from app.schemas.edc.study import (
-    StudyAmendmentCreate,
     StudyCreate,
     StudyResponse,
     StudyStatusTransition,
     StudyUpdate,
-    StudyVersionCreate,
     StudyVersionResponse,
 )
 from app.schemas.shared.base import PaginatedResponse
@@ -218,57 +226,6 @@ async def list_versions(
     # Ensure study exists
     study = await study_service.get_study(session, study_id)
     return [StudyVersionResponse.model_validate(v) for v in study.versions]
-
-
-@router.post(
-    "/{study_id}/versions", response_model=StudyVersionResponse, status_code=201
-)
-async def create_version(
-    study_id: UUID,
-    body: StudyVersionCreate,
-    session: DbSession,
-    current_user: Annotated[..., Depends(require_permission("study.configure"))],
-) -> StudyVersionResponse:
-    """Create a new draft Study_Version for a study.
-
-    Permission: study.configure
-    Requirement 5.3: Create a new draft version (amendment) with reason.
-    """
-    # Ensure study exists
-    await study_service.get_study(session, study_id)
-
-    version = await study_version_service.create_version(
-        session=session,
-        study_id=study_id,
-        version_number=body.version_number,
-        amendment_reason=body.amendment_reason,
-        actor_id=current_user.id,
-    )
-    return StudyVersionResponse.model_validate(version)
-
-
-@router.post(
-    "/{study_id}/amend", response_model=StudyVersionResponse, status_code=201
-)
-async def create_amendment(
-    study_id: UUID,
-    body: StudyAmendmentCreate,
-    session: DbSession,
-    current_user: Annotated[..., Depends(require_permission("study.configure"))],
-) -> StudyVersionResponse:
-    """Create a draft amendment from the latest published version.
-
-    Permission: study.configure
-    Requirements 5.3 and 5.4: retain published history and record the reason.
-    """
-    study = await study_service.get_study(session, study_id)
-    version = await study_version_service.create_amendment(
-        session=session,
-        study=study,
-        reason=body.reason,
-        actor_id=current_user.id,
-    )
-    return StudyVersionResponse.model_validate(version)
 
 
 # ---------------------------------------------------------------------------

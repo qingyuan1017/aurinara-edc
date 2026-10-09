@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Building2, CheckCircle2, CircleHelp, FileText, LayoutDashboard, ScrollText, Search, Settings, Sparkles, Stethoscope, Upload, Users, type LucideIcon } from 'lucide-react'
+import { Bell, BookOpen, Building2, CalendarRange, CheckCircle2, CircleHelp, FileText, KeyRound, LayoutDashboard, ListChecks, Layers, Database, ScrollText, Search, Settings, Sparkles, Stethoscope, Tags, Upload, Users, Workflow, type LucideIcon } from 'lucide-react'
 import type { CTMSCapabilityState, CTMSNavigationSection, CTMSNavigationItem } from '@/features/ctms'
 import { resolveCTMSNavigation } from '@/features/ctms'
 import type { PVCapabilityState, PVNavigationSection, PVNavigationItem } from '@/features/pv'
@@ -60,15 +60,23 @@ export const EDC_NAV_ITEMS: readonly EDCNavigationItem[] = [
   { id: 'studies', label: 'Studies', to: '/studies', icon: BookOpen, section: 'study-data', search: preserveCurrentSearch },
   { id: 'sites', label: 'Sites', to: '/sites', icon: Building2, section: 'study-data', search: preserveCurrentSearch },
   { id: 'subjects', label: 'Subjects', to: '/subjects', icon: Users, section: 'study-data', search: preserveCurrentSearch },
-  { id: 'forms', label: 'Forms', to: '/forms', icon: FileText, section: 'study-data', search: preserveCurrentSearch },
   { id: 'queries', label: 'Queries', to: '/queries', icon: CircleHelp, section: 'data-quality', search: preserveCurrentSearch },
   { id: 'data-cleaning', label: 'Data Cleaning', to: '/data-cleaning', icon: Search, section: 'data-quality', search: preserveCurrentSearch },
   { id: 'sdv', label: 'SDV Worklist', to: '/sdv', icon: CheckCircle2, section: 'data-quality', search: preserveCurrentSearch },
   { id: 'review', label: 'Clinical Review', to: '/review', icon: Stethoscope, section: 'data-quality', search: preserveCurrentSearch },
-  { id: 'edit-checks', label: 'Edit Checks', to: '/edit-checks', icon: CheckCircle2, section: 'data-quality', search: preserveCurrentSearch },
   { id: 'ai', label: 'AI Assistant', to: '/ai', icon: Sparkles, section: 'operations', search: preserveCurrentSearch },
   { id: 'notifications', label: 'Notifications', to: '/notifications', icon: Bell, section: 'operations', search: preserveCurrentSearch },
   { id: 'exports', label: 'Exports', to: '/exports', icon: Upload, section: 'operations', search: preserveCurrentSearch },
+  { id: 'forms', label: 'Form Builder', to: '/designer/forms', icon: FileText, section: 'designer', search: preserveCurrentSearch },
+  { id: 'edit-checks', label: 'Edit Checks', to: '/designer/edit-checks', icon: CheckCircle2, section: 'designer', search: preserveCurrentSearch },
+  { id: 'designer-codelists', label: 'Codelists', to: '/designer/codelists', icon: Tags, section: 'designer', search: preserveCurrentSearch },
+  { id: 'designer-subject-phases', label: 'Subject Phases', to: '/designer/subject-phases', icon: Workflow, section: 'designer', search: preserveCurrentSearch },
+  { id: 'designer-soa', label: 'Schedule of Assessment', to: '/designer/schedule-of-assessment', icon: CalendarRange, section: 'designer', search: preserveCurrentSearch },
+  { id: 'designer-cycles', label: 'Cycles', to: '/designer/cycles', icon: Layers, section: 'designer', search: preserveCurrentSearch },
+  { id: 'designer-arms', label: 'Arms', to: '/designer/arms', icon: ListChecks, section: 'designer', search: preserveCurrentSearch },
+  { id: 'designer-crf-access', label: 'CRF Access', to: '/designer/crf-access', icon: KeyRound, section: 'designer', search: preserveCurrentSearch },
+  { id: 'designer-raw-data-variables', label: 'Raw-Data Variables', to: '/designer/raw-data-variables', icon: Database, section: 'designer', search: preserveCurrentSearch },
+  { id: 'designer-coding-settings', label: 'Coding Settings', to: '/designer/coding-settings', icon: FileText, section: 'designer', search: preserveCurrentSearch },
   { id: 'admin', label: 'Admin', to: '/admin', icon: Settings, section: 'administration', search: preserveCurrentSearch },
   { id: 'audit', label: 'Audit Trail', to: '/audit', icon: ScrollText, section: 'administration', search: preserveCurrentSearch },
 ] as const
@@ -81,6 +89,7 @@ const EDC_SECTION_LABELS: Readonly<Record<string, string>> = {
   'study-data': 'Study data',
   'data-quality': 'Data quality',
   operations: 'Operations',
+  designer: 'Designer',
   administration: 'Administration',
 }
 

@@ -51,6 +51,30 @@ export const PERMISSIONS = {
   // Edit Checks
   EDITCHECK_CONFIGURE: 'editcheck.configure',
 
+  // Designer module (design-time authoring; Designer_Role only).
+  // Replace the study.configure/version.publish/form.configure/
+  // editcheck.configure placeholders for authoring after the Designer/EDC
+  // refactor. The operational codes above remain for the EDC surface.
+  DESIGNER_STUDY_VERSION_READ: 'designer.study_version.read',
+  DESIGNER_STUDY_VERSION_CREATE: 'designer.study_version.create',
+  DESIGNER_STUDY_VERSION_AMEND: 'designer.study_version.amend',
+  DESIGNER_VERSION_PUBLISH: 'designer.version.publish',
+  DESIGNER_FORM_READ: 'designer.form.read',
+  DESIGNER_FORM_CONFIGURE: 'designer.form.configure',
+  DESIGNER_FIELD_CONFIGURE: 'designer.field.configure',
+  DESIGNER_EDITCHECK_CONFIGURE: 'designer.editcheck.configure',
+  DESIGNER_EDITCHECK_TEST: 'designer.editcheck.test',
+  DESIGNER_CODELIST_READ: 'designer.codelist.read',
+  DESIGNER_CODELIST_CONFIGURE: 'designer.codelist.configure',
+  DESIGNER_SUBJECT_PHASE_CONFIGURE: 'designer.subject_phase.configure',
+  DESIGNER_SOA_READ: 'designer.soa.read',
+  DESIGNER_SOA_CONFIGURE: 'designer.soa.configure',
+  DESIGNER_CYCLE_CONFIGURE: 'designer.cycle.configure',
+  DESIGNER_ARM_CONFIGURE: 'designer.arm.configure',
+  DESIGNER_CRF_ACCESS_CONFIGURE: 'designer.crf_access.configure',
+  DESIGNER_RAW_DATA_VARIABLE_CONFIGURE: 'designer.raw_data_variable.configure',
+  DESIGNER_CODING_SETTING_CONFIGURE: 'designer.coding_setting.configure',
+
   // SDV & Review
   SDV_MANAGE: 'sdv.manage',
   REVIEW_MANAGE: 'review.manage',

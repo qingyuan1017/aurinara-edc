@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.core.exceptions import NotFoundError
 from app.models.edc.study import StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject, SubjectStatus
 from app.models.edc.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
@@ -145,12 +145,18 @@ class TestComputeWindowStatus:
 
 
 # ---------------------------------------------------------------------------
-# define_visit — Req 8.1
+# define_visit — Req 4.2 (delegation)
 # ---------------------------------------------------------------------------
+#
+# Visit *definition* authoring was reassigned to the Designer module
+# (``app.services.designer.visit_definition_service``) as part of the
+# Designer / EDC refactor. The authoring tests now live in
+# ``test_visit_definition_service.py``. ``VisitService.define_visit`` remains a
+# thin backward-compatible delegate, verified below.
 
 
-class TestDefineVisit:
-    async def test_define_visit_persists_definition(
+class TestDefineVisitDelegates:
+    async def test_define_visit_delegates_to_designer_service(
         self, service, mock_session, actor_id
     ):
         version = _make_version(StudyVersionStatus.draft)
@@ -165,57 +171,17 @@ class TestDefineVisit:
             is_required=True,
         )
 
-        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
-            mock_audit.record = AsyncMock()
-            definition = await service.define_visit(
+        sentinel = object()
+        with patch(
+            "app.services.edc.visit_service.visit_definition_service.define_visit",
+            new=AsyncMock(return_value=sentinel),
+        ) as mock_define:
+            result = await service.define_visit(
                 mock_session, version, data, actor_id
             )
 
-        assert definition.study_version_id == version.id
-        assert definition.name == "Screening"
-        assert definition.visit_number == 1
-        assert definition.visit_type == "screening"
-        assert definition.target_day == 0
-        assert definition.window_after == 3
-        assert definition.display_order == 1
-        assert definition.is_required is True
-        mock_session.add.assert_called_once()
-
-    async def test_define_visit_blocked_on_published_version(
-        self, service, mock_session, actor_id
-    ):
-        version = _make_version(StudyVersionStatus.published)
-        data = VisitDefinitionCreate(
-            name="Visit 1",
-            visit_number=1,
-            visit_type="scheduled",
-            display_order=1,
-        )
-
-        with pytest.raises(BusinessRuleError):
-            await service.define_visit(mock_session, version, data, actor_id)
-
-    async def test_define_visit_writes_audit_event(
-        self, service, mock_session, actor_id
-    ):
-        version = _make_version(StudyVersionStatus.draft)
-        data = VisitDefinitionCreate(
-            name="Visit 1",
-            visit_number=1,
-            visit_type="scheduled",
-            display_order=1,
-        )
-
-        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
-            mock_audit.record = AsyncMock()
-            await service.define_visit(mock_session, version, data, actor_id)
-
-            mock_audit.record.assert_awaited_once()
-            call_kwargs = mock_audit.record.call_args.kwargs
-            assert call_kwargs["entity_type"] == "visit_definition"
-            assert call_kwargs["action"] == "create"
-            assert call_kwargs["actor_id"] == actor_id
-            assert call_kwargs["study_id"] == version.study_id
+        assert result is sentinel
+        mock_define.assert_awaited_once_with(mock_session, version, data, actor_id)
 
 
 # ---------------------------------------------------------------------------

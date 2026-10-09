@@ -1,16 +1,28 @@
-"""Visit_Service — visit definitions, instances, and window-status computation.
+"""Visit_Service — operational visit instances and window-status computation.
+
+As part of the Designer / EDC refactor the **definition-authoring** part of
+visits was reassigned to the Designer module and now lives in
+``app.services.designer.visit_definition_service`` (``VisitDefinitionService`` /
+``visit_definition_service``). This EDC service keeps the **operational** part:
+initializing Visit_Instances from a bound Design_Version, recording visit dates
+and computing window status, creating unscheduled visits, and marking visits
+missed.
+
+For backward compatibility ``VisitService.define_visit`` is retained here as a
+thin wrapper that delegates to the Designer service; existing callers and import
+paths (``from app.services.edc.visit_service import visit_service``) keep working
+unchanged (R11.1).
+
+All metadata and clinical mutations write an Audit_Event within the caller's
+transaction (data + audit commit atomically).
 
 Satisfies Requirements:
-  - 8.1: Persist visit definitions (name, visit number, type, target day, window
-          bounds, display order, required flag) while the owning version is draft.
+  - 4.2 / 4.3: Visit definition authoring (now Designer-owned; delegated).
   - 8.2: Create Visit_Instances from a bound Study_Version's visit definitions.
   - 8.3: Compute visit window status (before_window, in_window, after_window)
           from the visit date relative to the configured window bounds.
   - 8.4: Allow creation of an unscheduled Visit_Instance.
   - 8.5: Mark a Visit_Instance as missed.
-
-All metadata and clinical mutations write an Audit_Event within the caller's
-transaction (data + audit commit atomically).
 """
 
 from __future__ import annotations
@@ -24,14 +36,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit_service
 from app.core.exceptions import NotFoundError
-from app.models.edc.study import StudyVersion
+from app.models.designer.study_version import StudyVersion
+from app.models.designer.visit import VisitDefinition
 from app.models.edc.subject import Subject
-from app.models.edc.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
+from app.models.edc.visit import VisitInstance, VisitInstanceStatus
 from app.schemas.edc.visit import (
     UnscheduledVisitCreate,
     VisitDefinitionCreate,
 )
-from app.services.edc.study_version_service import study_version_service
+from app.services.designer.visit_definition_service import visit_definition_service
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +91,10 @@ def compute_window_status(
 
 
 class VisitService:
-    """Manages visit definitions, instance initialization, and window status."""
+    """Manages visit instance initialization and window status (operational EDC)."""
 
     # ------------------------------------------------------------------
-    # Define visit (Req 8.1) — draft only
+    # Define visit (Req 4.2 / 4.3) — Designer-owned; delegated for compatibility
     # ------------------------------------------------------------------
 
     async def define_visit(
@@ -91,7 +104,11 @@ class VisitService:
         data: VisitDefinitionCreate,
         actor_id: UUID,
     ) -> VisitDefinition:
-        """Define a visit on a draft Study_Version (Requirement 8.1).
+        """Define a visit on a draft Design_Version (Requirements 4.2, 4.3).
+
+        Backward-compatible delegate: visit definition authoring is owned by the
+        Designer module's ``visit_definition_service``. This method forwards to
+        it so existing callers that reach the EDC ``visit_service`` keep working.
 
         Args:
             session: Active async database session (caller's transaction).
@@ -103,43 +120,12 @@ class VisitService:
             The created VisitDefinition.
 
         Raises:
-            BusinessRuleError: If the owning version is published (Req 5.2).
+            BusinessRuleError: If the owning version is published (Req 2.4).
+            ValidationError: If the window bounds are inverted (Req 4.3).
         """
-        # Block metadata writes on a published version (Req 5.2)
-        study_version_service.guard_mutable(version)
-
-        definition = VisitDefinition(
-            study_version_id=version.id,
-            name=data.name,
-            visit_number=data.visit_number,
-            visit_type=data.visit_type,
-            target_day=data.target_day,
-            window_before=data.window_before,
-            window_after=data.window_after,
-            display_order=data.display_order,
-            is_required=data.is_required,
+        return await visit_definition_service.define_visit(
+            session, version, data, actor_id
         )
-        session.add(definition)
-        await session.flush()  # Assign the id
-
-        await audit_service.record(
-            session,
-            entity_type="visit_definition",
-            entity_id=definition.id,
-            action="create",
-            study_id=version.study_id,
-            actor_id=actor_id,
-            new_value=f"name={definition.name}, visit_number={definition.visit_number}",
-        )
-
-        logger.info(
-            "Visit definition created: id=%s version_id=%s name=%s actor=%s",
-            definition.id,
-            version.id,
-            definition.name,
-            actor_id,
-        )
-        return definition
 
     # ------------------------------------------------------------------
     # Initialize instances (Req 8.2)
@@ -175,6 +161,7 @@ class VisitService:
                 visit_definition_id=definition.id,
                 name=definition.name,
                 status=VisitInstanceStatus.scheduled,
+                design_version_id=subject.study_version_id,
             )
             session.add(instance)
             instances.append(instance)
@@ -313,6 +300,7 @@ class VisitService:
             name=data.name,
             visit_date=data.visit_date,
             status=VisitInstanceStatus.unscheduled,
+            design_version_id=subject.study_version_id,
         )
         session.add(instance)
         await session.flush()

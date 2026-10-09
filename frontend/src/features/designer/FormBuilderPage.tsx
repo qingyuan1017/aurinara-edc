@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import { api } from '@/lib/api'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
 import { EmptyState, ErrorState, LoadingState, OwnershipBadge, PageContainer, PageHeader } from '@/components/patterns'
@@ -15,17 +16,42 @@ interface Section { id: string; name: string; display_order: number; fields: Fie
 interface FormDefinition { id: string; name: string; form_code: string; display_order: number; is_repeating: boolean; sections?: Section[] }
 const CONTROL_TYPES = ['text', 'textarea', 'integer', 'decimal', 'date', 'datetime', 'time', 'radio', 'checkbox', 'dropdown', 'multi-select', 'boolean', 'file_upload', 'calculated', 'repeating_table', 'coded_term']
 
-export function FormBuilderPage({ studyId }: { studyId: string }) {
-  const queryClient = useQueryClient(); const canConfigure = usePermission(PERMISSIONS.FORM_CONFIGURE); const [selectedId, setSelectedId] = useState(''); const [form, setForm] = useState({ name: '', form_code: '', display_order: 0, is_repeating: false }); const [sectionName, setSectionName] = useState(''); const [field, setField] = useState({ label: '', variable_name: '', control_type: 'text', data_type: 'string', is_required: false }); const [error, setError] = useState('')
-  const formsQuery = useQuery({ queryKey: ['form-definitions', studyId], queryFn: async () => (await api.get<FormDefinition[]>(`/studies/${studyId}/forms`)).data })
-  const selected = formsQuery.data?.find((item) => item.id === selectedId)
-  const detailQuery = useQuery({ queryKey: ['form-definition', selectedId], enabled: !!selectedId, queryFn: async () => (await api.get<FormDefinition>(`/forms/${selectedId}`)).data })
-  const activeForm = detailQuery.data ?? selected
-  const createForm = useMutation({ mutationFn: () => api.post(`/studies/${studyId}/forms`, form), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['form-definitions', studyId] }); setForm({ name: '', form_code: '', display_order: 0, is_repeating: false }) }, onError: () => setError('Could not create form. A draft study version and form.configure permission are required.') })
-  const createSection = useMutation({ mutationFn: () => api.post(`/forms/${selectedId}/sections`, { name: sectionName, display_order: activeForm?.sections?.length ?? 0 }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['form-definition', selectedId] }); setSectionName('') }, onError: () => setError('Could not create section.') })
-  const createField = useMutation({ mutationFn: (sectionId: string) => api.post(`/forms/${selectedId}/fields`, { ...field, display_order: 0 }, { params: { section_id: sectionId } }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['form-definition', selectedId] }); setField({ label: '', variable_name: '', control_type: 'text', data_type: 'string', is_required: false }) }, onError: () => setError('Could not create field.') })
+/**
+ * Surface the real backend failure instead of a fixed guess. Reads the shared
+ * EDC error envelope ({ error: { message } }), FastAPI's validation shape
+ * ({ detail }), then any Error message, and finally the provided fallback.
+ */
+function describeError(err: unknown, fallback: string): string {
+  if (isAxiosError(err)) {
+    const data = err.response?.data as
+      | { error?: { message?: string }; detail?: unknown }
+      | undefined
+    const enveloped = data?.error?.message
+    if (typeof enveloped === 'string' && enveloped.trim()) return enveloped
+    const detail = data?.detail
+    if (typeof detail === 'string' && detail.trim()) return detail
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0] as { msg?: unknown; loc?: unknown }
+      const field = Array.isArray(first.loc) ? first.loc[first.loc.length - 1] : undefined
+      if (typeof first.msg === 'string') return field ? `${field}: ${first.msg}` : first.msg
+    }
+    if (err.message) return err.message
+  }
+  if (err instanceof Error && err.message) return err.message
+  return fallback
+}
 
-  return <PageContainer><PageHeader title="Form Builder" description="Configure eCRF definitions on the current draft study version." ownership={<OwnershipBadge owner="EDC" />} />
+export function FormBuilderPage({ studyId }: { studyId: string }) {
+  const queryClient = useQueryClient(); const canConfigure = usePermission(PERMISSIONS.DESIGNER_FORM_CONFIGURE); const [selectedId, setSelectedId] = useState(''); const [form, setForm] = useState({ name: '', form_code: '', display_order: 0, is_repeating: false }); const [sectionName, setSectionName] = useState(''); const [field, setField] = useState({ label: '', variable_name: '', control_type: 'text', data_type: 'string', is_required: false }); const [error, setError] = useState('')
+  const formsQuery = useQuery({ queryKey: ['form-definitions', studyId], queryFn: async () => (await api.get<FormDefinition[]>(`/designer/studies/${studyId}/forms`)).data })
+  const selected = formsQuery.data?.find((item) => item.id === selectedId)
+  const detailQuery = useQuery({ queryKey: ['form-definition', selectedId], enabled: !!selectedId, queryFn: async () => (await api.get<FormDefinition>(`/designer/forms/${selectedId}`)).data })
+  const activeForm = detailQuery.data ?? selected
+  const createForm = useMutation({ mutationFn: () => api.post(`/designer/studies/${studyId}/forms`, form), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['form-definitions', studyId] }); setForm({ name: '', form_code: '', display_order: 0, is_repeating: false }) }, onError: (err) => setError(describeError(err, 'Could not create form. A draft study version and form.configure permission are required.')) })
+  const createSection = useMutation({ mutationFn: () => api.post(`/designer/forms/${selectedId}/sections`, { name: sectionName, display_order: activeForm?.sections?.length ?? 0 }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['form-definition', selectedId] }); setSectionName('') }, onError: (err) => setError(describeError(err, 'Could not create section.')) })
+  const createField = useMutation({ mutationFn: (sectionId: string) => api.post(`/designer/forms/${selectedId}/fields`, { ...field, display_order: 0 }, { params: { section_id: sectionId } }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['form-definition', selectedId] }); setField({ label: '', variable_name: '', control_type: 'text', data_type: 'string', is_required: false }) }, onError: (err) => setError(describeError(err, 'Could not create field.')) })
+
+  return <PageContainer><PageHeader title="Form Builder" description="Configure eCRF definitions on the current draft study version." ownership={<OwnershipBadge owner="Designer" />} />
     {error ? <Alert variant="destructive" className="mb-6"><AlertDescription>{error}</AlertDescription></Alert> : null}
     <div className="grid gap-6 lg:grid-cols-[18rem_1fr]">
       <Card><CardHeader className="pb-3"><div className="flex items-center justify-between"><CardTitle className="text-base">Forms</CardTitle><span className="text-xs text-muted-foreground">{formsQuery.data?.length ?? 0}</span></div></CardHeader><CardContent className="space-y-3">

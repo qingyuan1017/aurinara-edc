@@ -32,6 +32,34 @@ PERMISSION_CODES: set[str] = {
     "study.read",
     # Version management
     "version.publish",
+    # ---------------------------------------------------------------------
+    # Designer_Module (design-time authoring) permission codes.
+    #
+    # These are the proper module-scoped codes for the designer routers that
+    # previously reused the shared ``study.configure``/``study.read``
+    # placeholders. They are only ever effective when granted through a
+    # Designer_Role (see DESIGNER_PERMISSION_CODES / module classification
+    # below). Codes are additive — existing operational codes are untouched.
+    # ---------------------------------------------------------------------
+    "designer.study_version.read",
+    "designer.study_version.create",
+    "designer.study_version.amend",
+    "designer.version.publish",
+    "designer.form.read",
+    "designer.form.configure",
+    "designer.field.configure",
+    "designer.editcheck.configure",
+    "designer.editcheck.test",
+    "designer.codelist.read",
+    "designer.codelist.configure",
+    "designer.subject_phase.configure",
+    "designer.soa.read",
+    "designer.soa.configure",
+    "designer.cycle.configure",
+    "designer.arm.configure",
+    "designer.crf_access.configure",
+    "designer.raw_data_variable.configure",
+    "designer.coding_setting.configure",
     # Site management
     "site.manage",
     "site.read",
@@ -120,6 +148,118 @@ PV_PERMISSION_CODES: frozenset[str] = frozenset(
     }
 )
 
+# ---------------------------------------------------------------------------
+# Module-scoped permission classification (Requirement 10)
+# ---------------------------------------------------------------------------
+#
+# Every permission code belongs to one authorization *module*:
+#   - "designer"    design-time authoring in the Designer_Module. Grantable
+#                   and effective ONLY through a Designer_Role.
+#   - "operational" study-conduct permissions in the EDC_Module. Grantable and
+#                   effective ONLY through an Operational_Role.
+#   - None          shared/platform codes (user/role admin, audit, CTMS, PV)
+#                   that are exempt from Designer/EDC module isolation. These
+#                   keep their existing behavior and are NOT constrained by the
+#                   module gate added in this refactor.
+#
+# The classification is the single source of truth for enforcing R10.1-R10.6:
+# PermissionService consults it to decide whether a resolved grant is permitted
+# to satisfy a required permission, defaulting to deny when it cannot be
+# confirmed that the grant's role owns the permission's module.
+
+DESIGNER_PERMISSION_CODES: frozenset[str] = frozenset(
+    {
+        "designer.study_version.read",
+        "designer.study_version.create",
+        "designer.study_version.amend",
+        "designer.version.publish",
+        "designer.form.read",
+        "designer.form.configure",
+        "designer.field.configure",
+        "designer.editcheck.configure",
+        "designer.editcheck.test",
+        "designer.codelist.read",
+        "designer.codelist.configure",
+        "designer.subject_phase.configure",
+        "designer.soa.read",
+        "designer.soa.configure",
+        "designer.cycle.configure",
+        "designer.arm.configure",
+        "designer.crf_access.configure",
+        "designer.raw_data_variable.configure",
+        "designer.coding_setting.configure",
+    }
+)
+
+# Operational (EDC) permission codes: data entry, subjects, visit instances,
+# queries, SDV, review, lock, signature, dashboards, reports, exports, and
+# operational study-info reads. These are the existing operational codes that
+# EDC routers already use; they are effective only through an Operational_Role.
+OPERATIONAL_PERMISSION_CODES: frozenset[str] = frozenset(
+    {
+        "study.read",
+        "subject.create",
+        "subject.read",
+        "subject.update",
+        "form.read",
+        "form.enter",
+        "form.submit",
+        "query.create",
+        "query.respond",
+        "query.close",
+        "query.reopen",
+        "query.cancel",
+        "sdv.manage",
+        "review.manage",
+        "lock.manage",
+        "signature.sign",
+        "data.export",
+        "file.upload",
+    }
+)
+
+
+def permission_module(code: str) -> str | None:
+    """Return the authorization module that owns a permission code.
+
+    Returns ``"designer"`` for Designer_Module codes, ``"operational"`` for
+    EDC_Module operational codes, and ``None`` for shared/platform codes that
+    are exempt from Designer/EDC module isolation.
+    """
+    if code in DESIGNER_PERMISSION_CODES:
+        return "designer"
+    if code in OPERATIONAL_PERMISSION_CODES:
+        return "operational"
+    return None
+
+
+def role_modules(
+    permission_codes: frozenset[str] | set[str] | list[str],
+) -> tuple[str, ...]:
+    """Classify which authorization modules a role owns from its codes.
+
+    A role owns the ``"designer"`` module if it grants any designer-module code
+    and the ``"operational"`` module if it grants any operational-module code.
+    A role may own neither (a purely shared/system/CTMS/PV role) or — as with
+    the built-in System Administrator — both.
+
+    The returned tuple is used to gate module-scoped permissions (Requirement
+    10): a designer code is only effective when it comes from a grant whose
+    role owns the designer module, and an operational code only from a grant
+    whose role owns the operational module. Modeling ownership as a set (rather
+    than a single module) keeps a role that legitimately spans both modules —
+    for example System Administrator — able to satisfy both module gates, while
+    a single-purpose Designer_Role or Operational_Role still owns exactly one.
+    """
+    codes = set(permission_codes)
+    modules: list[str] = []
+    if codes & DESIGNER_PERMISSION_CODES:
+        modules.append("designer")
+    if codes & OPERATIONAL_PERMISSION_CODES:
+        modules.append("operational")
+    return tuple(modules)
+
+
 ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
     "System Administrator": {
         "scope": "system",
@@ -195,6 +335,20 @@ ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
             "query.create",
             "audit.read",
         ],
+    },
+    # --- Designer / EDC module-scoped roles (Requirement 10) ---------------
+    # Designer_Role carries the full Designer_Module permission set and nothing
+    # else, so it can only authorize design-time authoring. Operational_Role
+    # carries the EDC_Module operational set and nothing else. A user may hold
+    # both; PermissionService enforces each set only within its own module
+    # scope (R10.5, R10.6).
+    "Designer_Role": {
+        "scope": "study",
+        "permissions": sorted(DESIGNER_PERMISSION_CODES),
+    },
+    "Operational_Role": {
+        "scope": "study",
+        "permissions": sorted(OPERATIONAL_PERMISSION_CODES),
     },
     "CTMS_Admin": {
         "scope": "system",

@@ -52,3 +52,7 @@ logs/
 *.pem
 *.key
 *.crt
+
+# --- Agent worktrees & task scratch ---
+.worktrees/
+**/.agents/

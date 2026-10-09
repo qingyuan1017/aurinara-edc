@@ -90,6 +90,19 @@ from app.models.ctms import (
     UUIDPrimaryKeyMixin,
     utc_now,
 )
+from app.models.designer.arm_definition import ArmDefinition
+from app.models.designer.coding_setting import CodingSetting
+from app.models.designer.crf_access_definition import CrfAccessDefinition
+from app.models.designer.cycle_definition import (
+    CycleDefinition,
+    cycle_definition_visits,
+)
+from app.models.designer.raw_data_variable_setting import RawDataVariableSetting
+from app.models.designer.schedule_of_assessment import (
+    ScheduleOfAssessment,
+    ScheduleOfAssessmentEntry,
+)
+from app.models.designer.subject_phase_definition import SubjectPhaseDefinition
 from app.models.edc.edit_check import EditCheck, ValidationResult
 from app.models.edc.form_data import (
     FieldValue,
@@ -202,6 +215,7 @@ __all__ = [
     "ActivationActionStatus",
     "ActorMetadataMixin",
     "AdverseEventRecord",
+    "ArmDefinition",
     "AuditEvent",
     "CTMSActivationAction",
     "CTMSBase",
@@ -230,6 +244,7 @@ __all__ = [
     "Codelist",
     "CodelistItem",
     "CodingDictionaryVersion",
+    "CodingSetting",
     "CodingSystem",
     "ContactStatus",
     "CoordinationConflict",
@@ -238,6 +253,8 @@ __all__ = [
     "CoordinationEventStatus",
     "CoordinationRef",
     "CorrelationMixin",
+    "CrfAccessDefinition",
+    "CycleDefinition",
     "DashboardQuery",
     "EdcAeProjection",
     "EditCheck",
@@ -313,6 +330,7 @@ __all__ = [
     "QueryStatus",
     "QueryTargetType",
     "QueryType",
+    "RawDataVariableSetting",
     "ReadinessCriterion",
     "ReadinessCriterionStatus",
     "RebuildStatus",
@@ -329,6 +347,8 @@ __all__ = [
     "SDVScopeType",
     "SDVStatus",
     "SafetyCase",
+    "ScheduleOfAssessment",
+    "ScheduleOfAssessmentEntry",
     "ScopeLevel",
     "SeriousnessAssessment",
     "SeriousnessCriterion",
@@ -350,6 +370,7 @@ __all__ = [
     "StudyVersion",
     "StudyVersionStatus",
     "Subject",
+    "SubjectPhaseDefinition",
     "SubjectStatus",
     "TaskDependency",
     "TaskEscalation",
@@ -365,5 +386,6 @@ __all__ = [
     "VisitInstance",
     "VisitInstanceStatus",
     "WhoDrugCoding",
+    "cycle_definition_visits",
     "utc_now",
 ]

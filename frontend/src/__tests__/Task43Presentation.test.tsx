@@ -111,7 +111,7 @@ describe('task 4.3 export and edit-check composition', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     mockNavigate.mockReset()
-    setUser([PERMISSIONS.DATA_EXPORT, PERMISSIONS.EDITCHECK_CONFIGURE])
+    setUser([PERMISSIONS.DATA_EXPORT, PERMISSIONS.DESIGNER_EDITCHECK_CONFIGURE])
   })
 
   it('preserves export status labels, completed downloads, and create payloads', async () => {
@@ -154,9 +154,9 @@ describe('task 4.3 export and edit-check composition', () => {
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Rule definition' }), { target: { value: '{"field":"weight","operator":"not_null"}' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save check' }))
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/studies/study-1/edit-checks', {
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/designer/studies/study-1/edit-checks', {
       name: 'Required weight', description: null, severity: 'warning', rule_json: { field: 'weight', operator: 'not_null' }, is_active: true,
     }))
-    expect(get).toHaveBeenCalledWith('/studies/study-1/edit-checks')
+    expect(get).toHaveBeenCalledWith('/designer/studies/study-1/edit-checks')
   })
 })

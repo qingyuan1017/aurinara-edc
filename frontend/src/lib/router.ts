@@ -20,8 +20,9 @@ import { NotificationsPage } from '@/features/notifications'
 import { SDVWorklistPage, ReviewWorklistPage } from '@/features/quality'
 import { StudyListPage, StudyVersioningPage } from '@/features/studies'
 import { StudyDetailPage } from '@/features/studies/StudyDetailPage'
+import { CodelistsPage, SubjectPhasesPage, ScheduleOfAssessmentPage, CyclesPage, ArmsPage, CrfAccessPage, RawDataVariablesPage, CodingSettingsPage, FormBuilderPage } from '@/features/designer'
 import { SubjectCasebookPage, SubjectListPage } from '@/features/subjects'
-import { FormBuilderPage, FormEntryPage } from '@/features/forms'
+import { FormEntryPage } from '@/features/forms'
 import { QueryListPage, QueryDetailPage } from '@/features/queries'
 import { SubjectSignaturesPage } from '@/features/signatures'
 import { VisitListPage } from '@/features/visits'
@@ -427,6 +428,46 @@ function CTMSSiteActivationRoute() {
   return createElement(CTMSWorkspacePage, { view: 'activation', siteId: params.siteId })
 }
 
+// Designer authoring routes — brand-new Designer resources, study-scoped and
+// gated server-side by designer.* permissions. Each resolves the study's open
+// draft Design_Version where the surface is version-scoped.
+const designerCodelistsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/codelists', component: () => createElement(DesignerResourceRoute, { Component: CodelistsPage }) })
+const designerSubjectPhasesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/subject-phases', component: () => createElement(DesignerResourceRoute, { Component: SubjectPhasesPage }) })
+const designerSoARoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/schedule-of-assessment', component: () => createElement(DesignerResourceRoute, { Component: ScheduleOfAssessmentPage }) })
+const designerCyclesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/cycles', component: () => createElement(DesignerResourceRoute, { Component: CyclesPage }) })
+const designerArmsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/arms', component: () => createElement(DesignerResourceRoute, { Component: ArmsPage }) })
+const designerCrfAccessRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/crf-access', component: () => createElement(DesignerResourceRoute, { Component: CrfAccessPage }) })
+const designerRawDataVariablesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/raw-data-variables', component: () => createElement(DesignerResourceRoute, { Component: RawDataVariablesPage }) })
+const designerCodingSettingsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/coding-settings', component: () => createElement(DesignerResourceRoute, { Component: CodingSettingsPage }) })
+// Study-context-scoped designer routes (sidebar entry points, mirroring the
+// edit-checks pattern). studyId is resolved from the active study context.
+const designerCodelistsCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/codelists', component: () => createElement(DesignerResourceRoute, { Component: CodelistsPage }) })
+const designerSubjectPhasesCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/subject-phases', component: () => createElement(DesignerResourceRoute, { Component: SubjectPhasesPage }) })
+const designerSoACtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/schedule-of-assessment', component: () => createElement(DesignerResourceRoute, { Component: ScheduleOfAssessmentPage }) })
+const designerCyclesCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/cycles', component: () => createElement(DesignerResourceRoute, { Component: CyclesPage }) })
+const designerArmsCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/arms', component: () => createElement(DesignerResourceRoute, { Component: ArmsPage }) })
+const designerCrfAccessCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/crf-access', component: () => createElement(DesignerResourceRoute, { Component: CrfAccessPage }) })
+const designerRawDataVariablesCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/raw-data-variables', component: () => createElement(DesignerResourceRoute, { Component: RawDataVariablesPage }) })
+const designerCodingSettingsCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/coding-settings', component: () => createElement(DesignerResourceRoute, { Component: CodingSettingsPage }) })
+// Form Builder (CRF design) and Edit Checks (CRF design) now live under the
+// Designer area, mirroring the designer resource pattern: a study-scoped route
+// and a study-context-scoped sidebar entry point. The legacy /forms,
+// /studies/$studyId/forms, /edit-checks, and /studies/$studyId/edit-checks
+// routes are kept rendering the same pages for backward compatibility.
+const designerFormsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/forms', component: () => createElement(DesignerResourceRoute, { Component: FormBuilderPage }) })
+const designerFormsCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/forms', component: () => createElement(DesignerResourceRoute, { Component: FormBuilderPage }) })
+const designerEditChecksRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/edit-checks', component: () => createElement(DesignerResourceRoute, { Component: EditCheckBuilderPage }) })
+const designerEditChecksCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/edit-checks', component: () => createElement(DesignerResourceRoute, { Component: EditCheckBuilderPage }) })
+
+function DesignerResourceRoute({ Component }: { Component: (props: { studyId: string }) => ReturnType<typeof createElement> }) {
+  const params = useParams({ strict: false })
+  const contextStudyId = useStudyContext((state) => state.selectedStudyId)
+  const studyId = params.studyId ?? contextStudyId
+  return studyId
+    ? createElement(Component, { studyId })
+    : createElement('p', { className: 'text-muted-foreground' }, 'Select a study to author designer definitions.')
+}
+
 const adminRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/admin',
@@ -471,6 +512,26 @@ const routeTree = rootRoute.addChildren([
       queryDetailRoute,
       editChecksRoute,
       studyEditChecksRoute,
+      designerCodelistsRoute,
+      designerSubjectPhasesRoute,
+      designerSoARoute,
+      designerCyclesRoute,
+      designerArmsRoute,
+      designerCrfAccessRoute,
+      designerRawDataVariablesRoute,
+      designerCodingSettingsRoute,
+      designerCodelistsCtxRoute,
+      designerSubjectPhasesCtxRoute,
+      designerSoACtxRoute,
+      designerCyclesCtxRoute,
+      designerArmsCtxRoute,
+      designerCrfAccessCtxRoute,
+      designerRawDataVariablesCtxRoute,
+      designerCodingSettingsCtxRoute,
+      designerFormsRoute,
+      designerFormsCtxRoute,
+      designerEditChecksRoute,
+      designerEditChecksCtxRoute,
       sdvRoute,
       reviewRoute,
       dataCleaningRoute,

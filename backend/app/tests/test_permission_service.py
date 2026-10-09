@@ -12,7 +12,14 @@ from uuid import UUID
 import pytest
 
 from app.core.exceptions import AuthenticationError, AuthorizationError
-from app.core.permissions import CTMS_PERMISSION_CODES, ROLE_DEFINITIONS
+from app.core.permissions import (
+    CTMS_PERMISSION_CODES,
+    DESIGNER_PERMISSION_CODES,
+    OPERATIONAL_PERMISSION_CODES,
+    ROLE_DEFINITIONS,
+    permission_module,
+    role_modules,
+)
 from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
 from app.services.shared.permission_service import PermissionService
 
@@ -450,7 +457,26 @@ class TestAuthorizationScope:
         assert scope.has_permission("form.configure", study_id=STUDY_B) is False
 
     def test_has_permission_site_grant(self):
-        """Site grant matches only its study+site."""
+        """Site grant matches only its study+site.
+
+        ``form.enter`` is an operational-module code, so the grant must carry
+        operational module ownership to satisfy the module gate (Requirement 10).
+        """
+        scope = AuthorizationScope(
+            grants=[
+                PermissionGrant(
+                    permission_code="form.enter",
+                    study_id=STUDY_A,
+                    site_id=SITE_1,
+                    role_modules=("operational",),
+                )
+            ]
+        )
+        assert scope.has_permission("form.enter", study_id=STUDY_A, site_id=SITE_1) is True
+        assert scope.has_permission("form.enter", study_id=STUDY_A, site_id=SITE_2) is False
+
+    def test_module_gate_denies_grant_without_role_module(self):
+        """A module-scoped code with no role-module ownership is denied (default-deny)."""
         scope = AuthorizationScope(
             grants=[
                 PermissionGrant(
@@ -458,8 +484,9 @@ class TestAuthorizationScope:
                 )
             ]
         )
-        assert scope.has_permission("form.enter", study_id=STUDY_A, site_id=SITE_1) is True
-        assert scope.has_permission("form.enter", study_id=STUDY_A, site_id=SITE_2) is False
+        assert (
+            scope.has_permission("form.enter", study_id=STUDY_A, site_id=SITE_1) is False
+        )
 
     def test_has_system_grant_true(self):
         """has_system_grant returns True for system-scope grants."""
@@ -530,3 +557,247 @@ class TestCTMSRoleDefinitions:
     def test_admin_contains_all_ctms_permissions(self):
         admin_permissions = set(ROLE_DEFINITIONS["CTMS_Admin"]["permissions"])
         assert admin_permissions >= CTMS_PERMISSION_CODES
+
+
+# ---------------------------------------------------------------------------
+# Tests: module-scoped separation of duties (Requirement 10)
+# ---------------------------------------------------------------------------
+#
+# Validates Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6
+#
+# A designer-module permission is effective only through a Designer_Role; an
+# operational-module permission only through an Operational_Role. Authorization
+# is evaluated server-side and defaults to deny. A single-role user is confined
+# to that one module; a both-role user has each permission set enforced only
+# within its own module scope.
+
+# A representative permission from each module used across the tests below.
+DESIGNER_PERM = "designer.form.configure"
+OPERATIONAL_PERM = "form.enter"
+
+
+def _role_with(name: str, scope: str, codes: list[str]) -> StubRole:
+    """Build a StubRole granting the given permission codes."""
+    perms = [StubRolePermission(permission=StubPermission(code=c)) for c in codes]
+    return StubRole(name=name, scope_level=scope, role_permissions=perms)
+
+
+def _make_designer_user(study_id: UUID = STUDY_A) -> StubUser:
+    """User holding only a Designer_Role scoped to a study."""
+    role = _role_with(
+        "Designer_Role", "study", sorted(DESIGNER_PERMISSION_CODES)
+    )
+    return StubUser(user_roles=[StubUserRole(role=role, study_id=study_id, site_id=None)])
+
+
+def _make_operational_user(study_id: UUID = STUDY_A) -> StubUser:
+    """User holding only an Operational_Role scoped to a study."""
+    role = _role_with(
+        "Operational_Role", "study", sorted(OPERATIONAL_PERMISSION_CODES)
+    )
+    return StubUser(user_roles=[StubUserRole(role=role, study_id=study_id, site_id=None)])
+
+
+def _make_both_role_user(study_id: UUID = STUDY_A) -> StubUser:
+    """User holding both a Designer_Role and an Operational_Role on one study."""
+    designer_role = _role_with(
+        "Designer_Role", "study", sorted(DESIGNER_PERMISSION_CODES)
+    )
+    operational_role = _role_with(
+        "Operational_Role", "study", sorted(OPERATIONAL_PERMISSION_CODES)
+    )
+    return StubUser(
+        user_roles=[
+            StubUserRole(role=designer_role, study_id=study_id, site_id=None),
+            StubUserRole(role=operational_role, study_id=study_id, site_id=None),
+        ]
+    )
+
+
+class TestPermissionModuleClassification:
+    """The static module classification is cohesive and non-overlapping."""
+
+    def test_designer_and_operational_sets_are_disjoint(self):
+        """A code never belongs to both modules."""
+        assert not (DESIGNER_PERMISSION_CODES & OPERATIONAL_PERMISSION_CODES)
+
+    def test_permission_module_classifies_designer(self):
+        for code in DESIGNER_PERMISSION_CODES:
+            assert permission_module(code) == "designer"
+
+    def test_permission_module_classifies_operational(self):
+        for code in OPERATIONAL_PERMISSION_CODES:
+            assert permission_module(code) == "operational"
+
+    def test_shared_codes_are_exempt(self):
+        """Shared/platform codes return None and are not module-gated."""
+        for code in ("user.list", "audit.read", "ctms.operational_data_read"):
+            assert permission_module(code) is None
+
+    def test_role_modules_single_and_both(self):
+        assert role_modules(DESIGNER_PERMISSION_CODES) == ("designer",)
+        assert role_modules(OPERATIONAL_PERMISSION_CODES) == ("operational",)
+        both = role_modules(DESIGNER_PERMISSION_CODES | OPERATIONAL_PERMISSION_CODES)
+        assert set(both) == {"designer", "operational"}
+        assert role_modules({"user.list", "audit.read"}) == ()
+
+
+class TestModuleScopedRoleSeeding:
+    """Designer_Role and Operational_Role are seeded with the right codes (R10.1)."""
+
+    def test_designer_role_holds_only_designer_codes(self):
+        perms = set(ROLE_DEFINITIONS["Designer_Role"]["permissions"])
+        assert perms == set(DESIGNER_PERMISSION_CODES)
+        assert not (perms & OPERATIONAL_PERMISSION_CODES)
+
+    def test_operational_role_holds_only_operational_codes(self):
+        perms = set(ROLE_DEFINITIONS["Operational_Role"]["permissions"])
+        assert perms == set(OPERATIONAL_PERMISSION_CODES)
+        assert not (perms & DESIGNER_PERMISSION_CODES)
+
+
+class TestDesignerPermissionRequiresDesignerRole:
+    """A designer permission is grantable/effective only through a Designer_Role."""
+
+    def test_designer_role_grants_designer_permission(self, svc: PermissionService):
+        user = _make_designer_user(STUDY_A)
+        svc.require(user, DESIGNER_PERM, study_id=STUDY_A)
+
+    def test_operational_role_cannot_grant_designer_permission(self, svc: PermissionService):
+        """An operational-only user is denied every designer permission (R10.2, R10.5)."""
+        user = _make_operational_user(STUDY_A)
+        for code in DESIGNER_PERMISSION_CODES:
+            with pytest.raises(AuthorizationError):
+                svc.require(user, code, study_id=STUDY_A)
+
+    def test_module_ownership_is_derived_from_codes_not_role_name(
+        self, svc: PermissionService
+    ):
+        """Module ownership follows the codes a role grants, not its name.
+
+        A role granting only operational codes owns only the operational module
+        regardless of its name, so it cannot authorize any designer permission.
+        """
+        role = _role_with("Misnamed Designer_Role", "study", [OPERATIONAL_PERM])
+        user = StubUser(
+            user_roles=[StubUserRole(role=role, study_id=STUDY_A, site_id=None)]
+        )
+        svc.require(user, OPERATIONAL_PERM, study_id=STUDY_A)
+        with pytest.raises(AuthorizationError):
+            svc.require(user, DESIGNER_PERM, study_id=STUDY_A)
+
+
+class TestOperationalPermissionRequiresOperationalRole:
+    """An operational permission is grantable/effective only through an Operational_Role."""
+
+    def test_operational_role_grants_operational_permission(self, svc: PermissionService):
+        user = _make_operational_user(STUDY_A)
+        svc.require(user, OPERATIONAL_PERM, study_id=STUDY_A)
+
+    def test_designer_role_cannot_grant_operational_permission(self, svc: PermissionService):
+        """A designer-only user is denied every operational permission (R10.3, R10.5)."""
+        user = _make_designer_user(STUDY_A)
+        for code in OPERATIONAL_PERMISSION_CODES:
+            with pytest.raises(AuthorizationError):
+                svc.require(user, code, study_id=STUDY_A)
+
+
+class TestDefaultDeny:
+    """Authorization defaults to deny when it cannot be confirmed (R10.4)."""
+
+    def test_user_without_module_role_denied_designer(self, svc: PermissionService):
+        """A user with no module role is denied a designer permission."""
+        user = StubUser(user_roles=[])
+        with pytest.raises(AuthorizationError):
+            svc.require(user, DESIGNER_PERM, study_id=STUDY_A)
+
+    def test_user_without_module_role_denied_operational(self, svc: PermissionService):
+        """A user with no module role is denied an operational permission."""
+        user = StubUser(user_roles=[])
+        with pytest.raises(AuthorizationError):
+            svc.require(user, OPERATIONAL_PERM, study_id=STUDY_A)
+
+    def test_shared_role_does_not_satisfy_module_permission(self, svc: PermissionService):
+        """A role holding only shared codes cannot satisfy a module permission."""
+        role = _role_with("Shared", "study", ["audit.read", "user.list"])
+        user = StubUser(
+            user_roles=[StubUserRole(role=role, study_id=STUDY_A, site_id=None)]
+        )
+        with pytest.raises(AuthorizationError):
+            svc.require(user, DESIGNER_PERM, study_id=STUDY_A)
+        with pytest.raises(AuthorizationError):
+            svc.require(user, OPERATIONAL_PERM, study_id=STUDY_A)
+
+    def test_scope_mismatch_still_denies_module_permission(self, svc: PermissionService):
+        """A designer role on another study does not authorize this study (R10.4)."""
+        user = _make_designer_user(STUDY_A)
+        with pytest.raises(AuthorizationError):
+            svc.require(user, DESIGNER_PERM, study_id=STUDY_B)
+
+
+class TestSingleRoleModuleIsolation:
+    """A single-role user is confined to that one module (R10.5)."""
+
+    def test_designer_only_user_isolated(self, svc: PermissionService):
+        user = _make_designer_user(STUDY_A)
+        # Allowed in its own module.
+        svc.require(user, DESIGNER_PERM, study_id=STUDY_A)
+        # Denied all operational-module permissions.
+        with pytest.raises(AuthorizationError):
+            svc.require(user, OPERATIONAL_PERM, study_id=STUDY_A)
+
+    def test_operational_only_user_isolated(self, svc: PermissionService):
+        user = _make_operational_user(STUDY_A)
+        svc.require(user, OPERATIONAL_PERM, study_id=STUDY_A)
+        with pytest.raises(AuthorizationError):
+            svc.require(user, DESIGNER_PERM, study_id=STUDY_A)
+
+
+class TestBothRoleModuleIsolation:
+    """A both-role user has each set enforced only within its own module (R10.6)."""
+
+    def test_both_roles_each_scoped_to_own_module(self, svc: PermissionService):
+        user = _make_both_role_user(STUDY_A)
+        # Each role authorizes its own module.
+        svc.require(user, DESIGNER_PERM, study_id=STUDY_A)
+        svc.require(user, OPERATIONAL_PERM, study_id=STUDY_A)
+
+    def test_both_roles_do_not_cross_authorize(self, svc: PermissionService):
+        """Neither role's grants leak into the other module's codes.
+
+        Build a both-role user whose designer role is scoped to STUDY_A and
+        operational role to STUDY_B. A designer permission must only resolve on
+        STUDY_A, and an operational permission only on STUDY_B — one role never
+        authorizes an action in the other module/scope."""
+        designer_role = _role_with(
+            "Designer_Role", "study", sorted(DESIGNER_PERMISSION_CODES)
+        )
+        operational_role = _role_with(
+            "Operational_Role", "study", sorted(OPERATIONAL_PERMISSION_CODES)
+        )
+        user = StubUser(
+            user_roles=[
+                StubUserRole(role=designer_role, study_id=STUDY_A, site_id=None),
+                StubUserRole(role=operational_role, study_id=STUDY_B, site_id=None),
+            ]
+        )
+        # Designer permission resolves only on STUDY_A.
+        svc.require(user, DESIGNER_PERM, study_id=STUDY_A)
+        with pytest.raises(AuthorizationError):
+            svc.require(user, DESIGNER_PERM, study_id=STUDY_B)
+        # Operational permission resolves only on STUDY_B.
+        svc.require(user, OPERATIONAL_PERM, study_id=STUDY_B)
+        with pytest.raises(AuthorizationError):
+            svc.require(user, OPERATIONAL_PERM, study_id=STUDY_A)
+
+    def test_both_role_grants_carry_distinct_module_ownership(self, svc: PermissionService):
+        """resolve_scope tags designer grants designer-owned and operational
+        grants operational-owned, so no single grant spans both modules."""
+        user = _make_both_role_user(STUDY_A)
+        scope = svc.resolve_scope(user)
+        for grant in scope.grants:
+            module = permission_module(grant.permission_code)
+            if module == "designer":
+                assert grant.role_modules == ("designer",)
+            elif module == "operational":
+                assert grant.role_modules == ("operational",)

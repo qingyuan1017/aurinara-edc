@@ -23,7 +23,7 @@ describe('AI assistant', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     useAuthStore.setState({
-      user: { id: 'user-1', email: 'dm@example.com', first_name: 'Data', last_name: 'Manager', roles: [], permissions: ['form.read', 'editcheck.configure', 'form.enter'] },
+      user: { id: 'user-1', email: 'dm@example.com', first_name: 'Data', last_name: 'Manager', roles: [], permissions: ['form.read', 'designer.editcheck.configure', 'form.enter'] },
       isAuthenticated: true,
     })
     useStudyContext.setState({ selectedStudyId: 'study-1', selectedSiteId: 'site-1' })

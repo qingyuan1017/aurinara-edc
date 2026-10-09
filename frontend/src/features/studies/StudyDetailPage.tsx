@@ -46,7 +46,7 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
 export function StudyDetailPage({ studyId }: { studyId: string }) {
   const queryClient = useQueryClient()
   const canConfigure = usePermission(PERMISSIONS.STUDY_CONFIGURE)
-  const canPublish = usePermission(PERMISSIONS.VERSION_PUBLISH)
+  const canPublish = usePermission(PERMISSIONS.DESIGNER_VERSION_PUBLISH)
 
   const { data: study, isLoading } = useQuery({
     queryKey: ['study', studyId],
@@ -75,7 +75,7 @@ export function StudyDetailPage({ studyId }: { studyId: string }) {
   })
 
   const publishMutation = useMutation({
-    mutationFn: (versionId: string) => api.post(`/versions/${versionId}/publish`),
+    mutationFn: (versionId: string) => api.post(`/designer/versions/${versionId}/publish`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['study-versions', studyId] }),
   })
 

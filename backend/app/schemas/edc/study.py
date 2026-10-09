@@ -1,13 +1,15 @@
-"""Study and Study Version Pydantic schemas.
+"""Study Pydantic schemas, with design-time version schemas re-exported.
+
+Study (identity) schemas stay here; the Design_Version schemas were reassigned
+to the Designer module (``app.schemas.designer.study_version``) and are
+re-exported below so existing imports keep working (R11.1).
 
 Satisfies Requirements:
   - 4.1: Study metadata — code, protocol number, title, sponsor, phase,
           therapeutic area, indication, status.
   - 4.2: Globally unique study code (validated at service layer).
   - 4.3: Study status transitions (enforced at service layer).
-  - 5.1: Study versions with draft/published lifecycle.
-  - 5.2: Immutability of published versions.
-  - 5.3: Amendment creation with reason.
+  - 11.1: Ownership reassignment with no stored-value changes.
   - 21.2: List endpoints return pagination envelope.
 """
 
@@ -18,6 +20,15 @@ from uuid import UUID
 from pydantic import Field
 
 from app.models.edc.study import StudyStatus
+
+# Design_Version schemas are owned by the Designer module. Re-exported here for
+# backward compatibility and to resolve the ``StudyResponse.versions`` forward
+# reference within this module's namespace.
+from app.schemas.designer.study_version import (
+    StudyAmendmentCreate,
+    StudyVersionCreate,
+    StudyVersionResponse,
+)
 from app.schemas.shared.base import (
     BaseCreateSchema,
     BaseSchema,
@@ -77,33 +88,15 @@ class StudyResponse(BaseSchema):
     versions: list[StudyVersionResponse] = Field(default_factory=list)
 
 
-# ---------------------------------------------------------------------------
-# Study Version schemas (Requirement 5)
-# ---------------------------------------------------------------------------
-
-
-class StudyVersionCreate(BaseCreateSchema):
-    """Schema for creating a new draft Study_Version."""
-
-    version_number: str
-    amendment_reason: str | None = None
-
-
-class StudyAmendmentCreate(BaseCreateSchema):
-    """Request body for creating an amendment from a published version."""
-
-    reason: str = Field(..., min_length=1, max_length=10_000)
-
-
-class StudyVersionResponse(BaseSchema):
-    """Response schema for a Study_Version."""
-
-    id: UUID
-    study_id: UUID
-    version_number: str
-    status: str
-    amendment_reason: str | None = None
-    amended_from_version_id: UUID | None = None
-    published_at: UtcDatetime | None = None
-    published_by: UUID | None = None
-    created_at: UtcDatetime
+# Backward-compatible public surface. The Design_Version schemas
+# (``StudyVersionCreate``, ``StudyAmendmentCreate``, ``StudyVersionResponse``)
+# are owned by ``app.schemas.designer.study_version`` and re-exported above.
+__all__ = [
+    "StudyAmendmentCreate",
+    "StudyCreate",
+    "StudyResponse",
+    "StudyStatusTransition",
+    "StudyUpdate",
+    "StudyVersionCreate",
+    "StudyVersionResponse",
+]

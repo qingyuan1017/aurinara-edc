@@ -79,7 +79,7 @@ class TestSystemQueryGenerationProperty:
         query_service.create_query = AsyncMock()
         service = EditCheckService(query_service_instance=query_service)
 
-        with patch("app.services.edc.edit_check_service.audit_service") as audit:
+        with patch("app.services.designer.edit_check_service.audit_service") as audit:
             audit.record = AsyncMock()
             result = await service.evaluate_edit_check(
                 session,

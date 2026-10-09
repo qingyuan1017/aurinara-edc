@@ -30,7 +30,7 @@ describe('StudyVersioningPage shared composition', () => {
         first_name: 'Study',
         last_name: 'Manager',
         roles: [],
-        permissions: ['study.configure', 'version.publish'],
+        permissions: ['designer.study_version.amend', 'designer.version.publish'],
       },
       isAuthenticated: true,
     })

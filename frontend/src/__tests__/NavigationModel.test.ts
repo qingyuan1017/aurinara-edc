@@ -35,6 +35,7 @@ describe('navigation model adapter', () => {
       'study-data',
       'data-quality',
       'operations',
+      'designer',
       'administration',
     ]))
   })

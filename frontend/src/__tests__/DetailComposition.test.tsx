@@ -21,7 +21,7 @@ function authenticate(permissions: string[]) {
 }
 
 describe('detail, casebook, audit, and notification composition', () => {
-  beforeEach(() => authenticate([PERMISSIONS.STUDY_CONFIGURE, PERMISSIONS.VERSION_PUBLISH, PERMISSIONS.USER_CREATE, PERMISSIONS.USER_DEACTIVATE]))
+  beforeEach(() => authenticate([PERMISSIONS.STUDY_CONFIGURE, PERMISSIONS.DESIGNER_VERSION_PUBLISH, PERMISSIONS.USER_CREATE, PERMISSIONS.USER_DEACTIVATE]))
   afterEach(() => {
     vi.restoreAllMocks()
     useAuthStore.setState({ user: null, isAuthenticated: false })
@@ -44,7 +44,7 @@ describe('detail, casebook, audit, and notification composition', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Versions' }))
     expect(await screen.findByText('v1.0')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/versions/version-1/publish'))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/designer/versions/version-1/publish'))
   })
 
   it('preserves casebook routes and clinical status ownership in the shared composition', async () => {

@@ -20,6 +20,13 @@ class Module(StrEnum):
 
     EDC = "EDC"
     CTMS = "CTMS"
+    # DESIGNER is the design-time module split out of the historical combined
+    # EDC capability (Designer / EDC refactor). Designer_Definitions (study
+    # versions, visit/form/field definitions, codelists, edit checks, phases,
+    # SoA, cycles, arms, CRF access, raw-data variables, coding settings) are
+    # owned by this module, so their audit events carry ``Module.DESIGNER`` as
+    # the owning module scope (R1.7). Operational_Records remain ``Module.EDC``.
+    DESIGNER = "DESIGNER"
     # PV is a third co-equal module. It is listed here so the shared platform
     # primitives (audit content owner, optional AI controls) can name the PV
     # module without forking a second enum. PV-owned safety records still live

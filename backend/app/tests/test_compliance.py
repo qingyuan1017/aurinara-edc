@@ -449,10 +449,19 @@ class TestScopeEnforcementVerification:
         assert missing == set(), f"PERMISSION_CODES missing expected codes: {missing}"
 
     def test_permission_codes_are_stable_format(self):
-        """All permission codes must follow the domain.action format."""
+        """All permission codes follow the domain.action format.
+
+        Module-scoped Designer codes introduced by the Designer / EDC refactor
+        use a three-segment ``module.domain.action`` form (for example
+        ``designer.form.configure``); the shared/operational codes keep the
+        original two-segment ``domain.action`` form. Both are accepted.
+        """
         for code in PERMISSION_CODES:
             parts = code.split(".")
-            assert len(parts) == 2, f"Permission code '{code}' does not follow domain.action format"
+            assert len(parts) in (2, 3), (
+                f"Permission code '{code}' does not follow a domain.action or "
+                "module.domain.action format"
+            )
             assert all(p.isalpha() or "_" in p for p in parts), (
                 f"Permission code '{code}' contains invalid characters"
             )
@@ -469,24 +478,28 @@ class TestAuditCompleteness:
     Validates: Requirements 18.1, 10.8, 25.6, 26.4
     """
 
-    # Services that perform clinical data mutations and MUST call audit_service.record
-    CLINICAL_SERVICES: ClassVar[list[str]] = [
-        "data_capture_service.py",
-        "subject_service.py",
-        "query_service.py",
-        "study_service.py",
-        "site_service.py",
-        "visit_service.py",
-        "form_metadata_service.py",
-    ]
+    # Services that mutate data and MUST call audit_service.record, mapped to the
+    # service package that owns them. ``form_metadata_service`` was reassigned to
+    # the Designer module (Designer / EDC refactor), so it is resolved from
+    # ``services/designer`` while the operational services stay under
+    # ``services/edc``.
+    AUDITED_SERVICES: ClassVar[dict[str, str]] = {
+        "data_capture_service.py": "edc",
+        "subject_service.py": "edc",
+        "query_service.py": "edc",
+        "study_service.py": "edc",
+        "site_service.py": "edc",
+        "visit_service.py": "edc",
+        "form_metadata_service.py": "designer",
+    }
 
     def test_clinical_services_call_audit_record(self):
         """Each clinical-mutating service must reference audit_service.record."""
-        services_dir = Path(__file__).parents[1] / "services" / "edc"
+        services_root = Path(__file__).parents[1] / "services"
 
         violations = []
-        for service_filename in self.CLINICAL_SERVICES:
-            service_path = services_dir / service_filename
+        for service_filename, package in self.AUDITED_SERVICES.items():
+            service_path = services_root / package / service_filename
             if not service_path.exists():
                 violations.append(f"{service_filename}: file not found")
                 continue

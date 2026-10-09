@@ -36,7 +36,7 @@ from app.schemas.edc.form_metadata import (
     FormSectionCreate,
     FormSectionUpdate,
 )
-from app.services.edc.form_metadata_service import (
+from app.services.designer.form_metadata_service import (
     FormMetadataService,
     form_metadata_service,
 )
@@ -121,6 +121,30 @@ def _make_codelist(study_version_id: uuid.UUID | None = None) -> Codelist:
     )
 
 
+def _stub_reload(mock_session, *, of_type=None, obj=None) -> None:
+    """Wire ``session.execute(...).scalars().one()`` to the reloaded entity.
+
+    The create/update service methods re-load the entity with its relationships
+    eagerly populated before returning, so response serialization emits no lazy
+    load. With a mock session, return either an explicit ``obj`` or the first
+    ``session.add`` instance of ``of_type``.
+    """
+
+    def _execute(*_args, **_kwargs):
+        resolved = obj
+        if resolved is None:
+            for call in mock_session.add.call_args_list:
+                candidate = call[0][0]
+                if of_type is None or isinstance(candidate, of_type):
+                    resolved = candidate
+                    break
+        result = MagicMock()
+        result.scalars.return_value.one.return_value = resolved
+        return result
+
+    mock_session.execute = AsyncMock(side_effect=_execute)
+
+
 # ---------------------------------------------------------------------------
 # Form definitions — Req 9.1
 # ---------------------------------------------------------------------------
@@ -132,8 +156,11 @@ class TestCreateForm:
         data = FormDefinitionCreate(
             name="Adverse Events", form_code="AE", display_order=0, is_repeating=True
         )
+        # create_form re-loads the form with its relationships before returning,
+        # so the serializer never emits a lazy load. Return the added instance.
+        _stub_reload(mock_session, of_type=FormDefinition)
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             form = await service.create_form(mock_session, version, data, actor_id)
 
@@ -157,8 +184,9 @@ class TestCreateForm:
     ):
         version = _make_version(StudyVersionStatus.draft)
         data = FormDefinitionCreate(name="AE", form_code="AE", display_order=0)
+        _stub_reload(mock_session, of_type=FormDefinition)
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.create_form(mock_session, version, data, actor_id)
 
@@ -176,7 +204,7 @@ class TestUpdateForm:
         form = _make_form(version.id)
         data = FormDefinitionUpdate(name="AE (renamed)", display_order=3)
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.update_form(
                 mock_session, version, form, data, actor_id
@@ -205,7 +233,7 @@ class TestDeleteForm:
         version = _make_version(StudyVersionStatus.draft)
         form = _make_form(version.id)
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.delete_form(mock_session, version, form, actor_id)
 
@@ -238,7 +266,7 @@ class TestReorderForms:
             patch.object(
                 service, "list_forms", AsyncMock(return_value=[f1, f2, f3])
             ),
-            patch("app.services.edc.form_metadata_service.audit_service") as mock_audit,
+            patch("app.services.designer.form_metadata_service.audit_service") as mock_audit,
         ):
             mock_audit.record = AsyncMock()
             result = await service.reorder_forms(
@@ -284,8 +312,9 @@ class TestSections:
         version = _make_version(StudyVersionStatus.draft)
         form = _make_form(version.id)
         data = FormSectionCreate(name="Demographics", display_order=1)
+        _stub_reload(mock_session, of_type=FormSection)
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             section = await service.create_section(
                 mock_session, version, form, data, actor_id
@@ -314,8 +343,10 @@ class TestSections:
         version = _make_version(StudyVersionStatus.draft)
         section = _make_section()
         data = FormSectionUpdate(name="Renamed")
+        # update_section mutates then re-loads; return the same section instance.
+        _stub_reload(mock_session, obj=section)
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.update_section(
                 mock_session, version, section, data, actor_id
@@ -333,7 +364,7 @@ class TestSections:
 
         with (
             patch.object(service, "list_sections", AsyncMock(return_value=[s1, s2])),
-            patch("app.services.edc.form_metadata_service.audit_service") as mock_audit,
+            patch("app.services.designer.form_metadata_service.audit_service") as mock_audit,
         ):
             mock_audit.record = AsyncMock()
             result = await service.reorder_sections(
@@ -379,7 +410,7 @@ class TestCreateField:
             calculation_expression=None,
         )
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             field = await service.create_field(
                 mock_session, version, section, data, actor_id
@@ -421,7 +452,7 @@ class TestCreateField:
             display_order=0,
         )
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             field = await service.create_field(
                 mock_session, version, section, data, actor_id
@@ -458,7 +489,7 @@ class TestUpdateDeleteField:
             label="Updated Label", control_type=ControlType.textarea
         )
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.update_field(
                 mock_session, version, field, data, actor_id
@@ -472,7 +503,7 @@ class TestUpdateDeleteField:
         version = _make_version(StudyVersionStatus.draft)
         field = _make_field()
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.delete_field(mock_session, version, field, actor_id)
 
@@ -488,7 +519,7 @@ class TestUpdateDeleteField:
 
         with (
             patch.object(service, "list_fields", AsyncMock(return_value=[f1, f2])),
-            patch("app.services.edc.form_metadata_service.audit_service") as mock_audit,
+            patch("app.services.designer.form_metadata_service.audit_service") as mock_audit,
         ):
             mock_audit.record = AsyncMock()
             result = await service.reorder_fields(
@@ -518,8 +549,9 @@ class TestCodelists:
                 CodelistItemCreate(code="2", label="Moderate", display_order=1),
             ],
         )
+        _stub_reload(mock_session, of_type=Codelist)
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             codelist = await service.create_codelist(
                 mock_session, version, data, actor_id
@@ -552,7 +584,7 @@ class TestCodelists:
             normal_high=Decimal("16.0"),
         )
 
-        with patch("app.services.edc.form_metadata_service.audit_service") as mock_audit:
+        with patch("app.services.designer.form_metadata_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             item = await service.add_codelist_item(
                 mock_session, version, codelist, data, actor_id

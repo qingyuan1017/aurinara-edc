@@ -17,7 +17,7 @@ vi.mock('@tanstack/react-router', () => ({
   useLocation: () => ({ pathname: '/', search: {}, hash: '' }),
 }))
 
-const edcNavigation = ['Dashboard', 'Studies', 'Sites', 'Subjects', 'Forms', 'Queries', 'Data Cleaning', 'SDV Worklist', 'Clinical Review', 'Edit Checks', 'AI Assistant', 'Notifications', 'Exports', 'Admin', 'Audit Trail']
+const edcNavigation = ['Dashboard', 'Studies', 'Sites', 'Subjects', 'Form Builder', 'Queries', 'Data Cleaning', 'SDV Worklist', 'Clinical Review', 'Edit Checks', 'AI Assistant', 'Notifications', 'Exports', 'Admin', 'Audit Trail']
 
 function renderShell(capability: { enabled: boolean; phase: 0 | 1 | 2 | 3 }) {
   useAuthStore.setState({

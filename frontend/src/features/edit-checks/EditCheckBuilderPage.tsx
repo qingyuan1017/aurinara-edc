@@ -38,7 +38,7 @@ export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
 
   const checksQuery = useQuery({
     queryKey: ['edit-checks', studyId],
-    queryFn: async () => (await api.get<EditCheck[]>(`/studies/${studyId}/edit-checks`)).data,
+    queryFn: async () => (await api.get<EditCheck[]>(`/designer/studies/${studyId}/edit-checks`)).data,
   })
   const selected = useMemo(() => checksQuery.data?.find((item) => item.id === selectedId), [checksQuery.data, selectedId])
 
@@ -64,8 +64,8 @@ export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
       if (!name.trim()) throw new Error('A check name is required.')
       const payload = { name: name.trim(), description: description.trim() || null, severity, rule_json: rule, is_active: true }
       return selectedId
-        ? api.patch<EditCheck>(`/edit-checks/${selectedId}`, payload)
-        : api.post<EditCheck>(`/studies/${studyId}/edit-checks`, payload)
+        ? api.patch<EditCheck>(`/designer/edit-checks/${selectedId}`, payload)
+        : api.post<EditCheck>(`/designer/studies/${studyId}/edit-checks`, payload)
     },
     onSuccess: ({ data }) => {
       client.invalidateQueries({ queryKey: ['edit-checks', studyId] })
@@ -86,7 +86,7 @@ export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
       } catch {
         throw new Error('Sample data must be valid JSON.')
       }
-      return api.post<{ passed: boolean; matched: boolean }>(`/edit-checks/${selectedId}/test`, { sample_data: sampleData })
+      return api.post<{ passed: boolean; matched: boolean }>(`/designer/edit-checks/${selectedId}/test`, { sample_data: sampleData })
     },
     onSuccess: ({ data }) => {
       setError('')
@@ -96,13 +96,13 @@ export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
   })
 
   const run = useMutation({
-    mutationFn: () => api.post(`/studies/${studyId}/edit-checks/run`),
+    mutationFn: () => api.post(`/designer/studies/${studyId}/edit-checks/run`),
     onSuccess: ({ data }) => setMessage(`Validation run complete: ${data.evaluated_form_instances} forms evaluated, ${data.failed_checks} failed checks.`),
     onError: () => setError('Could not run edit checks for this study.'),
   })
 
   return (
-    <PermissionGuard permission={PERMISSIONS.EDITCHECK_CONFIGURE} studyId={studyId}>
+    <PermissionGuard permission={PERMISSIONS.DESIGNER_EDITCHECK_CONFIGURE} studyId={studyId}>
       <PageContainer wide>
         <PageHeader
           title="Edit-check builder"

@@ -1,8 +1,16 @@
-"""Edit-check definition and runtime evaluation routes.
+"""Edit-check authoring and design-time testing routes — Designer-owned.
 
-The routes keep authorization and study-version ownership server-side while
- delegating validation, persistence, and evaluation to ``EditCheckService``.
-Satisfies Requirements 12.1, 12.4, 12.5, and 21.1.
+Moved from ``app.api.routes.edc.edit_checks`` as part of the Designer / EDC
+refactor. These handlers own declarative edit-check authoring (create/update)
+and design-time rule testing, delegating validation, persistence, and
+evaluation to the Designer ``edit_check_service``. The runtime ``run`` endpoint
+is retained so authored checks can be evaluated against captured form instances.
+
+Authorization and study-version ownership are enforced server-side.
+
+Satisfies Requirements:
+  - 5.1: Validate and persist declarative edit-check rules on a Design_Version.
+  - 5.3: Test a rule against a provided case with no operational side effects.
 """
 
 from __future__ import annotations
@@ -16,10 +24,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, get_permission_service
 from app.core.exceptions import NotFoundError
-from app.models.edc.edit_check import EditCheck, ValidationResult
+from app.models.designer.edit_check import EditCheck, ValidationResult
+from app.models.designer.study_version import StudyVersion, StudyVersionStatus
 from app.models.edc.form_data import FormInstance
 from app.models.edc.form_metadata import FormDefinition
-from app.models.edc.study import StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject
 from app.models.shared.identity import User
 from app.schemas.edc.edit_check import (
@@ -32,7 +40,7 @@ from app.schemas.edc.edit_check import (
     EditCheckUpdate,
     ValidationResultResponse,
 )
-from app.services.edc.edit_check_service import edit_check_service
+from app.services.designer.edit_check_service import edit_check_service
 from app.services.edc.study_service import study_service
 from app.services.shared.permission_service import PermissionService
 
@@ -40,8 +48,8 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 PermissionSvc = Annotated[PermissionService, Depends(get_permission_service)]
 
-study_router = APIRouter(prefix="/studies", tags=["edit-checks"])
-router = APIRouter(prefix="/edit-checks", tags=["edit-checks"])
+study_router = APIRouter(prefix="/studies", tags=["designer-edit-checks"])
+router = APIRouter(prefix="/edit-checks", tags=["designer-edit-checks"])
 
 
 async def _get_version(
@@ -66,7 +74,11 @@ async def _get_version(
     )
     version = result.scalars().first()
     if version is None:
-        message = "Study version not found" if study_version_id else "No draft study version found for this study"
+        message = (
+            "Study version not found"
+            if study_version_id
+            else "No draft study version found for this study"
+        )
         raise NotFoundError(
             message,
             details={
@@ -95,14 +107,19 @@ def _require_access(
     current_user: User,
     permission_service: PermissionService,
     study_id: UUID,
+    permission: str = "designer.editcheck.configure",
 ) -> None:
-    """Enforce the permission against the owning study, not just globally."""
-    permission_service.require(current_user, "editcheck.configure", study_id=study_id)
+    """Enforce a Designer_Module edit-check permission against the owning study.
+
+    Defaults to ``designer.editcheck.configure`` (authoring/evaluation); the
+    design-time rule-testing endpoint passes ``designer.editcheck.test``. Both
+    are Designer_Module codes, so only a Designer_Role can satisfy them
+    (Requirement 10).
+    """
+    permission_service.require(current_user, permission, study_id=study_id)
 
 
-@study_router.get(
-    "/{study_id}/edit-checks", response_model=list[EditCheckResponse]
-)
+@study_router.get("/{study_id}/edit-checks", response_model=list[EditCheckResponse])
 async def list_edit_checks(
     study_id: UUID,
     session: DbSession,
@@ -122,9 +139,7 @@ async def list_edit_checks(
 
 
 @study_router.post(
-    "/{study_id}/edit-checks",
-    response_model=EditCheckResponse,
-    status_code=201,
+    "/{study_id}/edit-checks", response_model=EditCheckResponse, status_code=201
 )
 async def create_edit_check(
     study_id: UUID,
@@ -187,21 +202,23 @@ async def test_edit_check(
 ) -> EditCheckTestResponse:
     """Evaluate sample data without creating clinical or validation records."""
     check, version = await _get_check_version(session, edit_check_id)
-    _require_access(current_user, permission_service, version.study_id)
-    outcome = edit_check_service.test(check.rule_json, body.sample_data)
+    _require_access(
+        current_user,
+        permission_service,
+        version.study_id,
+        permission="designer.editcheck.test",
+    )
+    result = edit_check_service.test_edit_check(check, body.sample_data)
     return EditCheckTestResponse(
         edit_check_id=check.id,
-        outcome=outcome,
-        matched=outcome,
-        passed=not outcome,
-        persisted=False,
+        outcome=result.outcome,
+        matched=result.matched,
+        passed=result.passed,
+        persisted=result.persisted,
     )
 
 
-@study_router.post(
-    "/{study_id}/edit-checks/run",
-    response_model=EditCheckRunResponse,
-)
+@study_router.post("/{study_id}/edit-checks/run", response_model=EditCheckRunResponse)
 async def run_edit_checks(
     study_id: UUID,
     session: DbSession,

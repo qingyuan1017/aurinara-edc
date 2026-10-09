@@ -20,7 +20,7 @@ describe('Phase 2 workflow controls', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     useAuthStore.setState({
-      user: { id: 'user-1', email: 'dm@example.com', first_name: 'Data', last_name: 'Manager', roles: [], permissions: ['lock.manage', 'file.upload', 'query.respond', 'query.close', 'query.reopen', 'sdv.manage', 'review.manage', 'editcheck.configure'] },
+      user: { id: 'user-1', email: 'dm@example.com', first_name: 'Data', last_name: 'Manager', roles: [], permissions: ['lock.manage', 'file.upload', 'query.respond', 'query.close', 'query.reopen', 'sdv.manage', 'review.manage', 'designer.editcheck.configure'] },
       isAuthenticated: true,
     })
   })
@@ -156,7 +156,7 @@ describe('Phase 2 workflow controls', () => {
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Rule definition' }), { target: { value: '{"field":"weight","operator":"not_null"}' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save check' }))
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/studies/study-1/edit-checks', {
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/designer/studies/study-1/edit-checks', {
       name: 'Required weight', description: null, severity: 'warning', rule_json: { field: 'weight', operator: 'not_null' }, is_active: true,
     }))
   })

@@ -42,11 +42,21 @@ async def db_session(async_engine):
 
 @pytest.fixture
 async def seeded(db_session: AsyncSession):
+    # Designer edit-check routes now use the module-scoped Designer_Module
+    # codes (Requirement 10). Seed both so the Designer_Role can author and
+    # test rules.
     permission = Permission(
-        id=uuid.uuid4(), code="editcheck.configure", description="Configure edit checks"
+        id=uuid.uuid4(),
+        code="designer.editcheck.configure",
+        description="Configure edit checks",
+    )
+    test_permission = Permission(
+        id=uuid.uuid4(),
+        code="designer.editcheck.test",
+        description="Test edit checks",
     )
     role = Role(
-        id=uuid.uuid4(), name="Data Manager", scope_level="system", is_system=True
+        id=uuid.uuid4(), name="Designer_Role", scope_level="system", is_system=True
     )
     user = User(
         id=uuid.uuid4(),
@@ -58,11 +68,12 @@ async def seeded(db_session: AsyncSession):
         mfa_enabled=False,
         last_activity=datetime.now(UTC),
     )
-    db_session.add_all([permission, role, user])
+    db_session.add_all([permission, test_permission, role, user])
     await db_session.flush()
     db_session.add_all(
         [
             RolePermission(role_id=role.id, permission_id=permission.id),
+            RolePermission(role_id=role.id, permission_id=test_permission.id),
             UserRole(user_id=user.id, role_id=role.id),
         ]
     )
@@ -113,6 +124,9 @@ async def seeded(db_session: AsyncSession):
         id=uuid.uuid4(),
         subject_id=subject.id,
         form_definition_id=form_definition.id,
+        # design_version_id is now not-null (bound published design, R2.7/R7.3);
+        # bind the operational record to the seeded version.
+        design_version_id=version.id,
         data_jsonb={"age": 21},
         created_at=datetime.now(UTC),
     )
@@ -168,7 +182,7 @@ class TestEditCheckRoutes:
     async def test_crud_and_study_version_lookup(self, client, seeded, db_session):
         headers = auth(seeded["user"])
         created = await client.post(
-            f"/api/v1/studies/{seeded['study'].id}/edit-checks",
+            f"/api/v1/designer/studies/{seeded['study'].id}/edit-checks",
             params={"study_version_id": str(seeded["version"].id)},
             json={"name": "Adult age", "rule_json": RULE, "severity": "warning"},
             headers=headers,
@@ -178,16 +192,18 @@ class TestEditCheckRoutes:
         assert created.json()["study_version_id"] == str(seeded["version"].id)
 
         listed = await client.get(
-            f"/api/v1/studies/{seeded['study'].id}/edit-checks", headers=headers
+            f"/api/v1/designer/studies/{seeded['study'].id}/edit-checks", headers=headers
         )
         assert listed.status_code == 200
         assert [item["id"] for item in listed.json()] == [check_id]
 
-        fetched = await client.get(f"/api/v1/edit-checks/{check_id}", headers=headers)
+        fetched = await client.get(
+            f"/api/v1/designer/edit-checks/{check_id}", headers=headers
+        )
         assert fetched.status_code == 200
 
         patched = await client.patch(
-            f"/api/v1/edit-checks/{check_id}",
+            f"/api/v1/designer/edit-checks/{check_id}",
             json={"description": "Updated description"},
             headers=headers,
         )
@@ -218,7 +234,7 @@ class TestEditCheckRoutes:
         await db_session.flush()
 
         response = await client.post(
-            f"/api/v1/edit-checks/{check.id}/test",
+            f"/api/v1/designer/edit-checks/{check.id}/test",
             json={"sample_data": {"age": 21}},
             headers=auth(seeded["user"]),
         )
@@ -243,7 +259,7 @@ class TestEditCheckRoutes:
         await db_session.flush()
 
         response = await client.post(
-            f"/api/v1/studies/{seeded['study'].id}/edit-checks/run",
+            f"/api/v1/designer/studies/{seeded['study'].id}/edit-checks/run",
             json={"study_version_id": str(seeded["version"].id)},
             headers=auth(seeded["user"]),
         )
@@ -269,7 +285,7 @@ class TestEditCheckRoutes:
         await db_session.flush()
 
         response = await client.get(
-            f"/api/v1/studies/{seeded['study'].id}/edit-checks",
+            f"/api/v1/designer/studies/{seeded['study'].id}/edit-checks",
             headers=auth(unauthorized),
         )
         assert response.status_code == 403
@@ -277,7 +293,7 @@ class TestEditCheckRoutes:
 
     async def test_invalid_dsl_uses_standard_error_envelope(self, client, seeded):
         response = await client.post(
-            f"/api/v1/studies/{seeded['study'].id}/edit-checks",
+            f"/api/v1/designer/studies/{seeded['study'].id}/edit-checks",
             json={
                 "name": "Unsafe rule",
                 "rule_json": {"field": "age", "operator": "exec", "value": "x"},

@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.permissions import permission_module
+
 CTMS_PERMISSION_ALIASES: dict[str, str] = {
     "operational-data-read": "ctms.operational_data_read",
     "operational-study-management": "ctms.operational_study_management",
@@ -52,6 +54,15 @@ class PermissionGrant(BaseModel):
 
     A grant with study_id=None and site_id=None indicates a system-level grant
     that applies regardless of study or site.
+
+    ``role_modules`` records which authorization modules the role that produced
+    this grant owns: ``("designer",)`` for a Designer_Role, ``("operational",)``
+    for an Operational_Role, ``("designer", "operational")`` for a role that
+    spans both (e.g. System Administrator), or ``()`` for a shared/platform role
+    (CTMS, PV). It enforces module-scoped separation of duties (Requirement 10):
+    a designer-module permission is only effective when it comes from a grant
+    whose role owns the designer module, and an operational-module permission
+    only from a grant whose role owns the operational module.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -59,6 +70,7 @@ class PermissionGrant(BaseModel):
     permission_code: str
     study_id: UUID | None = None
     site_id: UUID | None = None
+    role_modules: tuple[str, ...] = ()
 
 
 class AuthorizationScope(BaseModel):
@@ -84,8 +96,20 @@ class AuthorizationScope(BaseModel):
         A site-scope grant (study_id set, site_id set) satisfies only that exact site.
         """
         permission = normalize_permission_code(permission)
+        required_module = permission_module(permission)
         for grant in self.grants:
             if normalize_permission_code(grant.permission_code) != permission:
+                continue
+
+            # Module-scoped separation of duties (Requirement 10):
+            # a designer-module permission is only effective when granted by a
+            # role that owns the designer module, and an operational-module
+            # permission only by a role that owns the operational module. When
+            # the required permission belongs to a module, the grant's
+            # originating role must own that module; otherwise the grant does
+            # not satisfy the check (default-deny). Shared/platform codes
+            # (required_module is None) are exempt from the module gate.
+            if required_module is not None and required_module not in grant.role_modules:
                 continue
 
             # System-scope grant: matches everything

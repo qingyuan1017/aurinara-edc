@@ -1,11 +1,21 @@
-"""Study and study version models.
+"""Study identity model (canonical/shared) and backward-compatible re-exports.
+
+``Study`` is the **canonical, shared** identity for a clinical study. It stays
+here and is not redefined elsewhere — the Designer / EDC refactor keeps a single
+authoritative ``Study`` identity (no competing identity, R1.5).
+
+The **design-time version metadata** (``Design_Version``) was reassigned to the
+Designer module and now lives in ``app.models.designer.study_version``. The
+``StudyVersion`` and ``StudyVersionStatus`` symbols are re-exported from this
+module so existing import paths (``from app.models.edc.study import
+StudyVersion``) continue to work unchanged (R11.1 — additive, no breakage).
 
 Satisfies Requirements:
+  - 1.5: `Study` identity canonical/shared (no competing identity).
   - 4.1: Study metadata — code, protocol number, title, sponsor, phase, therapeutic area,
           indication, status.
   - 4.2: Globally unique study code.
-  - 5.1: Study versions with draft/published lifecycle.
-  - 5.5: Each form definition is associated with exactly one Study_Version (via FK).
+  - 11.1: Ownership reassignment of version metadata without table/column renames.
   - 22.1: UUID primary keys.
   - 22.5: Soft-delete via deleted_at column.
   - 22.6: Indexed for efficient querying.
@@ -20,13 +30,19 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
-    Text,
-    UniqueConstraint,
     Uuid,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+# Design-time version metadata is owned by the Designer module. Re-exported here
+# for backward compatibility with existing ``app.models.edc.study`` imports and
+# so the shared ORM registry resolves the ``Study.versions`` relationship.
+from app.models.designer.study_version import (
+    StudyVersion,
+    StudyVersionStatus,
+)
 
 # --- Enums ---
 
@@ -42,18 +58,17 @@ class StudyStatus(enum.StrEnum):
     archived = "Archived"
 
 
-class StudyVersionStatus(enum.StrEnum):
-    """Study version status (Requirement 5.1)."""
-
-    draft = "draft"
-    published = "published"
-
-
 # --- Models ---
 
 
 class Study(Base):
-    """Clinical study/trial — the top-level organizational entity."""
+    """Clinical study/trial — the top-level organizational entity.
+
+    This is the canonical, shared ``Study`` identity. Design-time version
+    metadata is modeled by ``Design_Version`` (``StudyVersion``) in the Designer
+    module; this identity binds to those versions through the ``versions``
+    relationship.
+    """
 
     __tablename__ = "studies"
 
@@ -110,78 +125,11 @@ class Study(Base):
         return f"<Study(id={self.id}, study_code={self.study_code!r}, status={self.status!r})>"
 
 
-class StudyVersion(Base):
-    """Versioned snapshot of a study's metadata definitions.
-
-    Each published version is immutable; form/visit/field definitions reference
-    a specific version. New drafts are created for amendments (Requirement 5.3).
-    """
-
-    __tablename__ = "study_versions"
-
-    # Primary key
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-
-    # Parent study
-    study_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("studies.id", ondelete="CASCADE"), nullable=False
-    )
-
-    # Version identifier
-    version_number: Mapped[str] = mapped_column(
-        String(20), nullable=False, comment="e.g. 1.0, 2.0"
-    )
-
-    # Lifecycle
-    status: Mapped[StudyVersionStatus] = mapped_column(
-        String(20), nullable=False, default=StudyVersionStatus.draft
-    )
-
-    # Amendment info (Phase 3)
-    amendment_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    amended_from_version_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid,
-        ForeignKey("study_versions.id", ondelete="RESTRICT"),
-        nullable=True,
-        comment="Published source version for an amendment",
-    )
-
-    # Publication
-    published_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    published_by: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
-
-    # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
-    )
-
-    # Relationships
-    study: Mapped["Study"] = relationship("Study", back_populates="versions")
-    amended_from: Mapped["StudyVersion | None"] = relationship(
-        "StudyVersion",
-        remote_side="StudyVersion.id",
-        foreign_keys=[amended_from_version_id],
-        back_populates="amendments",
-    )
-    amendments: Mapped[list["StudyVersion"]] = relationship(
-        "StudyVersion",
-        foreign_keys=[amended_from_version_id],
-        back_populates="amended_from",
-    )
-
-    __table_args__ = (
-        UniqueConstraint("study_id", "version_number", name="uq_study_version_number"),
-        Index("ix_study_versions_study_id", "study_id"),
-        Index("ix_study_versions_status", "status"),
-        Index("ix_study_versions_amended_from_version_id", "amended_from_version_id"),
-    )
-
-    def __repr__(self) -> str:
-        return (
-            f"<StudyVersion(id={self.id}, study_id={self.study_id}, "
-            f"version={self.version_number!r}, status={self.status!r})>"
-        )
+# Backward-compatible public surface. ``StudyVersion`` / ``StudyVersionStatus``
+# are owned by ``app.models.designer.study_version`` and re-exported here.
+__all__ = [
+    "Study",
+    "StudyStatus",
+    "StudyVersion",
+    "StudyVersionStatus",
+]
