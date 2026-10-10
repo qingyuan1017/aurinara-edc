@@ -15,7 +15,7 @@ function renderWithQueryClient(ui: React.ReactNode) {
 describe('EDC lifecycle presentation migrations', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    useAuthStore.setState({ user: { id: 'user-1', email: 'dm@example.com', first_name: 'Data', last_name: 'Manager', roles: [], permissions: ['designer.form.configure', 'query.create', 'form.enter'] }, isAuthenticated: true })
+    useAuthStore.setState({ user: { id: 'user-1', email: 'dm@example.com', first_name: 'Data', last_name: 'Manager', roles: [], permissions: ['designer.form.read', 'designer.form.configure', 'designer.field.configure', 'query.create', 'form.enter'] }, isAuthenticated: true })
   })
 
   it('keeps form builder creation payload and endpoint while using labeled shared controls', async () => {

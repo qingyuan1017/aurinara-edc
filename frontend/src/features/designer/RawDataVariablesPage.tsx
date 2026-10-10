@@ -17,6 +17,8 @@ const EMPTY_ATTRIBUTES = '{}'
 function RawDataVariablesEditor({ versionId }: { versionId: string }) {
   const [name, setName] = useState('')
   const [dataType, setDataType] = useState('')
+  const [label, setLabel] = useState('')
+  const [suffix, setSuffix] = useState('')
   const [attributesText, setAttributesText] = useState(EMPTY_ATTRIBUTES)
   const [created, setCreated] = useState<RawDataVariableSettingResponse[]>([])
   const [error, setError] = useState('')
@@ -35,12 +37,18 @@ function RawDataVariablesEditor({ versionId }: { versionId: string }) {
           throw new Error('Attributes must be valid JSON.')
         }
       }
-      const payload: RawDataVariableSettingCreate = { name: name.trim(), data_type: dataType.trim(), attributes }
+      const payload: RawDataVariableSettingCreate = {
+        name: name.trim(),
+        data_type: dataType.trim(),
+        attributes,
+        label: label.trim() || null,
+        suffix: suffix.trim() || null,
+      }
       return (await api.post<RawDataVariableSettingResponse>(`/designer/versions/${versionId}/raw-data-variables`, payload)).data
     },
     onSuccess: (data) => {
       setCreated((prev) => [...prev, data])
-      setName(''); setDataType(''); setAttributesText(EMPTY_ATTRIBUTES)
+      setName(''); setDataType(''); setLabel(''); setSuffix(''); setAttributesText(EMPTY_ATTRIBUTES)
       setError(''); setMessage(`Raw-data variable "${data.name}" added.`)
     },
     onError: (err) => { setError(getApiErrorMessage(err, 'Could not create the raw-data variable.')); setMessage('') },
@@ -63,6 +71,12 @@ function RawDataVariablesEditor({ versionId }: { versionId: string }) {
               <FormField label="Data type" name="rdv-type" required>
                 <Input value={dataType} onChange={(event) => setDataType(event.target.value)} placeholder="string" required />
               </FormField>
+              <FormField label="Label" name="rdv-label" description="Optional display label for a fixed variable.">
+                <Input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Subject identifier" />
+              </FormField>
+              <FormField label="Suffix" name="rdv-suffix" description="Optional suffix for special variable types.">
+                <Input value={suffix} onChange={(event) => setSuffix(event.target.value)} placeholder="_RAW" />
+              </FormField>
               <FormField label="Attributes (JSON)" name="rdv-attributes" description="Optional JSON object of additional attributes.">
                 <Textarea value={attributesText} onChange={(event) => setAttributesText(event.target.value)} className="min-h-24 font-mono text-sm" />
               </FormField>
@@ -80,9 +94,14 @@ function RawDataVariablesEditor({ versionId }: { versionId: string }) {
             <DataTableShell label="Raw-data variables" empty={!created.length} emptyTitle="No variables added yet" emptyDescription="Variables you create appear here.">
               <Table>
                 <caption className="sr-only">Raw-data variables added this session</caption>
-                <TableHeader><TableRow>{['Name', 'Data type'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
+                <TableHeader><TableRow>{['Name', 'Data type', 'Label', 'Suffix'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
                 <TableBody>{created.map((row) => (
-                  <TableRow key={row.id}><TableCell className="font-medium">{row.name}</TableCell><TableCell>{row.data_type}</TableCell></TableRow>
+                  <TableRow key={row.id}>
+                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell>{row.data_type}</TableCell>
+                    <TableCell>{row.label ?? '—'}</TableCell>
+                    <TableCell>{row.suffix ?? '—'}</TableCell>
+                  </TableRow>
                 ))}</TableBody>
               </Table>
             </DataTableShell>
