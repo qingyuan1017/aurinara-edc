@@ -10,8 +10,8 @@ record retention.
 This migration is purely additive: one new table and three indexes. No existing
 table or column is changed, so the downgrade simply drops the table.
 
-Revision ID: 0053
-Revises: 0052
+Revision ID: 0054
+Revises: 0053
 Create Date: 2026-10-10
 """
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "0053"
-down_revision: str | None = "0052"
+revision: str = "0054"
+down_revision: str | None = "0053"
 branch_labels: str | None = None
 depends_on: str | None = None
 
