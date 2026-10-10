@@ -19344,6 +19344,69 @@
         }
       }
     },
+    "/api/v1/designer/forms/{form_id}/sections/reorder": {
+      "post": {
+        "tags": [
+          "designer-forms"
+        ],
+        "summary": "Reorder Sections",
+        "description": "Reorder a form's sections by id.\n\nPermission: designer.form.configure (Designer_Role only)",
+        "operationId": "reorder_sections_api_v1_designer_forms__form_id__sections_reorder_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "form_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Form Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FormSectionResponse"
+                  },
+                  "title": "Response Reorder Sections Api V1 Designer Forms  Form Id  Sections Reorder Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/designer/fields/{field_id}": {
       "patch": {
         "tags": [
@@ -19429,6 +19492,179 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/sections/{section_id}/fields/reorder": {
+      "post": {
+        "tags": [
+          "designer-forms"
+        ],
+        "summary": "Reorder Fields",
+        "description": "Reorder a section's fields by id.\n\nPermission: designer.field.configure (Designer_Role only)",
+        "operationId": "reorder_fields_api_v1_designer_sections__section_id__fields_reorder_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "section_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Section Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FieldDefinitionResponse"
+                  },
+                  "title": "Response Reorder Fields Api V1 Designer Sections  Section Id  Fields Reorder Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/forms/{form_id}/dependencies": {
+      "post": {
+        "tags": [
+          "designer-form-dependencies"
+        ],
+        "summary": "Create Form Dependency",
+        "description": "Create a form-to-form dependency edge.\n\nPermission: designer.form.configure (Designer_Role only)",
+        "operationId": "create_form_dependency_api_v1_designer_forms__form_id__dependencies_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "form_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Form Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormDependencyCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDependencyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "designer-form-dependencies"
+        ],
+        "summary": "List Form Dependencies",
+        "description": "List a form's dependency edges.\n\nPermission: designer.form.read (Designer_Role only)",
+        "operationId": "list_form_dependencies_api_v1_designer_forms__form_id__dependencies_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "form_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Form Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FormDependencyResponse"
+                  },
+                  "title": "Response List Form Dependencies Api V1 Designer Forms  Form Id  Dependencies Get"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -20020,6 +20256,57 @@
       }
     },
     "/api/v1/designer/versions/{version_id}/subject-phases": {
+      "get": {
+        "tags": [
+          "designer-subject-phases"
+        ],
+        "summary": "List Subject Phases",
+        "description": "List a Design_Version's subject phase definitions.\n\nPermission: designer.subject_phase.read (Designer_Role only)",
+        "operationId": "list_subject_phases_api_v1_designer_versions__version_id__subject_phases_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SubjectPhaseDefinitionResponse"
+                  },
+                  "title": "Response List Subject Phases Api V1 Designer Versions  Version Id  Subject Phases Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "designer-subject-phases"
@@ -20064,6 +20351,267 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/subject-phases/{phase_id}": {
+      "patch": {
+        "tags": [
+          "designer-subject-phases"
+        ],
+        "summary": "Update Subject Phase",
+        "description": "Update a Subject_Phase_Definition (partial PATCH).\n\nPermission: designer.subject_phase.configure (Designer_Role only)",
+        "operationId": "update_subject_phase_api_v1_designer_subject_phases__phase_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "phase_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Phase Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubjectPhaseDefinitionUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectPhaseDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "designer-subject-phases"
+        ],
+        "summary": "Delete Subject Phase",
+        "description": "Delete a Subject_Phase_Definition, cascading its transition edges.\n\nPermission: designer.subject_phase.configure (Designer_Role only)",
+        "operationId": "delete_subject_phase_api_v1_designer_subject_phases__phase_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "phase_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Phase Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/subject-phase-transitions": {
+      "post": {
+        "tags": [
+          "designer-subject-phase-transitions"
+        ],
+        "summary": "Create Subject Phase Transition",
+        "description": "Create a subject-phase transition edge within a draft Design_Version.\n\nPermission: designer.subject_phase.configure (Designer_Role only)",
+        "operationId": "create_subject_phase_transition_api_v1_designer_versions__version_id__subject_phase_transitions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubjectPhaseTransitionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectPhaseTransitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "designer-subject-phase-transitions"
+        ],
+        "summary": "List Subject Phase Transitions",
+        "description": "List a Design_Version's subject-phase transition edges.\n\nPermission: designer.subject_phase.read (Designer_Role only)",
+        "operationId": "list_subject_phase_transitions_api_v1_designer_versions__version_id__subject_phase_transitions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SubjectPhaseTransitionResponse"
+                  },
+                  "title": "Response List Subject Phase Transitions Api V1 Designer Versions  Version Id  Subject Phase Transitions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/subject-phase-transitions/{transition_id}": {
+      "delete": {
+        "tags": [
+          "designer-subject-phase-transitions"
+        ],
+        "summary": "Delete Subject Phase Transition",
+        "description": "Delete a subject-phase transition edge from a draft Design_Version.\n\nPermission: designer.subject_phase.configure (Designer_Role only)",
+        "operationId": "delete_subject_phase_transition_api_v1_designer_versions__version_id__subject_phase_transitions__transition_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "transition_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Transition Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -20167,116 +20715,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScheduleOfAssessmentResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/designer/versions/{version_id}/cycles": {
-      "post": {
-        "tags": [
-          "designer-cycles"
-        ],
-        "summary": "Create Cycle",
-        "description": "Create a Cycle_Definition within a draft Design_Version.\n\nPermission: study.configure",
-        "operationId": "create_cycle_api_v1_designer_versions__version_id__cycles_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "version_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Version Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CycleDefinitionCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CycleDefinitionResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "designer-cycles"
-        ],
-        "summary": "List Cycles",
-        "description": "List the Cycle_Definitions for a Design_Version.\n\nPermission: designer.cycle.read (Designer_Role only)",
-        "operationId": "list_cycles_api_v1_designer_versions__version_id__cycles_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "version_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Version Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CycleDefinitionResponse"
-                  },
-                  "title": "Response List Cycles Api V1 Designer Versions  Version Id  Cycles Get"
                 }
               }
             }
@@ -20404,13 +20842,123 @@
         }
       }
     },
+    "/api/v1/designer/visits/{visit_id}/dependencies": {
+      "post": {
+        "tags": [
+          "designer-visit-dependencies"
+        ],
+        "summary": "Create Visit Dependency",
+        "description": "Create a visit-to-visit dependency edge.\n\nPermission: designer.visit.configure (Designer_Role only)",
+        "operationId": "create_visit_dependency_api_v1_designer_visits__visit_id__dependencies_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "visit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Visit Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitDependencyCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitDependencyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "designer-visit-dependencies"
+        ],
+        "summary": "List Visit Dependencies",
+        "description": "List a visit's dependency edges.\n\nPermission: designer.visit.read (Designer_Role only)",
+        "operationId": "list_visit_dependencies_api_v1_designer_visits__visit_id__dependencies_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "visit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Visit Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VisitDependencyResponse"
+                  },
+                  "title": "Response List Visit Dependencies Api V1 Designer Visits  Visit Id  Dependencies Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/designer/versions/{version_id}/arms": {
       "post": {
         "tags": [
           "designer-arms"
         ],
         "summary": "Create Arm",
-        "description": "Create an Arm_Definition within a draft Design_Version.\n\nPermission: study.configure",
+        "description": "Create an Arm_Definition within a draft Design_Version.\n\nPermission: designer.arm.configure (Designer_Role only)",
         "operationId": "create_arm_api_v1_designer_versions__version_id__arms_post",
         "security": [
           {
@@ -20446,6 +20994,57 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ArmDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "designer-arms"
+        ],
+        "summary": "List Arms",
+        "description": "List the Arm_Definitions for a Design_Version.\n\nPermission: designer.arm.read (Designer_Role only)",
+        "operationId": "list_arms_api_v1_designer_versions__version_id__arms_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ArmDefinitionResponse"
+                  },
+                  "title": "Response List Arms Api V1 Designer Versions  Version Id  Arms Get"
                 }
               }
             }
@@ -26460,6 +27059,14 @@
               }
             ],
             "title": "Description"
+          },
+          "visit_definition_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Visit Definition Ids"
           }
         },
         "type": "object",
@@ -26501,6 +27108,14 @@
             ],
             "title": "Description"
           },
+          "visit_definition_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Visit Definition Ids"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -26526,7 +27141,7 @@
           "created_at"
         ],
         "title": "ArmDefinitionResponse",
-        "description": "Response schema for a persisted Arm_Definition."
+        "description": "Response schema for a persisted Arm_Definition.\n\n``visit_definition_ids`` lists the arm's member visits (plain visits and\ncycles). The route constructs this field explicitly from ``arm.visits``;\n``model_validate(arm)`` cannot populate it because the ORM relationship is\nnamed ``visits``."
       },
       "AssessmentResponse": {
         "properties": {
@@ -28585,6 +29200,23 @@
               }
             ],
             "title": "Field Definition Id"
+          },
+          "blinded": {
+            "type": "boolean",
+            "title": "Blinded",
+            "default": false
+          },
+          "unblind_role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unblind Role"
           }
         },
         "type": "object",
@@ -28592,7 +29224,7 @@
           "role"
         ],
         "title": "CrfAccessDefinitionCreate",
-        "description": "Request body for creating a Crf_Access_Definition in a Draft_Design."
+        "description": "Request body for creating a Crf_Access_Definition in a Draft_Design.\n\n``blinded`` applies at whichever scope the grant expresses (form or field).\n``unblind_role`` optionally names a role permitted to unblind; the service\nrequires ``blinded`` to be True when ``unblind_role`` is set."
       },
       "CrfAccessDefinitionResponse": {
         "properties": {
@@ -28641,6 +29273,22 @@
               }
             ],
             "title": "Field Definition Id"
+          },
+          "blinded": {
+            "type": "boolean",
+            "title": "Blinded",
+            "default": false
+          },
+          "unblind_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unblind Role"
           },
           "created_at": {
             "type": "string",
@@ -28775,84 +29423,6 @@
         ],
         "title": "CurrentUserResponse",
         "description": "User identity + resolved authorization scope."
-      },
-      "CycleDefinitionCreate": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name"
-          },
-          "display_order": {
-            "type": "integer",
-            "maximum": 999.0,
-            "minimum": 1.0,
-            "title": "Display Order"
-          },
-          "visit_definition_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "title": "Visit Definition Ids"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "display_order"
-        ],
-        "title": "CycleDefinitionCreate",
-        "description": "Request body for creating a Cycle_Definition in a Draft_Design."
-      },
-      "CycleDefinitionResponse": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "study_version_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Study Version Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "display_order": {
-            "type": "integer",
-            "title": "Display Order"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "study_version_id",
-          "name",
-          "display_order",
-          "created_at"
-        ],
-        "title": "CycleDefinitionResponse",
-        "description": "Response schema for a persisted Cycle_Definition."
       },
       "DashboardQueryCreate": {
         "properties": {
@@ -30898,6 +31468,19 @@
             ],
             "title": "Is Required"
           },
+          "form_section_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Form Section Id",
+            "description": "Move the field to this section (same form only)."
+          },
           "codelist_id": {
             "anyOf": [
               {
@@ -31523,6 +32106,87 @@
         "type": "object",
         "title": "FormDefinitionUpdate",
         "description": "Request body for editing a form definition (Requirement 4.1)."
+      },
+      "FormDependencyCreate": {
+        "properties": {
+          "depends_on_form_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Depends On Form Definition Id"
+          },
+          "dependency_type": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Dependency Type",
+            "default": "prerequisite"
+          },
+          "condition_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Expression"
+          }
+        },
+        "type": "object",
+        "required": [
+          "depends_on_form_definition_id"
+        ],
+        "title": "FormDependencyCreate",
+        "description": "Request body for creating a form-to-form dependency in a Draft_Design."
+      },
+      "FormDependencyResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "form_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Form Definition Id"
+          },
+          "depends_on_form_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Depends On Form Definition Id"
+          },
+          "dependency_type": {
+            "type": "string",
+            "title": "Dependency Type"
+          },
+          "condition_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Expression"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "form_definition_id",
+          "depends_on_form_definition_id",
+          "dependency_type",
+          "created_at"
+        ],
+        "title": "FormDependencyResponse",
+        "description": "Response schema for a persisted form-to-form dependency."
       },
       "FormInstanceResponse": {
         "properties": {
@@ -37638,6 +38302,30 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Attributes"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "suffix": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suffix"
           }
         },
         "type": "object",
@@ -37646,7 +38334,7 @@
           "data_type"
         ],
         "title": "RawDataVariableSettingCreate",
-        "description": "Request body for creating a Raw_Data_Variable_Setting in a Draft_Design."
+        "description": "Request body for creating a Raw_Data_Variable_Setting in a Draft_Design.\n\n``label`` is an optional display label for a fixed variable; ``suffix`` is an\noptional suffix applied for special variable types. Both drive dataset\ngeneration."
       },
       "RawDataVariableSettingResponse": {
         "properties": {
@@ -37672,6 +38360,28 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Attributes"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "suffix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suffix"
           },
           "created_at": {
             "type": "string",
@@ -38178,6 +38888,25 @@
         ],
         "title": "RegulatoryReportResponse",
         "description": "A Regulatory_Report as returned by the API."
+      },
+      "ReorderRequest": {
+        "properties": {
+          "ordered_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Ordered Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ordered_ids"
+        ],
+        "title": "ReorderRequest",
+        "description": "Request body for reordering a set of sibling entities by id.\n\nThe ``ordered_ids`` list defines the new display order: the first id\nreceives display_order 0, the next 1, and so on."
       },
       "ReportMeta": {
         "properties": {
@@ -39155,18 +39884,6 @@
             ],
             "title": "Visit Definition Id"
           },
-          "cycle_definition_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cycle Definition Id"
-          },
           "display_order": {
             "type": "integer",
             "title": "Display Order",
@@ -39175,7 +39892,7 @@
         },
         "type": "object",
         "title": "ScheduleEntryCreate",
-        "description": "One form/procedure-to-visit/cycle mapping within an SoA.\n\nExactly one of ``form_definition_id`` or ``procedure_name`` identifies what\nis collected; at least one of ``visit_definition_id`` or\n``cycle_definition_id`` identifies when it is collected. The service\nvalidates these invariants."
+        "description": "One form/procedure-to-visit mapping within an SoA.\n\nExactly one of ``form_definition_id`` or ``procedure_name`` identifies what\nis collected; a ``visit_definition_id`` (a plain visit or a cycle) identifies\nwhen it is collected. The service validates these invariants."
       },
       "ScheduleEntryResponse": {
         "properties": {
@@ -39223,18 +39940,6 @@
               }
             ],
             "title": "Visit Definition Id"
-          },
-          "cycle_definition_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cycle Definition Id"
           },
           "display_order": {
             "type": "integer",
@@ -40804,6 +41509,143 @@
         "title": "SubjectPhaseDefinitionResponse",
         "description": "Response schema for a persisted Subject_Phase_Definition."
       },
+      "SubjectPhaseDefinitionUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "display_order": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 999.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Order"
+          }
+        },
+        "type": "object",
+        "title": "SubjectPhaseDefinitionUpdate",
+        "description": "Request body for editing a Subject_Phase_Definition (partial PATCH)."
+      },
+      "SubjectPhaseTransitionCreate": {
+        "properties": {
+          "from_phase_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "From Phase Id"
+          },
+          "to_phase_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "To Phase Id"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "condition_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Expression"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_phase_id",
+          "to_phase_id"
+        ],
+        "title": "SubjectPhaseTransitionCreate",
+        "description": "Request body for creating a subject-phase transition in a Draft_Design."
+      },
+      "SubjectPhaseTransitionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "design_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Design Version Id"
+          },
+          "from_phase_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "From Phase Id"
+          },
+          "to_phase_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "To Phase Id"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "condition_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Expression"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "design_version_id",
+          "from_phase_id",
+          "to_phase_id",
+          "created_at"
+        ],
+        "title": "SubjectPhaseTransitionResponse",
+        "description": "Response schema for a persisted subject-phase transition.\n\n``updated_at`` is intentionally omitted for parity with\n``VisitDependencyResponse``."
+      },
       "SubjectResponse": {
         "properties": {
           "id": {
@@ -41757,6 +42599,45 @@
             "title": "Is Required",
             "description": "Whether the visit is required",
             "default": true
+          },
+          "repeat_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Min",
+            "description": "Cycle-only: minimum repeat count"
+          },
+          "repeat_max": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Max",
+            "description": "Cycle-only: maximum repeat count"
+          },
+          "cycle_length": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Length",
+            "description": "Cycle-only: nominal length in days of one iteration"
           }
         },
         "type": "object",
@@ -41834,6 +42715,39 @@
             "type": "boolean",
             "title": "Is Required"
           },
+          "repeat_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Min"
+          },
+          "repeat_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Max"
+          },
+          "cycle_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Length"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -41852,6 +42766,87 @@
         ],
         "title": "VisitDefinitionResponse",
         "description": "Response schema for a visit definition (Requirement 4.2)."
+      },
+      "VisitDependencyCreate": {
+        "properties": {
+          "depends_on_visit_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Depends On Visit Definition Id"
+          },
+          "dependency_type": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Dependency Type",
+            "default": "prerequisite"
+          },
+          "condition_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Expression"
+          }
+        },
+        "type": "object",
+        "required": [
+          "depends_on_visit_definition_id"
+        ],
+        "title": "VisitDependencyCreate",
+        "description": "Request body for creating a visit-to-visit dependency in a Draft_Design."
+      },
+      "VisitDependencyResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "visit_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Visit Definition Id"
+          },
+          "depends_on_visit_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Depends On Visit Definition Id"
+          },
+          "dependency_type": {
+            "type": "string",
+            "title": "Dependency Type"
+          },
+          "condition_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Expression"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "visit_definition_id",
+          "depends_on_visit_definition_id",
+          "dependency_type",
+          "created_at"
+        ],
+        "title": "VisitDependencyResponse",
+        "description": "Response schema for a persisted visit-to-visit dependency."
       },
       "VisitInstanceResponse": {
         "properties": {

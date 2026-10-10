@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Building2, CalendarClock, CalendarRange, CheckCircle2, CircleHelp, FileText, KeyRound, LayoutDashboard, ListChecks, Layers, Database, ScrollText, Search, Settings, Sparkles, Stethoscope, Tags, Upload, Users, Workflow, type LucideIcon } from 'lucide-react'
+import { Bell, BookOpen, Building2, CalendarClock, CalendarRange, CheckCircle2, CircleHelp, FileText, KeyRound, LayoutDashboard, ListChecks, Database, ScrollText, Search, Settings, Sparkles, Stethoscope, Tags, Upload, Users, Workflow, type LucideIcon } from 'lucide-react'
 import type { CTMSCapabilityState, CTMSNavigationSection, CTMSNavigationItem } from '@/features/ctms'
 import { resolveCTMSNavigation } from '@/features/ctms'
 import type { PVCapabilityState, PVNavigationSection, PVNavigationItem } from '@/features/pv'
@@ -73,7 +73,6 @@ export const EDC_NAV_ITEMS: readonly EDCNavigationItem[] = [
   { id: 'designer-subject-phases', label: 'Subject Phases', to: '/designer/subject-phases', icon: Workflow, section: 'designer', search: preserveCurrentSearch },
   { id: 'designer-visits', label: 'Visits', to: '/designer/visits', icon: CalendarClock, section: 'designer', search: preserveCurrentSearch },
   { id: 'designer-soa', label: 'Schedule of Assessment', to: '/designer/schedule-of-assessment', icon: CalendarRange, section: 'designer', search: preserveCurrentSearch },
-  { id: 'designer-cycles', label: 'Cycles', to: '/designer/cycles', icon: Layers, section: 'designer', search: preserveCurrentSearch },
   { id: 'designer-arms', label: 'Arms', to: '/designer/arms', icon: ListChecks, section: 'designer', search: preserveCurrentSearch },
   { id: 'designer-crf-access', label: 'CRF Access', to: '/designer/crf-access', icon: KeyRound, section: 'designer', search: preserveCurrentSearch },
   { id: 'designer-raw-data-variables', label: 'Raw-Data Variables', to: '/designer/raw-data-variables', icon: Database, section: 'designer', search: preserveCurrentSearch },

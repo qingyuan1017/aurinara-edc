@@ -4,7 +4,7 @@ import { api } from '@/lib/api'
 /**
  * A Designer draft version resolved from the operational study-version list.
  *
- * Several designer definition surfaces (subject phases, cycles, arms, CRF
+ * Several designer definition surfaces (subject phases, visits, arms, CRF
  * access, raw-data variables, coding settings, schedule of assessment) are
  * authored against a specific Design_Version and are only mutable while that
  * version is a draft. The frontend resolves the open draft from the version

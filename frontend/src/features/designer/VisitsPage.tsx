@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DataTableShell, FormActions, FormField, LoadingState, PageContainer, PageHeader } from '@/components/patterns'
 import { DraftGate, getApiErrorMessage } from './shared'
 
-const VISIT_TYPES = ['scheduled', 'unscheduled', 'screening'] as const
+const VISIT_TYPES = ['visit', 'cycle', 'scheduled', 'unscheduled', 'screening'] as const
 
 function optionalNumber(value: string): number | null {
   const trimmed = value.trim()
@@ -26,7 +26,10 @@ function VisitsEditor({ studyId, versionId }: { studyId: string; versionId: stri
 
   const [name, setName] = useState('')
   const [visitNumber, setVisitNumber] = useState(1)
-  const [visitType, setVisitType] = useState<string>('scheduled')
+  const [visitType, setVisitType] = useState<string>('visit')
+  const [repeatMin, setRepeatMin] = useState('')
+  const [repeatMax, setRepeatMax] = useState('')
+  const [cycleLength, setCycleLength] = useState('')
   const [targetDay, setTargetDay] = useState('')
   const [windowBefore, setWindowBefore] = useState('')
   const [windowAfter, setWindowAfter] = useState('')
@@ -43,6 +46,7 @@ function VisitsEditor({ studyId, versionId }: { studyId: string; versionId: stri
   const create = useMutation({
     mutationFn: async () => {
       if (!name.trim()) throw new Error('A visit name is required.')
+      const isCycle = visitType === 'cycle'
       const payload: VisitDefinitionCreate = {
         name: name.trim(),
         visit_number: visitNumber,
@@ -52,12 +56,16 @@ function VisitsEditor({ studyId, versionId }: { studyId: string; versionId: stri
         window_after: optionalNumber(windowAfter),
         display_order: displayOrder,
         is_required: isRequired,
+        repeat_min: isCycle ? optionalNumber(repeatMin) : null,
+        repeat_max: isCycle ? optionalNumber(repeatMax) : null,
+        cycle_length: isCycle ? optionalNumber(cycleLength) : null,
       }
       return (await api.post<VisitDefinitionResponse>(`/designer/versions/${versionId}/visits`, payload)).data
     },
     onSuccess: (data) => {
       client.invalidateQueries({ queryKey: ['designer-visits', versionId] })
       setName(''); setTargetDay(''); setWindowBefore(''); setWindowAfter('')
+      setRepeatMin(''); setRepeatMax(''); setCycleLength('')
       setVisitNumber((n) => n + 1); setDisplayOrder((order) => order + 1); setIsRequired(true)
       setError(''); setMessage(`Visit "${data.name}" added.`)
     },
@@ -70,7 +78,7 @@ function VisitsEditor({ studyId, versionId }: { studyId: string; versionId: stri
 
   return (
     <PageContainer wide>
-      <PageHeader title="Visits" description="Define study visits for the current draft version." />
+      <PageHeader title="Visits" description="Define study visits and cycles for the current draft version. Select the 'cycle' type to configure repeat counts and cycle length." />
       {message ? <Alert variant="success" className="mb-4"><AlertDescription>{message}</AlertDescription></Alert> : null}
       {error ? <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert> : null}
 
@@ -96,6 +104,19 @@ function VisitsEditor({ studyId, versionId }: { studyId: string; versionId: stri
                     {VISIT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
                   </select>
                 </FormField>
+                {visitType === 'cycle' ? (
+                  <>
+                    <FormField label="Repeat min" name="visit-repeat-min" description="Cycle-only: minimum repeat count.">
+                      <Input type="number" min={0} max={99999} value={repeatMin} onChange={(event) => setRepeatMin(event.target.value)} />
+                    </FormField>
+                    <FormField label="Repeat max" name="visit-repeat-max" description="Cycle-only: maximum repeat count.">
+                      <Input type="number" min={0} max={99999} value={repeatMax} onChange={(event) => setRepeatMax(event.target.value)} />
+                    </FormField>
+                    <FormField label="Cycle length" name="visit-cycle-length" description="Cycle-only: nominal length in days of one iteration.">
+                      <Input type="number" min={0} max={99999} value={cycleLength} onChange={(event) => setCycleLength(event.target.value)} />
+                    </FormField>
+                  </>
+                ) : null}
                 <FormField label="Target day" name="visit-target-day" description="Optional day relative to baseline.">
                   <Input type="number" min={0} max={99999} value={targetDay} onChange={(event) => setTargetDay(event.target.value)} placeholder="0" />
                 </FormField>
@@ -127,13 +148,14 @@ function VisitsEditor({ studyId, versionId }: { studyId: string; versionId: stri
             <DataTableShell label="Visit definitions" empty={!rows.length} emptyTitle="No visits defined yet" emptyDescription="Visits you create appear here.">
               <Table>
                 <caption className="sr-only">Visit definitions ordered by display order</caption>
-                <TableHeader><TableRow>{['Order', '#', 'Name', 'Type', 'Target day', 'Window -', 'Window +', 'Required'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
+                <TableHeader><TableRow>{['Order', '#', 'Name', 'Type', 'Repeat / length', 'Target day', 'Window -', 'Window +', 'Required'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
                 <TableBody>{rows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell>{row.display_order}</TableCell>
                     <TableCell>{row.visit_number}</TableCell>
                     <TableCell className="font-medium">{row.name}</TableCell>
                     <TableCell>{row.visit_type}</TableCell>
+                    <TableCell>{row.visit_type === 'cycle' ? `${row.repeat_min ?? '—'}–${row.repeat_max ?? '—'} · ${row.cycle_length ?? '—'}d` : '—'}</TableCell>
                     <TableCell>{row.target_day ?? '—'}</TableCell>
                     <TableCell>{row.window_before ?? '—'}</TableCell>
                     <TableCell>{row.window_after ?? '—'}</TableCell>

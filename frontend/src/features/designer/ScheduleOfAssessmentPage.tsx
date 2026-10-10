@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { PermissionGuard } from '@/components/guards/PermissionGuard'
 import { PERMISSIONS, usePermission } from '@/lib/permissions'
-import type { CycleDefinitionResponse, ScheduleEntryCreate, ScheduleOfAssessmentCreate, ScheduleOfAssessmentResponse, VisitDefinitionResponse } from '@/api/model'
+import type { ScheduleEntryCreate, ScheduleOfAssessmentCreate, ScheduleOfAssessmentResponse, VisitDefinitionResponse } from '@/api/model'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,7 +18,6 @@ interface EntryDraft {
   formDefinitionId: string
   procedureName: string
   visitDefinitionId: string
-  cycleDefinitionId: string
 }
 
 interface FormDefinitionSummary {
@@ -28,7 +27,7 @@ interface FormDefinitionSummary {
 }
 
 const makeKey = () => Math.random().toString(36).slice(2)
-const emptyEntry = (): EntryDraft => ({ key: makeKey(), what: 'form', formDefinitionId: '', procedureName: '', visitDefinitionId: '', cycleDefinitionId: '' })
+const emptyEntry = (): EntryDraft => ({ key: makeKey(), what: 'form', formDefinitionId: '', procedureName: '', visitDefinitionId: '' })
 
 function isNotFound(error: unknown): boolean {
   return (error as { response?: { status?: number } })?.response?.status === 404
@@ -59,16 +58,11 @@ function ScheduleOfAssessmentEditor({ studyId, versionId }: { studyId: string; v
     queryKey: ['designer-visits', versionId],
     queryFn: async () => (await api.get<VisitDefinitionResponse[]>(`/designer/versions/${versionId}/visits`)).data,
   })
-  const cyclesQuery = useQuery({
-    queryKey: ['designer-cycles', versionId],
-    queryFn: async () => (await api.get<CycleDefinitionResponse[]>(`/designer/versions/${versionId}/cycles`)).data,
-  })
   const formsQuery = useQuery({
     queryKey: ['form-definitions', studyId],
     queryFn: async () => (await api.get<FormDefinitionSummary[]>(`/designer/studies/${studyId}/forms`)).data,
   })
   const visits = visitsQuery.data ?? []
-  const cycles = cyclesQuery.data ?? []
   const forms = formsQuery.data ?? []
 
   // Seed the editor from an existing SoA so the matrix can be reviewed/extended.
@@ -89,7 +83,6 @@ function ScheduleOfAssessmentEditor({ studyId, versionId }: { studyId: string; v
           formDefinitionId: entry.form_definition_id ?? '',
           procedureName: entry.procedure_name ?? '',
           visitDefinitionId: entry.visit_definition_id ?? '',
-          cycleDefinitionId: entry.cycle_definition_id ?? '',
         })))
     }
   }
@@ -102,14 +95,13 @@ function ScheduleOfAssessmentEditor({ studyId, versionId }: { studyId: string; v
         if (!hasForm && !hasProcedure) {
           throw new Error(`Entry ${index + 1} needs a form definition ID or a procedure name.`)
         }
-        if (!entry.visitDefinitionId.trim() && !entry.cycleDefinitionId.trim()) {
-          throw new Error(`Entry ${index + 1} needs a visit and/or cycle definition ID.`)
+        if (!entry.visitDefinitionId.trim()) {
+          throw new Error(`Entry ${index + 1} needs a visit definition ID.`)
         }
         return {
           form_definition_id: hasForm ? entry.formDefinitionId.trim() : null,
           procedure_name: hasProcedure ? entry.procedureName.trim() : null,
           visit_definition_id: entry.visitDefinitionId.trim() || null,
-          cycle_definition_id: entry.cycleDefinitionId.trim() || null,
           display_order: index + 1,
         }
       })
@@ -131,7 +123,7 @@ function ScheduleOfAssessmentEditor({ studyId, versionId }: { studyId: string; v
     <PageContainer wide>
       <PageHeader
         title="Schedule of assessment"
-        description="Map forms and procedures to visits and cycles for the current draft version."
+        description="Map forms and procedures to visits for the current draft version."
         actions={canConfigure ? <Button type="button" variant="outline" onClick={() => setEntries((prev) => [...prev, emptyEntry()])}>Add entry</Button> : null}
       />
       {message ? <Alert variant="success" className="mb-4"><AlertDescription>{message}</AlertDescription></Alert> : null}
@@ -144,7 +136,7 @@ function ScheduleOfAssessmentEditor({ studyId, versionId }: { studyId: string; v
             <DataTableShell label="Schedule of assessment entries">
               <Table>
                 <caption className="sr-only">Schedule of assessment entries</caption>
-                <TableHeader><TableRow>{['Collect', 'What', 'Visit', 'Cycle', ''].map((heading, index) => <TableHead key={heading || index}>{heading}</TableHead>)}</TableRow></TableHeader>
+                <TableHeader><TableRow>{['Collect', 'What', 'Visit', ''].map((heading, index) => <TableHead key={heading || index}>{heading}</TableHead>)}</TableRow></TableHeader>
                 <TableBody>{entries.map((entry, index) => (
                   <TableRow key={entry.key}>
                     <TableCell>
@@ -182,17 +174,6 @@ function ScheduleOfAssessmentEditor({ studyId, versionId }: { studyId: string; v
                       >
                         <option value="">— none —</option>
                         {visits.map((visit) => <option key={visit.id} value={visit.id}>{visit.visit_number} · {visit.name}</option>)}
-                      </select>
-                    </TableCell>
-                    <TableCell>
-                      <select
-                        aria-label={`Entry ${index + 1} cycle`}
-                        value={entry.cycleDefinitionId}
-                        onChange={(event) => update(entry.key, { cycleDefinitionId: event.target.value })}
-                        className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      >
-                        <option value="">— none —</option>
-                        {cycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.name}</option>)}
                       </select>
                     </TableCell>
                     <TableCell><Button type="button" variant="ghost" size="sm" aria-label={`Remove entry ${index + 1}`} disabled={entries.length === 1} onClick={() => setEntries((prev) => prev.filter((it) => it.key !== entry.key))}>Remove</Button></TableCell>

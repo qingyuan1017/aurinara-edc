@@ -30,10 +30,14 @@ const appShellPath = resolve(sourceRoot, 'components/layout/AppShell.tsx')
 const authGuardPath = resolve(sourceRoot, 'components/guards/AuthGuard.tsx')
 
 const approvedDependencies = new Set([
+  '@dnd-kit/core',
+  '@dnd-kit/sortable',
+  '@dnd-kit/utilities',
   '@hookform/resolvers',
   '@tanstack/react-query',
   '@tanstack/react-router',
   '@tanstack/react-table',
+  '@xyflow/react',
   'axios',
   'class-variance-authority',
   'clsx',

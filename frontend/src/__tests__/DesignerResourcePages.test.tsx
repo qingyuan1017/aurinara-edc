@@ -6,7 +6,6 @@ import { CodelistsPage } from '@/features/designer/CodelistsPage'
 import { SubjectPhasesPage } from '@/features/designer/SubjectPhasesPage'
 import { ArmsPage } from '@/features/designer/ArmsPage'
 import { ScheduleOfAssessmentPage } from '@/features/designer/ScheduleOfAssessmentPage'
-import { CyclesPage } from '@/features/designer/CyclesPage'
 import { VisitsPage } from '@/features/designer/VisitsPage'
 import { useAuthStore } from '@/lib/auth'
 import { api } from '@/lib/api'
@@ -133,38 +132,6 @@ describe('ArmsPage', () => {
   })
 })
 
-describe('CyclesPage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    seedPermissions(['designer.cycle.configure', 'designer.visit.read'])
-  })
-
-  it('creates a cycle with member visits chosen from the visit dropdown', async () => {
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url === '/studies/study-1/versions') return Promise.resolve({ data: DRAFT_VERSIONS })
-      if (url === '/designer/versions/ver-draft/visits') {
-        return Promise.resolve({ data: [{ id: 'visit-1', study_version_id: 'ver-draft', name: 'Baseline', visit_number: 1, visit_type: 'scheduled', target_day: 0, window_before: null, window_after: null, display_order: 1, is_required: true, created_at: 'x' }] })
-      }
-      return Promise.resolve({ data: [] })
-    })
-    vi.mocked(api.post).mockResolvedValue({ data: { id: 'cyc-1', study_version_id: 'ver-draft', name: 'Cycle 1', display_order: 1, created_at: 'x' } } as never)
-
-    renderPage(<CyclesPage studyId="study-1" />)
-
-    fireEvent.change(await screen.findByPlaceholderText('Cycle 1'), { target: { value: 'Cycle 1' } })
-    const visitSelect = screen.getByLabelText('Member visits') as HTMLSelectElement
-    const option = Array.from(visitSelect.options).find((opt) => opt.value === 'visit-1')!
-    option.selected = true
-    fireEvent.change(visitSelect)
-    fireEvent.click(screen.getByRole('button', { name: 'Add cycle' }))
-
-    await waitFor(() => expect(api.post).toHaveBeenCalledWith(
-      '/designer/versions/ver-draft/cycles',
-      expect.objectContaining({ name: 'Cycle 1', display_order: 1, visit_definition_ids: ['visit-1'] }),
-    ))
-  })
-})
-
 describe('VisitsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -191,7 +158,7 @@ describe('VisitsPage', () => {
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith(
       '/designer/versions/ver-draft/visits',
-      expect.objectContaining({ name: 'Week 2', visit_number: 1, visit_type: 'scheduled', display_order: 1, is_required: true, target_day: null, window_before: null, window_after: null }),
+      expect.objectContaining({ name: 'Week 2', visit_number: 1, visit_type: 'visit', display_order: 1, is_required: true, target_day: null, window_before: null, window_after: null, repeat_min: null, repeat_max: null, cycle_length: null }),
     ))
   })
 
@@ -215,9 +182,6 @@ describe('ScheduleOfAssessmentPage', () => {
       if (url === '/designer/versions/ver-draft/visits') {
         return Promise.resolve({ data: [{ id: 'visit-1', study_version_id: 'ver-draft', name: 'Baseline', visit_number: 1, visit_type: 'scheduled', target_day: 0, window_before: null, window_after: null, display_order: 1, is_required: true, created_at: 'x' }] })
       }
-      if (url === '/designer/versions/ver-draft/cycles') {
-        return Promise.resolve({ data: [{ id: 'cycle-1', study_version_id: 'ver-draft', name: 'Cycle 1', display_order: 1, created_at: 'x' }] })
-      }
       if (url === '/designer/studies/study-1/forms') {
         return Promise.resolve({ data: [{ id: 'form-1', name: 'Vitals', form_code: 'VITALS', display_order: 1, is_repeating: false }] })
       }
@@ -235,7 +199,7 @@ describe('ScheduleOfAssessmentPage', () => {
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith(
       '/designer/versions/ver-draft/schedule-of-assessment',
-      { entries: [expect.objectContaining({ form_definition_id: 'form-1', visit_definition_id: 'visit-1', procedure_name: null, cycle_definition_id: null, display_order: 1 })] },
+      { entries: [expect.objectContaining({ form_definition_id: 'form-1', visit_definition_id: 'visit-1', procedure_name: null, display_order: 1 })] },
     ))
   })
 })
