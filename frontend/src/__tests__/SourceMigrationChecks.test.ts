@@ -38,6 +38,7 @@ const approvedDependencies = new Set([
   '@tanstack/react-router',
   '@tanstack/react-table',
   '@xyflow/react',
+  'amazon-cognito-identity-js',
   'axios',
   'class-variance-authority',
   'clsx',
@@ -63,6 +64,7 @@ const approvedDependencies = new Set([
   'eslint-plugin-react-refresh',
   'globals',
   'jsdom',
+  'orval',
   'tailwindcss',
   'typescript',
   'typescript-eslint',
@@ -166,7 +168,8 @@ describe('frontend source migration checks', () => {
           .filter((name) => primitiveNames.has(name))
         if (!importedNames.length) continue
         const importSource = match[2]
-        const importerIsPattern = path.includes('/components/patterns/') && importSource.startsWith('.')
+        const normalizedPath = path.replace(/\\/g, '/')
+        const importerIsPattern = normalizedPath.includes('/components/patterns/') && importSource.startsWith('.')
         const approvedImport = importerIsPattern || approvedPrimitiveImportPrefixes.some((prefix) => importSource.startsWith(prefix))
         if (!approvedImport) {
           violations.push(`${path}: ${importedNames.join(', ')} from ${importSource}`)

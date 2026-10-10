@@ -122,8 +122,11 @@ def _inverted_visit_definitions(draw: st.DrawFn) -> VisitDefinitionCreate:
     constructed by bypassing schema validation via ``model_construct`` — the
     service's own window guard is the layer under test here.
     """
-    # Choose edges so the lower edge strictly exceeds the upper edge.
-    window_after = draw(st.integers(min_value=0, max_value=WINDOW_BOUND_MAX))
+    # Choose edges so the lower edge strictly exceeds the upper edge. The upper
+    # edge is capped one below WINDOW_BOUND_MAX so a strictly more-negative
+    # ``window_before`` still exists within [-WINDOW_BOUND_MAX, -(window_after + 1)]
+    # (otherwise the integer range would invert when window_after == WINDOW_BOUND_MAX).
+    window_after = draw(st.integers(min_value=0, max_value=WINDOW_BOUND_MAX - 1))
     # window_before negative with magnitude large enough to invert the window:
     #   lower_edge = -window_before > window_after  =>  window_before < -window_after
     window_before = draw(
