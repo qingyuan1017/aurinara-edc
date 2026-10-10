@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { PermissionGuard } from '@/components/guards/PermissionGuard'
 import { PERMISSIONS, usePermission } from '@/lib/permissions'
-import type { VisitDefinitionCreate, VisitDefinitionResponse } from '@/api/model'
+import type { VisitDefinitionCreate, VisitDefinitionResponse, VisitDependencyCreate, VisitDependencyResponse } from '@/api/model'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,9 +21,78 @@ function optionalNumber(value: string): number | null {
   return Number(trimmed)
 }
 
+/**
+ * Per-visit visit->visit dependency editor.
+ *
+ * CRITICAL (Finding 2): the list endpoint returns ALL outgoing edges including
+ * system-managed `cycle_member` membership edges. We filter client-side to
+ * `prerequisite` and HIDE `cycle_member` rows (they have no delete path and
+ * would misrepresent membership as authored dependencies). Listing + create
+ * only (no delete endpoint).
+ */
+function VisitDependencyEditor({ visit, visits, canConfigure }: { visit: VisitDefinitionResponse; visits: VisitDefinitionResponse[]; canConfigure: boolean }) {
+  const client = useQueryClient()
+  const [dependsOn, setDependsOn] = useState('')
+  const [condition, setCondition] = useState('')
+  const [error, setError] = useState('')
+
+  const depsQuery = useQuery({
+    queryKey: ['designer-visit-dependencies', visit.id],
+    queryFn: async () => (await api.get<VisitDependencyResponse[]>(`/designer/visits/${visit.id}/dependencies`)).data,
+  })
+
+  const create = useMutation({
+    mutationFn: async () => {
+      if (!dependsOn) throw new Error('Pick a prerequisite visit.')
+      const payload: VisitDependencyCreate = {
+        depends_on_visit_definition_id: dependsOn,
+        dependency_type: 'prerequisite',
+        condition_expression: condition.trim() || null,
+      }
+      return (await api.post<VisitDependencyResponse>(`/designer/visits/${visit.id}/dependencies`, payload)).data
+    },
+    onSuccess: () => {
+      setError(''); setDependsOn(''); setCondition('')
+      client.invalidateQueries({ queryKey: ['designer-visit-dependencies', visit.id] })
+    },
+    onError: (err) => setError(getApiErrorMessage(err, 'Could not create the visit dependency.')),
+  })
+
+  const prerequisites = (depsQuery.data ?? []).filter((dep) => dep.dependency_type === 'prerequisite')
+  const nameFor = (id: string) => visits.find((v) => v.id === id)?.name ?? id
+
+  return (
+    <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+      <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Depends on</h4>
+      {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+      {prerequisites.length ? (
+        <ul className="space-y-1 text-sm">
+          {prerequisites.map((dep) => (
+            <li key={dep.id} className="rounded bg-background px-2 py-1">
+              {nameFor(dep.depends_on_visit_definition_id)}
+              {dep.condition_expression ? <span className="text-muted-foreground"> · {dep.condition_expression}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : <p className="text-xs text-muted-foreground">No prerequisites.</p>}
+      {canConfigure ? (
+        <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); create.mutate() }}>
+          <select aria-label={`Prerequisite visit for ${visit.name}`} value={dependsOn} onChange={(event) => setDependsOn(event.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-sm">
+            <option value="">— select prerequisite visit —</option>
+            {visits.filter((v) => v.id !== visit.id).map((v) => <option key={v.id} value={v.id}>{v.visit_number} · {v.name}</option>)}
+          </select>
+          <Input aria-label={`Condition expression for ${visit.name}`} value={condition} onChange={(event) => setCondition(event.target.value)} placeholder="Optional condition expression" className="h-8" />
+          <Button type="submit" size="sm" variant="outline" pending={create.isPending} loadingText="Adding…">Add prerequisite</Button>
+        </form>
+      ) : null}
+    </div>
+  )
+}
+
 function VisitsEditor({ studyId, versionId }: { studyId: string; versionId: string }) {
   const client = useQueryClient()
   const canConfigure = usePermission(PERMISSIONS.DESIGNER_VISIT_CONFIGURE, studyId)
+  const [expandedVisitId, setExpandedVisitId] = useState('')
 
   const [name, setName] = useState('')
   const [visitNumber, setVisitNumber] = useState(1)
@@ -148,20 +218,44 @@ function VisitsEditor({ studyId, versionId }: { studyId: string; versionId: stri
             <DataTableShell label="Visit definitions" empty={!rows.length} emptyTitle="No visits defined yet" emptyDescription="Visits you create appear here.">
               <Table>
                 <caption className="sr-only">Visit definitions ordered by display order</caption>
-                <TableHeader><TableRow>{['Order', '#', 'Name', 'Type', 'Repeat / length', 'Target day', 'Window -', 'Window +', 'Required'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
-                <TableBody>{rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.display_order}</TableCell>
-                    <TableCell>{row.visit_number}</TableCell>
-                    <TableCell className="font-medium">{row.name}</TableCell>
-                    <TableCell>{row.visit_type}</TableCell>
-                    <TableCell>{row.visit_type === 'cycle' ? `${row.repeat_min ?? '—'}–${row.repeat_max ?? '—'} · ${row.cycle_length ?? '—'}d` : '—'}</TableCell>
-                    <TableCell>{row.target_day ?? '—'}</TableCell>
-                    <TableCell>{row.window_before ?? '—'}</TableCell>
-                    <TableCell>{row.window_after ?? '—'}</TableCell>
-                    <TableCell>{row.is_required ? 'Yes' : 'No'}</TableCell>
-                  </TableRow>
-                ))}</TableBody>
+                <TableHeader><TableRow>{['Order', '#', 'Name', 'Type', 'Repeat / length', 'Target day', 'Window -', 'Window +', 'Required', 'Dependencies'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
+                <TableBody>{rows.map((row) => {
+                  const expanded = expandedVisitId === row.id
+                  return (
+                    <Fragment key={row.id}>
+                      <TableRow>
+                        <TableCell>{row.display_order}</TableCell>
+                        <TableCell>{row.visit_number}</TableCell>
+                        <TableCell className="font-medium">{row.name}</TableCell>
+                        <TableCell>{row.visit_type}</TableCell>
+                        <TableCell>{row.visit_type === 'cycle' ? `${row.repeat_min ?? '—'}–${row.repeat_max ?? '—'} · ${row.cycle_length ?? '—'}d` : '—'}</TableCell>
+                        <TableCell>{row.target_day ?? '—'}</TableCell>
+                        <TableCell>{row.window_before ?? '—'}</TableCell>
+                        <TableCell>{row.window_after ?? '—'}</TableCell>
+                        <TableCell>{row.is_required ? 'Yes' : 'No'}</TableCell>
+                        <TableCell>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            aria-expanded={expanded}
+                            aria-label={`${expanded ? 'Hide' : 'Show'} dependencies for ${row.name}`}
+                            onClick={() => setExpandedVisitId(expanded ? '' : row.id)}
+                          >
+                            {expanded ? 'Hide' : 'Depends on'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                      {expanded ? (
+                        <TableRow>
+                          <TableCell colSpan={10} className="bg-muted/20">
+                            <VisitDependencyEditor visit={row} visits={rows} canConfigure={canConfigure} />
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </Fragment>
+                  )
+                })}</TableBody>
               </Table>
             </DataTableShell>
           </CardContent>
