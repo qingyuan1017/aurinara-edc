@@ -61,6 +61,8 @@ class AuditEventResponse(BaseSchema):
     new_value: str | None = None
     reason: str | None = None
     request_id: UUID
+    authorization_decision_id: UUID | None = None
+    authorization_policy_version: int | None = None
     ip_address: str | None = None
     user_agent: str | None = None
 
@@ -89,6 +91,8 @@ class AuditEventExport(BaseModel):
     new_value: str | None = None
     reason: str | None = None
     request_id: str
+    authorization_decision_id: str | None = None
+    authorization_policy_version: int | None = None
     ip_address: str | None = None
     user_agent: str | None = None
 

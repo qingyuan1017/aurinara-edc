@@ -7,7 +7,7 @@ with separate database, object storage, secrets, authentication, and logging con
 from enum import StrEnum
 from functools import lru_cache
 
-from pydantic import PostgresDsn, field_validator
+from pydantic import PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     secrets_namespace: str = "local"
     auth_issuer: str | None = None
     auth_audience: str | None = None
+    auth_jwks_url: str | None = None
+    auth_algorithms: str = "RS256"
+    auth_provider_name: str = "oidc"
     logging_sink: str = "stdout"
     logging_namespace: str = "local"
     retention_days: int = 2555
@@ -119,6 +122,19 @@ class Settings(BaseSettings):
     cognito_scopes: str = "openid email"
     cognito_jwks_cache_ttl_seconds: int = 3600
 
+    # --- Shared Aurinara platform control plane ---
+    platform_control_plane_url: str | None = None
+    platform_authorization_mode: str = "disabled"
+    platform_identity_issuer: str | None = None
+    platform_service_token_url: str | None = None
+    platform_service_client_id: str | None = None
+    platform_service_client_secret: SecretStr | None = None
+    platform_service_audience: str = "aurinara-platform"
+    platform_authorization_timeout_seconds: float = 2.0
+    platform_authorization_cache_seconds: int = 30
+    platform_event_queue_url: str | None = None
+    platform_event_region: str = "us-east-1"
+
     # --- Object storage (local by default; S3-compatible when configured) ---
     object_storage_backend: str = "local"
     object_storage_local_dir: str = "attachments"
@@ -150,6 +166,21 @@ class Settings(BaseSettings):
         """Accept only the published CTMS delivery phases (0 means disabled)."""
         if value not in (0, 1, 2, 3):
             raise ValueError("CTMS_PHASE must be 0, 1, 2, or 3")
+        return value
+
+    @field_validator("platform_authorization_mode")
+    @classmethod
+    def validate_platform_authorization_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"disabled", "shadow", "enforced"}:
+            raise ValueError("PLATFORM_AUTHORIZATION_MODE must be disabled, shadow, or enforced")
+        return normalized
+
+    @field_validator("platform_authorization_cache_seconds")
+    @classmethod
+    def validate_platform_authorization_cache(cls, value: int) -> int:
+        if not 0 <= value <= 60:
+            raise ValueError("platform authorization cache must be between 0 and 60 seconds")
         return value
 
     # --- PV/Safety phased capability rollout ---

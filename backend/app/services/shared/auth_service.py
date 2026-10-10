@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import get_settings
 from app.core.ctms import Module
 from app.core.security import (
     CognitoTokenPayload,
@@ -37,6 +38,7 @@ from app.core.security import (
     hash_password,
     refresh_cognito_token,
     validate_cognito_token,
+    validate_oidc_token,
     verify_mfa_code,
     verify_password,
     verify_reset_token,
@@ -367,6 +369,24 @@ class AuthService:
             InvalidTokenError: If the token is invalid.
             AuthenticationError: If no internal user maps to the token subject.
         """
+        oidc_payload = validate_oidc_token(token)
+        if oidc_payload is not None:
+            provider = get_settings().auth_provider_name
+            result = await session.execute(
+                select(User).where(
+                    User.external_identity_provider == provider,
+                    User.external_subject == oidc_payload.sub,
+                )
+            )
+            user = result.scalars().first()
+            if user is None:
+                raise AuthenticationError(
+                    f"No internal user mapped to external identity: {oidc_payload.sub}"
+                )
+            if user.status == UserStatus.inactive:
+                raise AuthenticationError("Account is inactive")
+            return user
+
         payload: CognitoTokenPayload | None = validate_cognito_token(token)
 
         if payload is None:

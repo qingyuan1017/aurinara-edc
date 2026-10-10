@@ -19,6 +19,10 @@ from app.models.shared.identity import (
     UserStatus,
 )
 from app.models.shared.notification import Notification, NotificationStatus
+from app.models.shared.platform_projection import (
+    PlatformMembershipProjection,
+    PlatformProjectionEvent,
+)
 from app.models.shared.revoked_token import RevokedToken
 
 SHARED_MODEL_PACKAGE = "app.models.shared"
@@ -37,6 +41,8 @@ __all__ = [
     "Notification",
     "NotificationStatus",
     "Permission",
+    "PlatformMembershipProjection",
+    "PlatformProjectionEvent",
     "RevokedToken",
     "Role",
     "RolePermission",

@@ -13,7 +13,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Index, String, Text, Uuid, event
+from sqlalchemy import JSON, BigInteger, DateTime, Index, String, Text, Uuid, event
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,9 +33,7 @@ class AuditEvent(Base):
     __tablename__ = "audit_events"
 
     # Primary key
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
 
     # Actor
     actor_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -99,13 +97,21 @@ class AuditEvent(Base):
     new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Reason for change (required post-submission edits)
-    reason: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="Reason_For_Change"
-    )
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Reason_For_Change")
 
     # Request tracing
     request_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, nullable=False, comment="Correlates to X-Request-ID header"
+    )
+    authorization_decision_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        nullable=True,
+        comment="Control-plane decision that authorized this operation",
+    )
+    authorization_policy_version: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+        comment="Control-plane policy version used by the decision",
     )
 
     # Client metadata

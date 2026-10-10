@@ -294,6 +294,89 @@ class CognitoTokenPayload(BaseModel):
     name: str | None = None
 
 
+class OidcTokenPayload(BaseModel):
+    """Minimal claims from a standard externally issued OIDC access token."""
+
+    sub: str
+    iss: str
+    exp: datetime
+    audience: str | list[str]
+
+
+_oidc_jwks_cache: dict[str, Any] | None = None
+_oidc_jwks_cache_expires_at = 0.0
+
+
+def _fetch_oidc_jwks(*, force_refresh: bool = False) -> dict[str, Any] | None:
+    global _oidc_jwks_cache, _oidc_jwks_cache_expires_at
+    settings = get_settings()
+    if not settings.auth_jwks_url:
+        return None
+    now = time.monotonic()
+    if not force_refresh and _oidc_jwks_cache is not None and now < _oidc_jwks_cache_expires_at:
+        return _oidc_jwks_cache
+    try:
+        with urllib.request.urlopen(settings.auth_jwks_url, timeout=5) as response:
+            result = json.loads(response.read())
+        if not isinstance(result, dict) or not isinstance(result.get("keys"), list):
+            return None
+        _oidc_jwks_cache = result
+        _oidc_jwks_cache_expires_at = now + max(60, int(settings.cognito_jwks_cache_ttl_seconds))
+        return result
+    except Exception:
+        return None
+
+
+def validate_oidc_token(token: str) -> OidcTokenPayload | None:
+    """Validate a standard OIDC token against configured issuer, audience, and JWKS."""
+
+    settings = get_settings()
+    if not settings.auth_issuer or not settings.auth_audience or not settings.auth_jwks_url:
+        return None
+    jwks = _fetch_oidc_jwks()
+    if jwks is None:
+        raise InvalidTokenError("Unable to fetch OIDC JWKS for token validation")
+    try:
+        header = jwt.get_unverified_header(token)
+        algorithm = header.get("alg")
+        algorithms = [item.strip() for item in settings.auth_algorithms.split(",") if item.strip()]
+        if algorithm not in algorithms:
+            raise InvalidTokenError("Unsupported OIDC token algorithm")
+        kid = header.get("kid")
+        if not kid:
+            raise InvalidTokenError("Token header missing 'kid'")
+        key = next((item for item in jwks.get("keys", []) if item.get("kid") == kid), None)
+        if key is None:
+            refreshed = _fetch_oidc_jwks(force_refresh=True)
+            key = next(
+                (item for item in (refreshed or {}).get("keys", []) if item.get("kid") == kid),
+                None,
+            )
+        if key is None:
+            raise InvalidTokenError("Token key ID not found in OIDC JWKS")
+        payload = jwt.decode(
+            token,
+            key,
+            algorithms=algorithms,
+            issuer=settings.auth_issuer,
+            audience=settings.auth_audience,
+            options={"require_exp": True, "require_sub": True, "require_iat": True},
+        )
+        subject = payload.get("sub")
+        if not isinstance(subject, str) or not subject:
+            raise InvalidTokenError("OIDC token has an invalid subject")
+        return OidcTokenPayload(
+            sub=subject,
+            iss=payload["iss"],
+            exp=datetime.fromtimestamp(payload["exp"], tz=UTC),
+            audience=payload["aud"],
+        )
+    except InvalidTokenError:
+        raise
+    except (JWTError, KeyError, TypeError, ValueError) as exc:
+        raise InvalidTokenError("OIDC token validation failed") from exc
+
+
 # Bounded process-local cache. A key miss forces one refresh for Cognito rotation.
 _jwks_cache: dict[str, Any] | None = None
 _jwks_cache_expires_at = 0.0

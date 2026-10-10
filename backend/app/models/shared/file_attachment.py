@@ -62,7 +62,10 @@ class FileAttachment(Base):
         String(20), nullable=False, default="EDC", server_default="EDC"
     )
     attachment_type: Mapped[str] = mapped_column(
-        String(40), nullable=False, default="Clinical_Attachment", server_default="Clinical_Attachment"
+        String(40),
+        nullable=False,
+        default="Clinical_Attachment",
+        server_default="Clinical_Attachment",
     )
 
     # Polymorphic parent reference.
@@ -95,6 +98,12 @@ class FileAttachment(Base):
     storage_key: Mapped[str] = mapped_column(
         Text, nullable=False, comment="S3 or local object-storage key"
     )
+    platform_object_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        nullable=True,
+        index=True,
+        comment="Opaque object ID in the shared platform catalog",
+    )
 
     # Upload provenance.
     uploaded_by: Mapped[uuid.UUID] = mapped_column(
@@ -105,9 +114,7 @@ class FileAttachment(Base):
     )
 
     # Soft deletion (Requirement 27.3); the row and storage metadata are retained.
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -116,7 +123,9 @@ class FileAttachment(Base):
     # pre-CTMS EDC rows and are populated for every operational attachment.
     correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    retention_state: Mapped[str] = mapped_column(String(30), nullable=False, default="active", server_default="active")
+    retention_state: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="active", server_default="active"
+    )
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import PaginationParams
 from app.api.pagination import paginate
 from app.core.audit import audit_service
+from app.core.config import get_settings
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
 from app.schemas.edc.study import StudyCreate
@@ -70,12 +71,15 @@ class StudyService:
                 details identify the conflicting identity — the existing
                 ``study_code`` and the existing study ``id`` (R1.6, Req 4.2).
         """
+        if get_settings().platform_authorization_mode == "enforced":
+            raise ConflictError(
+                message="Canonical studies are created through the platform control plane",
+                details={"reason": "CANONICAL_STUDY_MANAGED_EXTERNALLY"},
+            )
         # Reject a competing canonical Study identity (R1.6). The canonical
         # Study identity key is ``study_code``; a pre-existing row with the same
         # code is the conflicting identity.
-        existing = await session.execute(
-            select(Study).where(Study.study_code == data.study_code)
-        )
+        existing = await session.execute(select(Study).where(Study.study_code == data.study_code))
         conflicting = existing.scalars().first()
         if conflicting is not None:
             raise ConflictError(
@@ -187,7 +191,10 @@ class StudyService:
 
         logger.info(
             "Study status transitioned: id=%s %s→%s actor=%s",
-            study.id, old_status, target_status.value, actor_id,
+            study.id,
+            old_status,
+            target_status.value,
+            actor_id,
         )
         return study
 
@@ -237,11 +244,7 @@ class StudyService:
         Returns:
             PaginatedResponse containing Study instances.
         """
-        query = (
-            select(Study)
-            .where(Study.deleted_at.is_(None))
-            .order_by(Study.created_at.desc())
-        )
+        query = select(Study).where(Study.deleted_at.is_(None)).order_by(Study.created_at.desc())
         return await paginate(session, query, pagination)
 
 

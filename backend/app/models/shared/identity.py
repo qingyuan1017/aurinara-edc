@@ -14,6 +14,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
@@ -93,6 +94,8 @@ class User(Base):
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    platform_managed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    platform_revision: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     __table_args__ = (
         UniqueConstraint(
@@ -206,6 +209,8 @@ class UserRole(Base):
     assigned_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    platform_managed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    platform_role_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="user_roles", foreign_keys=[user_id])

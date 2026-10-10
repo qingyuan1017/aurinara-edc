@@ -26,7 +26,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import audit_service
 from app.core.config import get_settings
 from app.core.ctms import Module
-from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.core.exceptions import (
+    ConflictError,
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+)
 from app.core.request_context import get_correlation_id
 from app.core.storage import ObjectStorage, get_object_storage
 from app.models.edc.form_data import FieldValue, FormInstance
@@ -42,6 +47,7 @@ from app.models.shared.file_attachment import (
 )
 from app.services.edc.lock_service import LockService, lock_service
 from app.services.shared.permission_service import PermissionService
+from app.services.shared.platform_objects import get_platform_objects
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +193,13 @@ class FileAttachmentService:
             )
 
         attachment_id = uuid.uuid4()
+        platform_object_id = await self._register_platform_bytes(
+            attachment_id=attachment_id,
+            study_id=context.study_id,
+            content=content,
+            content_type=content_type,
+            classification=f"{context.object_type.value}-attachment",
+        )
         storage_key = f"files/{context.study_id}/{attachment_id}/{filename}"
         # The object is written before the metadata row so a storage failure
         # cannot leave a committed attachment row without file bytes.  The
@@ -204,6 +217,7 @@ class FileAttachmentService:
             content_type=content_type,
             size_bytes=len(content),
             storage_key=storage_key,
+            platform_object_id=platform_object_id,
             uploaded_by=actor_id,
             uploaded_at=datetime.now(UTC),
         )
@@ -271,6 +285,14 @@ class FileAttachmentService:
         content, filename, content_type = await self._read_file(file)
         self._validate_operational_file(content, content_type)
         attachment_id = uuid.uuid4()
+        platform_object_id = await self._register_platform_bytes(
+            attachment_id=attachment_id,
+            study_id=study_id,
+            content=content,
+            content_type=content_type,
+            classification="ctms-operational-attachment",
+            retention_until=retention_until,
+        )
         # Do not put the submitted name in the key. The UUID namespace and a
         # short validated extension make traversal and key injection impossible.
         extension = self._safe_extension(filename)
@@ -288,6 +310,7 @@ class FileAttachmentService:
             content_type=content_type,
             size_bytes=len(content),
             storage_key=storage_key,
+            platform_object_id=platform_object_id,
             uploaded_by=actor_id,
             uploaded_at=datetime.now(UTC),
             correlation_id=correlation_id,
@@ -314,10 +337,43 @@ class FileAttachmentService:
         )
         return attachment
 
+    @staticmethod
+    async def _register_platform_bytes(
+        *,
+        attachment_id: UUID,
+        study_id: UUID,
+        content: bytes,
+        content_type: str,
+        classification: str,
+        retention_until: datetime | None = None,
+    ) -> UUID | None:
+        gateway = get_platform_objects()
+        if gateway.mode == "disabled":
+            return None
+        try:
+            return await gateway.register_bytes(
+                study_id=study_id,
+                content=content,
+                media_type=content_type,
+                classification=classification,
+                external_reference=f"file_attachment:{attachment_id}",
+                retention_until=retention_until,
+            )
+        except ServiceUnavailableError:
+            if gateway.mode == "enforced":
+                raise
+            logger.warning(
+                "Shared object upload unavailable in shadow mode; retaining legacy bytes"
+            )
+            return None
+
     @classmethod
     def _normalize_operational_parent_type(cls, parent_type: str) -> str:
         normalized = str(parent_type).strip().replace("-", "_").lower()
-        if normalized in cls._CLINICAL_PARENT_TYPES or normalized not in cls._OPERATIONAL_PARENT_TYPES:
+        if (
+            normalized in cls._CLINICAL_PARENT_TYPES
+            or normalized not in cls._OPERATIONAL_PARENT_TYPES
+        ):
             raise ValidationError(
                 message="Operational attachments require a CTMS-owned parent",
                 details={"parent_type": normalized},
@@ -387,6 +443,31 @@ class FileAttachmentService:
         Both the specific parent read permission and object scope are checked;
         a caller cannot download merely because it knows an attachment UUID.
         """
+        attachment = await self.authorize_download(
+            session,
+            attachment,
+            user,
+            correlation_id=correlation_id,
+        )
+
+        try:
+            return await self.storage.get(attachment.storage_key)
+        except FileNotFoundError as exc:
+            raise NotFoundError(
+                message="Attachment content not found",
+                details={"attachment_id": str(attachment.id)},
+            ) from exc
+
+    async def authorize_download(
+        self,
+        session: AsyncSession,
+        attachment: FileAttachment | UUID,
+        user: Any,
+        *,
+        correlation_id: str | None = None,
+    ) -> FileAttachment:
+        """Authorize and audit access before local or gateway byte retrieval."""
+
         attachment = await self._resolve_attachment(session, attachment)
         self._assert_attachment_ownership(attachment)
         if attachment.deleted_at is not None or attachment.archived_at is not None:
@@ -408,14 +489,6 @@ class FileAttachmentService:
         )
         self.permission_service.assert_object_access(user, attachment)
 
-        try:
-            content = await self.storage.get(attachment.storage_key)
-        except FileNotFoundError as exc:
-            raise NotFoundError(
-                message="Attachment content not found",
-                details={"attachment_id": str(attachment.id)},
-            ) from exc
-
         await audit_service.record(
             session,
             entity_type=(
@@ -427,20 +500,26 @@ class FileAttachmentService:
             action="download",
             module=attachment.module,
             actor_id=getattr(user, "id", None),
-            correlation_id=correlation_id or getattr(user, "correlation_id", None) or get_correlation_id(),
+            correlation_id=correlation_id
+            or getattr(user, "correlation_id", None)
+            or get_correlation_id(),
             scope={"study_id": attachment.study_id, "site_id": attachment.site_id},
             changed_fields=[],
             study_id=attachment.study_id,
             site_id=attachment.site_id,
             subject_id=attachment.subject_id,
-            new_value=f"storage_key={attachment.storage_key}",
+            new_value=(
+                f"platform_object_id={attachment.platform_object_id}"
+                if attachment.platform_object_id is not None
+                else f"attachment_id={attachment.id}"
+            ),
         )
         logger.info(
             "File attachment downloaded: id=%s actor=%s",
             attachment.id,
             getattr(user, "id", None),
         )
-        return content
+        return attachment
 
     async def soft_delete(
         self,
@@ -495,7 +574,9 @@ class FileAttachmentService:
             entity_id=attachment.id,
             action="delete",
             module=attachment.module,
-            correlation_id=correlation_id or getattr(user, "correlation_id", None) or get_correlation_id(),
+            correlation_id=correlation_id
+            or getattr(user, "correlation_id", None)
+            or get_correlation_id(),
             scope={"study_id": attachment.study_id, "site_id": attachment.site_id},
             changed_fields=["deleted_at", "deleted_by", "delete_reason"],
             study_id=attachment.study_id,
@@ -573,7 +654,14 @@ class FileAttachmentService:
             actor_id=actor_id,
             correlation_id=correlation_id or get_correlation_id(),
             scope={"study_id": attachment.study_id, "site_id": attachment.site_id},
-            changed_fields=["deleted_at", "deleted_by", "delete_reason", "restored_at", "restored_by", "retention_state"],
+            changed_fields=[
+                "deleted_at",
+                "deleted_by",
+                "delete_reason",
+                "restored_at",
+                "restored_by",
+                "retention_state",
+            ],
             study_id=attachment.study_id,
             site_id=attachment.site_id,
             reason=reason.strip(),
@@ -610,7 +698,9 @@ class FileAttachmentService:
                 if attachment.module == FileAttachmentModule.CTMS.value
                 else "file.upload"
             )
-            self.permission_service.require(user, permission, study_id=attachment.study_id, site_id=attachment.site_id)
+            self.permission_service.require(
+                user, permission, study_id=attachment.study_id, site_id=attachment.site_id
+            )
             self.permission_service.assert_object_access(user, attachment)
         attachment.archived_at = current_time
         attachment.archived_by = actor_id
@@ -619,7 +709,9 @@ class FileAttachmentService:
         await session.flush()
         await audit_service.record(
             session,
-            entity_type="operational_attachment" if attachment.module == FileAttachmentModule.CTMS.value else "file_attachment",
+            entity_type="operational_attachment"
+            if attachment.module == FileAttachmentModule.CTMS.value
+            else "file_attachment",
             entity_id=attachment.id,
             action="archive",
             module=attachment.module,
@@ -665,12 +757,16 @@ class FileAttachmentService:
                 if attachment.module == FileAttachmentModule.CTMS.value
                 else "file.upload"
             )
-            self.permission_service.require(user, permission, study_id=attachment.study_id, site_id=attachment.site_id)
+            self.permission_service.require(
+                user, permission, study_id=attachment.study_id, site_id=attachment.site_id
+            )
             self.permission_service.assert_object_access(user, attachment)
         await self.storage.delete(attachment.storage_key)
         await audit_service.record(
             session,
-            entity_type="operational_attachment" if attachment.module == FileAttachmentModule.CTMS.value else "file_attachment",
+            entity_type="operational_attachment"
+            if attachment.module == FileAttachmentModule.CTMS.value
+            else "file_attachment",
             entity_id=attachment.id,
             action="purge",
             module=attachment.module,

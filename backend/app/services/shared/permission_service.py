@@ -20,16 +20,23 @@ Satisfies Requirements:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.ctms import Module
-from app.core.exceptions import AuthenticationError, AuthorizationError
+from app.core.exceptions import AuthenticationError, AuthorizationError, ServiceUnavailableError
 from app.core.permissions import role_modules
 from app.models.shared.identity import User, UserStatus
 from app.schemas.shared.permission import AuthorizationScope, PermissionGrant
+from app.services.shared.platform_authorization import (
+    AuthorizationGateway,
+    get_platform_authorization,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class PermissionService:
@@ -38,6 +45,12 @@ class PermissionService:
     Resolves user permissions from their role assignments and enforces both
     route-level and object-level access checks.
     """
+
+    def __init__(self, platform_gateway: AuthorizationGateway | None = None) -> None:
+        self._platform_gateway = platform_gateway
+
+    def _gateway(self) -> AuthorizationGateway:
+        return self._platform_gateway or get_platform_authorization()
 
     def _ensure_active(self, user: User) -> None:
         """Reject deactivated accounts before resolving or enforcing scope.
@@ -73,8 +86,7 @@ class PermissionService:
             site_id = user_role.site_id
 
             role_permission_codes = {
-                role_permission.permission.code
-                for role_permission in role.role_permissions
+                role_permission.permission.code for role_permission in role.role_permissions
             }
             # Classify which authorization modules this role owns (designer,
             # operational, both, or neither) from its own permission codes. Each
@@ -115,7 +127,46 @@ class PermissionService:
         Requirements 2.2, 2.3, 23.4: route-level enforcement with clear error.
         """
         scope = self.resolve_scope(user)
-        if not scope.has_permission(permission, study_id=study_id, site_id=site_id):
+        local_allowed = scope.has_permission(permission, study_id=study_id, site_id=site_id)
+        gateway = self._gateway()
+        if gateway.mode != "disabled":
+            try:
+                decision = gateway.decide(user, permission, study_id=study_id, site_id=site_id)
+            except ServiceUnavailableError:
+                if gateway.mode == "enforced":
+                    raise
+                logger.warning(
+                    "platform authorization unavailable in shadow mode",
+                    extra={"user_id": str(user.id), "permission": permission},
+                )
+                decision = None
+            if decision is None:
+                if not local_allowed:
+                    raise AuthorizationError(
+                        message="Insufficient permissions",
+                        details={
+                            "required_permission": permission,
+                            "study_id": str(study_id) if study_id else None,
+                            "site_id": str(site_id) if site_id else None,
+                        },
+                    )
+                return
+            if gateway.mode == "shadow" and decision.allowed != local_allowed:
+                logger.warning(
+                    "platform authorization shadow mismatch",
+                    extra={
+                        "user_id": str(user.id),
+                        "permission": permission,
+                        "study_id": str(study_id) if study_id else None,
+                        "site_id": str(site_id) if site_id else None,
+                        "local_allowed": local_allowed,
+                        "platform_allowed": decision.allowed,
+                        "policy_version": decision.policy_version,
+                    },
+                )
+            if gateway.mode == "enforced":
+                local_allowed = decision.allowed
+        if not local_allowed:
             raise AuthorizationError(
                 message="Insufficient permissions",
                 details={
@@ -201,12 +252,35 @@ class PermissionService:
         """
         scope = self.resolve_scope(user)
 
-        # System-scope users see all studies
-        if scope.has_system_grant():
-            return study_ids
-
-        allowed_study_ids = scope.get_study_ids()
-        return [sid for sid in study_ids if sid in allowed_study_ids]
+        allowed_study_ids = set(study_ids) if scope.has_system_grant() else scope.get_study_ids()
+        local = [sid for sid in study_ids if sid in allowed_study_ids]
+        gateway = self._gateway()
+        if gateway.mode == "disabled":
+            return local
+        try:
+            central = [
+                study_id
+                for study_id in study_ids
+                if gateway.decide(
+                    user,
+                    "study.read",
+                    study_id=study_id,
+                    site_id=None,
+                ).allowed
+            ]
+        except ServiceUnavailableError:
+            if gateway.mode == "enforced":
+                raise
+            logger.warning("platform authorization unavailable for study-list shadow check")
+            return local
+        if gateway.mode == "shadow":
+            if set(central) != set(local):
+                logger.warning(
+                    "platform authorization study-list shadow mismatch",
+                    extra={"user_id": str(user.id)},
+                )
+            return local
+        return central
 
     def filter_sites(
         self,
@@ -222,21 +296,45 @@ class PermissionService:
         """
         scope = self.resolve_scope(user)
 
-        # System-scope users see all sites.
-        if scope.has_system_grant():
-            return site_ids
-
-        allowed_site_ids = scope.get_site_ids()
-        allowed_study_ids = scope.get_study_ids()
-        return [
+        allowed_site_ids = set(site_ids) if scope.has_system_grant() else scope.get_site_ids()
+        allowed_study_ids = (
+            set(site_study_ids.values())
+            if scope.has_system_grant() and site_study_ids is not None
+            else scope.get_study_ids()
+        )
+        local = [
             site_id
             for site_id in site_ids
             if site_id in allowed_site_ids
-            or (
-                site_study_ids is not None
-                and site_study_ids.get(site_id) in allowed_study_ids
-            )
+            or (site_study_ids is not None and site_study_ids.get(site_id) in allowed_study_ids)
         ]
+        gateway = self._gateway()
+        if gateway.mode == "disabled":
+            return local
+        try:
+            central = [
+                site_id
+                for site_id in site_ids
+                if gateway.decide(
+                    user,
+                    "site.read",
+                    study_id=site_study_ids.get(site_id) if site_study_ids else None,
+                    site_id=site_id,
+                ).allowed
+            ]
+        except ServiceUnavailableError:
+            if gateway.mode == "enforced":
+                raise
+            logger.warning("platform authorization unavailable for site-list shadow check")
+            return local
+        if gateway.mode == "shadow":
+            if set(central) != set(local):
+                logger.warning(
+                    "platform authorization site-list shadow mismatch",
+                    extra={"user_id": str(user.id)},
+                )
+            return local
+        return central
 
     def assert_object_access(self, user: User, obj: object) -> None:
         """Check that the object's study_id/site_id is within the user's scope.

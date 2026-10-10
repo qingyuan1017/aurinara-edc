@@ -12,25 +12,28 @@ Endpoints:
   - DELETE /files/{file_id}                          reasoned soft-delete
 """
 
+import logging
 from typing import Annotated
 from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ServiceUnavailableError
 from app.models.shared.file_attachment import FileAttachment
 from app.models.shared.identity import User
 from app.schemas.shared.file_attachment import FileAttachmentDelete, FileAttachmentResponse
 from app.services.shared.file_attachment_service import file_attachment_service
+from app.services.shared.platform_objects import get_platform_objects
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 router = APIRouter(tags=["files"])
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -71,6 +74,20 @@ async def download_file(
             message="File attachment not found",
             details={"attachment_id": str(file_id)},
         )
+
+    if attachment.platform_object_id is not None:
+        gateway = get_platform_objects()
+        if gateway.mode != "disabled":
+            await file_attachment_service.authorize_download(session, attachment, current_user)
+            try:
+                url = await gateway.authorize_download(attachment.platform_object_id)
+                return RedirectResponse(url=url, status_code=307)
+            except ServiceUnavailableError:
+                if gateway.mode == "enforced":
+                    raise
+                logger.warning(
+                    "Shared object download unavailable in shadow mode; using legacy bytes"
+                )
 
     content = await file_attachment_service.download(session, attachment, current_user)
     filename = quote(attachment.filename, safe="")

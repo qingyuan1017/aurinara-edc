@@ -69,6 +69,8 @@ class AuditService:
         actor_id: UUID | None = None,
         actor_email: str | None = None,
         request_id: str | None = None,
+        authorization_decision_id: UUID | None = None,
+        authorization_policy_version: int | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
     ) -> AuditEvent:
@@ -120,6 +122,17 @@ class AuditService:
         if request_id_value is None:
             request_id_value = uuid_mod.uuid4()
 
+        if authorization_decision_id is None:
+            # Imported lazily to keep the audit core independent from service setup.
+            from app.services.shared.platform_authorization import (
+                get_authorization_decision,
+            )
+
+            decision = get_authorization_decision()
+            if decision is not None:
+                authorization_decision_id = decision.decision_id
+                authorization_policy_version = decision.policy_version
+
         event = AuditEvent(
             actor_id=actor_id,
             actor_email=actor_email,
@@ -134,17 +147,22 @@ class AuditService:
                 key: (str(value) if isinstance(value, UUID) else value)
                 for key, value in (scope or {}).items()
                 if value is not None
-            } or None,
+            }
+            or None,
             changed_fields=list(changed_fields) if changed_fields is not None else None,
             source_module=(
                 source_module.value
                 if isinstance(source_module, Module)
-                else str(source_module) if source_module is not None else None
+                else str(source_module)
+                if source_module is not None
+                else None
             ),
             target_module=(
                 target_module.value
                 if isinstance(target_module, Module)
-                else str(target_module) if target_module is not None else None
+                else str(target_module)
+                if target_module is not None
+                else None
             ),
             source_record_id=source_record_id,
             target_record_id=target_record_id,
@@ -157,6 +175,8 @@ class AuditService:
             new_value=new_value,
             reason=reason,
             request_id=request_id_value,
+            authorization_decision_id=authorization_decision_id,
+            authorization_policy_version=authorization_policy_version,
             ip_address=ip_address,
             user_agent=user_agent,
         )
@@ -305,9 +325,7 @@ class AuditService:
                     actor_kind=event.actor_kind if isinstance(event.actor_kind, str) else "user",
                     worker_id=event.worker_id if isinstance(event.worker_id, str) else None,
                     correlation_id=(
-                        event.correlation_id
-                        if isinstance(event.correlation_id, str)
-                        else None
+                        event.correlation_id if isinstance(event.correlation_id, str) else None
                     ),
                     scope_json=event.scope_json if isinstance(event.scope_json, dict) else None,
                     changed_fields=(
@@ -322,6 +340,12 @@ class AuditService:
                     new_value=event.new_value,
                     reason=event.reason,
                     request_id=str(event.request_id),
+                    authorization_decision_id=(
+                        str(event.authorization_decision_id)
+                        if event.authorization_decision_id
+                        else None
+                    ),
+                    authorization_policy_version=event.authorization_policy_version,
                     ip_address=event.ip_address,
                     user_agent=event.user_agent,
                 ).model_dump()
