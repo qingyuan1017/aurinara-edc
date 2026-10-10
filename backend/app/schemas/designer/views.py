@@ -179,6 +179,17 @@ class SubjectPhaseDefinitionView(FrozenView):
     display_order: int
 
 
+class SubjectPhaseTransitionView(FrozenView):
+    """Immutable view of a published subject-phase-to-phase transition edge."""
+
+    id: UUID
+    design_version_id: UUID
+    from_phase_id: UUID
+    to_phase_id: UUID
+    label: str | None = None
+    condition_expression: str | None = None
+
+
 class ScheduleOfAssessmentEntryView(FrozenView):
     """Immutable view of one form/procedure-to-visit mapping entry.
 
@@ -313,6 +324,7 @@ class PublishedDesignView(FrozenView):
     coding_settings: tuple[CodingSettingView, ...] = Field(default_factory=tuple)
     form_dependencies: tuple[FormDependencyView, ...] = Field(default_factory=tuple)
     visit_dependencies: tuple[VisitDependencyView, ...] = Field(default_factory=tuple)
+    subject_phase_transitions: tuple[SubjectPhaseTransitionView, ...] = Field(default_factory=tuple)
 
 
 __all__ = [
@@ -331,6 +343,7 @@ __all__ = [
     "ScheduleOfAssessmentEntryView",
     "ScheduleOfAssessmentView",
     "SubjectPhaseDefinitionView",
+    "SubjectPhaseTransitionView",
     "VisitDefinitionView",
     "VisitDependencyView",
 ]

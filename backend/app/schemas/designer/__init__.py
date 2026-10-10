@@ -21,6 +21,11 @@ from app.schemas.designer.study_version import (
 from app.schemas.designer.subject_phase_definition import (
     SubjectPhaseDefinitionCreate,
     SubjectPhaseDefinitionResponse,
+    SubjectPhaseDefinitionUpdate,
+)
+from app.schemas.designer.subject_phase_transition import (
+    SubjectPhaseTransitionCreate,
+    SubjectPhaseTransitionResponse,
 )
 from app.schemas.designer.views import (
     ArmDefinitionView,
@@ -38,6 +43,7 @@ from app.schemas.designer.views import (
     ScheduleOfAssessmentEntryView,
     ScheduleOfAssessmentView,
     SubjectPhaseDefinitionView,
+    SubjectPhaseTransitionView,
     VisitDefinitionView,
     VisitDependencyView,
 )
@@ -76,7 +82,11 @@ __all__ = [
     "StudyVersionResponse",
     "SubjectPhaseDefinitionCreate",
     "SubjectPhaseDefinitionResponse",
+    "SubjectPhaseDefinitionUpdate",
     "SubjectPhaseDefinitionView",
+    "SubjectPhaseTransitionCreate",
+    "SubjectPhaseTransitionResponse",
+    "SubjectPhaseTransitionView",
     "VisitDefinitionView",
     "VisitDependencyView",
 ]

@@ -44,6 +44,7 @@ from app.schemas.designer.form_metadata import (
     FormDefinitionUpdate,
     FormSectionCreate,
     FormSectionResponse,
+    ReorderRequest,
 )
 from app.services.designer.form_metadata_service import form_metadata_service
 from app.services.edc.study_service import study_service
@@ -256,6 +257,60 @@ async def create_field(
     return FieldDefinitionResponse.model_validate(field)
 
 
+@router.post("/{form_id}/sections/reorder", response_model=list[FormSectionResponse])
+async def reorder_sections(
+    form_id: UUID,
+    body: ReorderRequest,
+    session: DbSession,
+    current_user: Annotated[User, Depends(require_permission("designer.form.configure"))],
+) -> list[FormSectionResponse]:
+    """Reorder a form's sections by id.
+
+    Permission: designer.form.configure (Designer_Role only)
+    """
+    form = await form_metadata_service.get_form(session, form_id)
+    version = form.study_version
+    sections = await form_metadata_service.reorder_sections(
+        session=session,
+        version=version,
+        form=form,
+        ordered_ids=body.ordered_ids,
+        actor_id=current_user.id,
+    )
+    return [FormSectionResponse.model_validate(s) for s in sections]
+
+
+# ---------------------------------------------------------------------------
+# Section-scoped field operations (mounted at /sections)
+# ---------------------------------------------------------------------------
+
+sections_router = APIRouter(prefix="/sections", tags=["designer-forms"])
+
+
+@sections_router.post("/{section_id}/fields/reorder", response_model=list[FieldDefinitionResponse])
+async def reorder_fields(
+    section_id: UUID,
+    body: ReorderRequest,
+    session: DbSession,
+    current_user: Annotated[User, Depends(require_permission("designer.field.configure"))],
+) -> list[FieldDefinitionResponse]:
+    """Reorder a section's fields by id.
+
+    Permission: designer.field.configure (Designer_Role only)
+    """
+    section = await form_metadata_service.get_section(session, section_id)
+    form = section.form_definition
+    version = form.study_version
+    fields = await form_metadata_service.reorder_fields(
+        session=session,
+        version=version,
+        section=section,
+        ordered_ids=body.ordered_ids,
+        actor_id=current_user.id,
+    )
+    return [FieldDefinitionResponse.model_validate(f) for f in fields]
+
+
 # ---------------------------------------------------------------------------
 # Single field operations (mounted at /fields)
 # ---------------------------------------------------------------------------
@@ -303,4 +358,4 @@ async def delete_field(
     )
 
 
-__all__ = ["fields_router", "router", "study_forms_router"]
+__all__ = ["fields_router", "router", "sections_router", "study_forms_router"]

@@ -167,6 +167,9 @@ class FieldDefinitionUpdate(BaseUpdateSchema):
     data_type: str | None = Field(None, min_length=1, max_length=50)
     display_order: int | None = None
     is_required: bool | None = None
+    form_section_id: UUID | None = Field(
+        None, description="Move the field to this section (same form only)."
+    )
     codelist_id: UUID | None = None
     default_value: str | None = None
     help_text: str | None = None

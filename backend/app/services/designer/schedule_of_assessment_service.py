@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -85,6 +86,13 @@ class ScheduleOfAssessmentService:
         for index, entry in enumerate(entries):
             self._validate_entry(entry, index)
 
+        # Idempotent replace (A.12): a design version holds at most one live SoA.
+        # Soft-delete every existing live SoA (and each of its live entries)
+        # before constructing the replacement, recording one 'delete' audit
+        # event per replaced SoA — all in the caller's transaction so the
+        # replacement and the retirement commit (or roll back) together.
+        await self._retire_existing(session, design_version_id, actor_id)
+
         soa = ScheduleOfAssessment(design_version_id=design_version_id)
         session.add(soa)
         await session.flush()
@@ -109,6 +117,42 @@ class ScheduleOfAssessmentService:
             len(entries),
         )
         return await self._get_with_entries(session, soa.id)
+
+    async def _retire_existing(
+        self,
+        session: AsyncSession,
+        design_version_id: UUID,
+        actor_id: UUID | None,
+    ) -> None:
+        """Soft-delete every live SoA (and its live entries) for a version.
+
+        Records one 'delete' audit event per replaced SoA within the caller's
+        transaction (A.12 idempotency).
+        """
+        result = await session.execute(
+            select(ScheduleOfAssessment)
+            .where(
+                ScheduleOfAssessment.design_version_id == design_version_id,
+                ScheduleOfAssessment.deleted_at.is_(None),
+            )
+            .options(selectinload(ScheduleOfAssessment.entries))
+        )
+        now = datetime.now(UTC)
+        for soa in result.scalars().all():
+            for entry in soa.entries:
+                if entry.deleted_at is None:
+                    entry.deleted_at = now
+            soa.deleted_at = now
+            await session.flush()
+            await audit_service.record(
+                session,
+                entity_type="schedule_of_assessment",
+                entity_id=soa.id,
+                action="delete",
+                module=Module.DESIGNER,
+                old_value=(f"design_version_id={design_version_id}; replaced (idempotent save)"),
+                actor_id=actor_id,
+            )
 
     async def _add_entry(
         self,
@@ -201,6 +245,10 @@ class ScheduleOfAssessmentService:
                 ScheduleOfAssessment.deleted_at.is_(None),
             )
             .options(selectinload(ScheduleOfAssessment.entries))
+            .order_by(
+                ScheduleOfAssessment.created_at.desc(),
+                ScheduleOfAssessment.id.desc(),
+            )
         )
         soa = result.scalars().first()
         if soa is None:

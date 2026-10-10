@@ -464,12 +464,37 @@ class FormMetadataService:
         data: FieldDefinitionUpdate,
         actor_id: UUID,
     ) -> FieldDefinition:
-        """Edit a field on a draft version (Req 4.2, 2.4)."""
+        """Edit a field on a draft version (Req 4.2, 2.4).
+
+        When ``form_section_id`` changes the field is moved to the target
+        section (which must belong to the same form) and appended at the end of
+        that section's display order.
+        """
         study_version_service.guard_mutable(version)
 
         changes = data.model_dump(exclude_unset=True)
         if "control_type" in changes and changes["control_type"] is not None:
             changes["control_type"] = str(changes["control_type"])
+
+        # Cross-section move: validate the target section belongs to the same
+        # form as the field's current section, then renumber by appending.
+        if (
+            "form_section_id" in changes
+            and changes["form_section_id"] is not None
+            and changes["form_section_id"] != field.form_section_id
+        ):
+            source_section = await self.get_section(session, field.form_section_id)
+            target_section = await self.get_section(session, changes["form_section_id"])
+            if target_section.form_definition_id != source_section.form_definition_id:
+                raise ValidationError(
+                    "A field can only be moved to a section of the same form",
+                    details={
+                        "field_definition_id": str(field.id),
+                        "form_section_id": str(changes["form_section_id"]),
+                    },
+                )
+            target_fields = await self.list_fields(session, target_section.id)
+            changes["display_order"] = len(target_fields)
 
         old_values = {key: getattr(field, key) for key in changes}
         for key, value in changes.items():

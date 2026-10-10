@@ -21,6 +21,7 @@ from pydantic import Field
 from app.schemas.shared.base import (
     BaseCreateSchema,
     BaseSchema,
+    BaseUpdateSchema,
     UtcDatetime,
 )
 
@@ -30,6 +31,13 @@ class SubjectPhaseDefinitionCreate(BaseCreateSchema):
 
     name: str = Field(..., min_length=1, max_length=100)
     display_order: int = Field(..., ge=1, le=999)
+
+
+class SubjectPhaseDefinitionUpdate(BaseUpdateSchema):
+    """Request body for editing a Subject_Phase_Definition (partial PATCH)."""
+
+    name: str | None = Field(None, min_length=1, max_length=100)
+    display_order: int | None = Field(None, ge=1, le=999)
 
 
 class SubjectPhaseDefinitionResponse(BaseSchema):
@@ -46,4 +54,5 @@ class SubjectPhaseDefinitionResponse(BaseSchema):
 __all__ = [
     "SubjectPhaseDefinitionCreate",
     "SubjectPhaseDefinitionResponse",
+    "SubjectPhaseDefinitionUpdate",
 ]

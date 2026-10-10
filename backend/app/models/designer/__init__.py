@@ -16,6 +16,7 @@ from app.models.designer.schedule_of_assessment import (
     ScheduleOfAssessmentEntry,
 )
 from app.models.designer.study_version import StudyVersion, StudyVersionStatus
+from app.models.designer.subject_phase_transition import SubjectPhaseTransition
 from app.models.designer.visit import VisitDefinition
 from app.models.designer.visit_dependency import VisitDefinitionDependency
 
@@ -36,6 +37,7 @@ __all__ = [
     "ScheduleOfAssessmentEntry",
     "StudyVersion",
     "StudyVersionStatus",
+    "SubjectPhaseTransition",
     "ValidationResult",
     "VisitDefinition",
     "VisitDefinitionDependency",

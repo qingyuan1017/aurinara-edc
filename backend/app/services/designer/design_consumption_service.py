@@ -48,6 +48,7 @@ from app.models.designer.raw_data_variable_setting import RawDataVariableSetting
 from app.models.designer.schedule_of_assessment import ScheduleOfAssessment
 from app.models.designer.study_version import StudyVersion, StudyVersionStatus
 from app.models.designer.subject_phase_definition import SubjectPhaseDefinition
+from app.models.designer.subject_phase_transition import SubjectPhaseTransition
 from app.models.designer.visit import VisitDefinition
 from app.models.designer.visit_dependency import VisitDefinitionDependency
 from app.schemas.designer.views import (
@@ -65,6 +66,7 @@ from app.schemas.designer.views import (
     ScheduleOfAssessmentEntryView,
     ScheduleOfAssessmentView,
     SubjectPhaseDefinitionView,
+    SubjectPhaseTransitionView,
     VisitDefinitionView,
     VisitDependencyView,
 )
@@ -194,6 +196,19 @@ class DesignConsumptionService:
         )
 
     @staticmethod
+    def _build_subject_phase_transition_view(
+        t: SubjectPhaseTransition,
+    ) -> SubjectPhaseTransitionView:
+        return SubjectPhaseTransitionView(
+            id=t.id,
+            design_version_id=t.design_version_id,
+            from_phase_id=t.from_phase_id,
+            to_phase_id=t.to_phase_id,
+            label=t.label,
+            condition_expression=t.condition_expression,
+        )
+
+    @staticmethod
     def _build_edit_check_view(rule: EditCheck) -> EditCheckRuleView:
         return EditCheckRuleView(
             id=rule.id,
@@ -267,6 +282,9 @@ class DesignConsumptionService:
         coding_settings = await self.list_coding_settings(session, design_version_id)
         form_dependencies = await self.list_form_dependencies(session, design_version_id)
         visit_dependencies = await self.list_visit_dependencies(session, design_version_id)
+        subject_phase_transitions = await self.list_subject_phase_transitions(
+            session, design_version_id
+        )
 
         permits_unscheduled = any(
             visit.visit_type == _UNSCHEDULED_VISIT_TYPE for visit in visit_definitions
@@ -292,6 +310,7 @@ class DesignConsumptionService:
             coding_settings=tuple(coding_settings),
             form_dependencies=tuple(form_dependencies),
             visit_dependencies=tuple(visit_dependencies),
+            subject_phase_transitions=tuple(subject_phase_transitions),
         )
 
     async def get_latest_published_design(
@@ -478,6 +497,32 @@ class DesignConsumptionService:
             .order_by(SubjectPhaseDefinition.display_order, SubjectPhaseDefinition.id)
         )
         return [SubjectPhaseDefinitionView.model_validate(p) for p in result.scalars().all()]
+
+    async def list_subject_phase_transitions(
+        self, session: AsyncSession, design_version_id: UUID
+    ) -> list[SubjectPhaseTransitionView]:
+        """List the subject-phase transition edges of a published design as views.
+
+        Excludes soft-deleted edges and (defense-in-depth, matching the
+        authoring service's ``list_transitions``) any edge whose source or
+        target phase has been soft-deleted.
+        """
+        await self._require_published_version(session, design_version_id)
+        from_phase = SubjectPhaseDefinition.__table__.alias("from_phase_c")
+        to_phase = SubjectPhaseDefinition.__table__.alias("to_phase_c")
+        result = await session.execute(
+            select(SubjectPhaseTransition)
+            .join(from_phase, from_phase.c.id == SubjectPhaseTransition.from_phase_id)
+            .join(to_phase, to_phase.c.id == SubjectPhaseTransition.to_phase_id)
+            .where(
+                SubjectPhaseTransition.design_version_id == design_version_id,
+                SubjectPhaseTransition.deleted_at.is_(None),
+                from_phase.c.deleted_at.is_(None),
+                to_phase.c.deleted_at.is_(None),
+            )
+            .order_by(SubjectPhaseTransition.created_at, SubjectPhaseTransition.id)
+        )
+        return [self._build_subject_phase_transition_view(t) for t in result.scalars().all()]
 
     async def get_schedule_of_assessment(
         self, session: AsyncSession, design_version_id: UUID

@@ -159,6 +159,7 @@ class DesignConsumptionService:
     def list_edit_check_rules(self, design_version_id: UUID) -> list[EditCheckRuleView]: ...
     def list_codelists(self, design_version_id: UUID) -> list[CodelistView]: ...
     def list_subject_phase_definitions(self, design_version_id: UUID) -> list[SubjectPhaseDefinitionView]: ...
+    def list_subject_phase_transitions(self, design_version_id: UUID) -> list[SubjectPhaseTransitionView]: ...
     def get_schedule_of_assessment(self, design_version_id: UUID) -> ScheduleOfAssessmentView: ...
     def list_crf_access_definitions(self, design_version_id: UUID) -> list[CrfAccessDefinitionView]: ...
     def list_raw_data_variable_settings(self, design_version_id: UUID) -> list[RawDataVariableSettingView]: ...
@@ -191,6 +192,7 @@ The refactor **reassigns ownership** of existing tables and adds a small set of 
 - **`edit_checks`** — reassigned to Designer (R5), FK to `study_versions`, stored declaratively (R5.5).
 - **`visit_definitions`** — reassigned to Designer (R4.2–R4.4), FK to `study_versions`. Now carries a `visit_type` discriminator (`visit` | `cycle`, plus the legacy `scheduled`/`unscheduled`/`screening` values) and nullable cycle metadata (`repeat_min`, `repeat_max`, `cycle_length`); the former `cycle_definitions` / `cycle_definition_visits` tables are folded in and dropped (migration 0052). (`visit_instances` stays in EDC.)
 - **NEW `subject_phase_definitions`** — `(design_version_id FK, name, display_order, …)`, unique name within a design version (R3).
+- **NEW `subject_phase_transitions`** — typed self-referential subject-phase → subject-phase edges `(design_version_id FK, from_phase_id FK, to_phase_id FK, label, condition_expression)`, self-guarded (a phase cannot transition to itself) and unique per `(design_version_id, from_phase_id, to_phase_id)`; soft-deletable, and cascaded when an incident phase is soft-deleted. Migration 0053.
 - **NEW `arm_definitions`** — study arms/treatment groups, FK to `study_versions` (R4.5); arm↔visit membership via **NEW `arm_definition_visits`** (R: arm defines which visits occur in the arm).
 - **NEW `schedule_of_assessment`** — mapping of forms/procedures to visit definitions (cycles included, single `visit_definition_id`), FK to `study_versions` (R4.1).
 - **NEW `crf_access_definitions`** — design-time read/write access of each operational role to each form/field, FK to `study_versions` (R4.6), with a form/question-level `blinded` flag and optional `unblind_role`.
@@ -223,6 +225,8 @@ erDiagram
     VISIT_DEFINITIONS ||--o{ VISIT_DEFINITION_DEPENDENCIES : "depends on"
     FORM_DEFINITIONS ||--o{ FORM_DEFINITION_DEPENDENCIES : "depends on"
     STUDY_VERSIONS ||--o{ SUBJECT_PHASE_DEFINITIONS : contains
+    SUBJECT_PHASE_DEFINITIONS ||--o{ SUBJECT_PHASE_TRANSITIONS : "transitions from"
+    SUBJECT_PHASE_DEFINITIONS ||--o{ SUBJECT_PHASE_TRANSITIONS : "transitions to"
     STUDY_VERSIONS ||--o{ SCHEDULE_OF_ASSESSMENT : contains
     SCHEDULE_OF_ASSESSMENT ||--o{ SCHEDULE_OF_ASSESSMENT_ENTRIES : contains
     SCHEDULE_OF_ASSESSMENT_ENTRIES }o--o| VISIT_DEFINITIONS : "collected at"
