@@ -54,6 +54,8 @@ export function StudyListPage() {
   const { data, isLoading, isError, refetch } = useListStudiesApiV1StudiesGet({
     page,
     page_size: 20,
+  }, {
+    query: { refetchInterval: 30_000, refetchIntervalInBackground: false },
   })
 
   const createMutation = useCreateStudyApiV1StudiesPost({

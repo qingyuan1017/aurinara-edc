@@ -11,6 +11,8 @@ import { AcceptInvitationPage } from '@/features/auth/AcceptInvitationPage'
 import { AccessDeniedPage } from '@/features/auth/AccessDeniedPage'
 import { ExportCenterPage } from '@/features/exports/ExportCenterPage'
 import { EditCheckBuilderPage } from '@/features/edit-checks/EditCheckBuilderPage'
+import { isCognitoConfigured } from '@/lib/cognito'
+import { isCognitoSdkConfigured } from '@/lib/cognito-sdk'
 
 const { mockNavigate, mockSearch } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -42,13 +44,18 @@ describe('task 4.3 public page composition', () => {
     useAuthStore.setState({ user: null, isAuthenticated: false })
   })
 
-  it('uses shared form fields on the login page without changing its public links', () => {
+  it('uses shared form fields and exposes password reset only for local authentication', () => {
     render(<LoginPage />)
 
     expect(screen.getByRole('heading', { name: 'Sign In' })).toBeInTheDocument()
     expect(screen.getByLabelText(/Email/)).toHaveAttribute('autocomplete', 'email')
     expect(screen.getByLabelText(/^Password/)).toHaveAttribute('autocomplete', 'current-password')
-    expect(screen.getByRole('link', { name: 'Forgot your password?' })).toHaveAttribute('href', '/forgot-password')
+    const forgotPassword = screen.queryByRole('link', { name: 'Forgot your password?' })
+    if (isCognitoConfigured() || isCognitoSdkConfigured()) {
+      expect(forgotPassword).not.toBeInTheDocument()
+    } else {
+      expect(forgotPassword).toHaveAttribute('href', '/forgot-password')
+    }
   })
 
   it('preserves the forgot-password endpoint and enumeration-safe success state', async () => {

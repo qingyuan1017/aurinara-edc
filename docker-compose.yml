@@ -17,5 +17,39 @@ services:
       timeout: 5s
       retries: 10
 
+  migrate:
+    build:
+      context: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment: &backend-environment
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://edetek:edetekpassword@postgres:5432/edc
+      PLATFORM_EVENT_QUEUE_URL: http://host.docker.internal:4567/000000000000/aurinara-edc-platform-events
+      PLATFORM_EVENT_REGION: us-east-1
+      PLATFORM_EVENT_ENDPOINT_URL: http://host.docker.internal:4567
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  platform-projection-worker:
+    build:
+      context: ./backend
+    command: ["python", "-m", "app.workers.platform_projection_worker", "--watch"]
+    environment: *backend-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   edc_postgres_data:

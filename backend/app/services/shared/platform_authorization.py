@@ -72,6 +72,8 @@ class PlatformAuthorizationClient:
         self._client_id = settings.platform_service_client_id
         self._client_secret = settings.platform_service_client_secret
         self._audience = settings.platform_service_audience
+        self._scope = settings.platform_service_scope
+        self._resource = settings.platform_service_resource
         self._max_cache_seconds = settings.platform_authorization_cache_seconds
         self._client = httpx.Client(
             transport=transport, timeout=settings.platform_authorization_timeout_seconds
@@ -91,7 +93,7 @@ class PlatformAuthorizationClient:
         if not self._base_url:
             raise ServiceUnavailableError("Platform authorization is not configured")
         subject = user.external_subject or str(user.id)
-        issuer = self._issuer
+        issuer = user.external_issuer or self._issuer
         if not issuer:
             raise ServiceUnavailableError("Platform identity issuer is not configured")
         action = namespaced_permission(permission)
@@ -142,6 +144,86 @@ class PlatformAuthorizationClient:
             self._cache[key] = (decision, time.monotonic() + ttl)
         return decision
 
+    def decide_batch(
+        self,
+        user: User,
+        permission: str,
+        resources: tuple[tuple[UUID | None, UUID | None], ...],
+    ) -> tuple[PlatformDecision, ...]:
+        """Resolve multiple study/site scopes in one PDP request."""
+
+        if not resources:
+            return ()
+        if not self._base_url:
+            raise ServiceUnavailableError("Platform authorization is not configured")
+        subject = user.external_subject or str(user.id)
+        issuer = user.external_issuer or self._issuer
+        if not issuer:
+            raise ServiceUnavailableError("Platform identity issuer is not configured")
+        action = namespaced_permission(permission)
+        now = time.monotonic()
+        resolved: dict[tuple[UUID | None, UUID | None], PlatformDecision] = {}
+        missing: list[tuple[UUID | None, UUID | None]] = []
+        for study_id, site_id in resources:
+            cached = self._cache.get((issuer, subject, action, study_id, site_id))
+            if cached is not None and cached[1] > now:
+                resolved[(study_id, site_id)] = cached[0]
+            else:
+                missing.append((study_id, site_id))
+        if missing:
+            try:
+                response = self._client.post(
+                    f"{self._base_url}/v1/authorization/decisions:batch",
+                    headers={"Authorization": f"Bearer {self.service_token()}"},
+                    json={
+                        "decisions": [
+                            {
+                                "principal": {"issuer": issuer, "subject": subject},
+                                "action": action,
+                                "resource": {
+                                    "product": "aurinara-edc",
+                                    "type": "permission_scope",
+                                    "study_id": str(study_id) if study_id else None,
+                                    "site_id": str(site_id) if site_id else None,
+                                },
+                            }
+                            for study_id, site_id in missing
+                        ]
+                    },
+                )
+                response.raise_for_status()
+                payloads = response.json()["decisions"]
+                if len(payloads) != len(missing):
+                    raise ValueError("authorization batch response length mismatch")
+                for resource, payload in zip(missing, payloads, strict=True):
+                    decision = PlatformDecision(
+                        allowed=bool(payload["allowed"]),
+                        decision_id=UUID(payload["decision_id"]),
+                        policy_version=int(payload["policy_version"]),
+                        expires_at=datetime.fromisoformat(
+                            payload["expires_at"].replace("Z", "+00:00")
+                        ),
+                        reason_code=str(payload["reason_code"]),
+                    )
+                    resolved[resource] = decision
+                    if decision.allowed and self._max_cache_seconds:
+                        ttl = min(
+                            self._max_cache_seconds,
+                            max(0.0, decision.expires_at.timestamp() - time.time()),
+                        )
+                        self._cache[(issuer, subject, action, *resource)] = (
+                            decision,
+                            time.monotonic() + ttl,
+                        )
+            except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
+                raise ServiceUnavailableError(
+                    "Platform authorization is temporarily unavailable"
+                ) from error
+        decisions = tuple(resolved[resource] for resource in resources)
+        if decisions:
+            _decision_context.set(decisions[-1])
+        return decisions
+
     def service_token(self) -> str:
         """Return a cached client-credentials token for control-plane calls."""
         now = time.monotonic()
@@ -150,15 +232,16 @@ class PlatformAuthorizationClient:
         if not self._token_url or not self._client_id or self._client_secret is None:
             raise ServiceUnavailableError("Platform service credentials are not configured")
         try:
-            response = self._client.post(
-                self._token_url,
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": self._client_id,
-                    "client_secret": self._client_secret.get_secret_value(),
-                    "audience": self._audience,
-                },
-            )
+            token_command = {
+                "grant_type": "client_credentials",
+                "client_id": self._client_id,
+                "client_secret": self._client_secret.get_secret_value(),
+                "audience": self._audience,
+                "scope": self._scope,
+            }
+            if self._resource:
+                token_command["resource"] = self._resource
+            response = self._client.post(self._token_url, data=token_command)
             response.raise_for_status()
             payload = response.json()
             token = str(payload["access_token"])

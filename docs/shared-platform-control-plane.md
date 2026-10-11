@@ -24,7 +24,7 @@ storage keys and credentials never reach the frontend.
 
 ## Migration sequence
 
-1. Apply migration `0053` and configure the generic OIDC issuer, API audience, JWKS URL,
+1. Apply migrations through `0055` and configure the generic OIDC issuer, API audience, JWKS URL,
    and a dedicated API service account.
 2. Prepare a reviewed user identity map. Never infer an issuer/subject for a local
    password account.
@@ -36,12 +36,30 @@ storage keys and credentials never reach the frontend.
      --output ..\migration\edc-platform-snapshot.json
    ```
 
-4. Import the snapshot into `aurinara-platform`, subscribe the projection worker to its
-   event stream, and run authorization in shadow mode.
-5. Reconcile every user, study, scoped role, attachment, and decision mismatch before
+4. Import the snapshot into `aurinara-platform`. For every reviewed platform role, create
+   an explicit least-privilege mapping to an existing EDC role from `backend/`:
+
+   ```powershell
+   python -m scripts.map_platform_role PLATFORM_ROLE_UUID LOCAL_EDC_ROLE_UUID
+   ```
+
+   The command is idempotent and refuses implicit remapping. Unmapped roles cause their
+   membership event to fail safely instead of granting guessed permissions.
+5. Subscribe the projection worker to the platform event stream and run authorization in
+   shadow mode.
+
+   For local Compose development, use
+   `docker compose up -d platform-projection-worker`; the API process does not consume
+   platform events itself.
+6. Reconcile every user, study, scoped role, attachment, and decision mismatch before
    enabling enforced mode. Missing or conflicting mappings block cutover.
-6. Keep legacy files throughout dual-read and rollback windows. Set
+7. Keep legacy files throughout dual-read and rollback windows. Set
    `platform_object_id` only after catalog registration and checksum/retention checks.
+
+After Cognito enrollment and shadow reconciliation are complete, set
+`LOCAL_AUTH_ENABLED=false` to disable local login, refresh, password-reset, and logout
+endpoints. Keep it enabled during shadow rollout so existing authorization behavior is
+unchanged.
 
 The service account needs `platform.authorization.decide` and the applicable
 `aurinara-edc.object.*` permissions. End-user tokens are validated locally against JWKS;

@@ -138,9 +138,11 @@ export function LoginPage() {
       title="Sign In"
       description="Clinical EDC System"
       footer={
-        <a href="/forgot-password" className="text-sm text-primary underline-offset-4 hover:underline">
-          Forgot your password?
-        </a>
+        !sdkConfigured && !cognitoConfigured ? (
+          <a href="/forgot-password" className="text-sm text-primary underline-offset-4 hover:underline">
+            Forgot your password?
+          </a>
+        ) : undefined
       }
     >
       {error ? (

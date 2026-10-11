@@ -12,6 +12,7 @@ from app.models.shared.identity import Role, User, UserRole, UserStatus
 from app.models.shared.platform_projection import (
     PlatformMembershipProjection,
     PlatformProjectionEvent,
+    PlatformRoleMapping,
 )
 
 
@@ -95,6 +96,7 @@ async def apply_platform_event(session: AsyncSession, event: PlatformEvent) -> b
 async def _apply_user_event(session: AsyncSession, event: PlatformEvent) -> bool:
     user = await session.get(User, event.aggregate_id)
     email = str(event.data["email"])
+    issuer = str(event.data["issuer"])
     subject = str(event.data["subject"])
     first_name, last_name = _split_display_name(str(event.data["display_name"]))
     if user is None:
@@ -112,13 +114,17 @@ async def _apply_user_event(session: AsyncSession, event: PlatformEvent) -> bool
             status=_user_status(str(event.data["status"])),
             password_hash=None,
             external_identity_provider="oidc",
+            external_issuer=issuer,
             external_subject=subject,
             platform_managed=True,
             platform_revision=event.sequence,
         )
         session.add(user)
     elif user.platform_revision is None or event.sequence > user.platform_revision:
-        if user.external_subject is not None and user.external_subject != subject:
+        if (
+            user.external_issuer is not None
+            and (user.external_issuer, user.external_subject) != (issuer, subject)
+        ):
             raise ConflictError(
                 message="Canonical user subject does not match the local identity",
                 details={"reason": "USER_IDENTITY_CONFLICT"},
@@ -128,6 +134,7 @@ async def _apply_user_event(session: AsyncSession, event: PlatformEvent) -> bool
         user.last_name = last_name
         user.status = _user_status(str(event.data["status"]))
         user.external_identity_provider = user.external_identity_provider or "oidc"
+        user.external_issuer = issuer
         user.external_subject = subject
         user.platform_managed = True
         user.platform_revision = event.sequence
@@ -173,14 +180,29 @@ async def _apply_membership_event(session: AsyncSession, event: PlatformEvent) -
         await session.flush()
         return True
     role_ids = [UUID(str(value)) for value in event.data.get("role_ids", [])]
+    role_mapping: dict[UUID, UUID] = {}
     if role_ids:
-        roles_result = await session.execute(select(Role).where(Role.id.in_(role_ids)))
-        roles = {role.id for role in roles_result.scalars()}
-        missing = set(role_ids) - roles
+        mappings_result = await session.execute(
+            select(PlatformRoleMapping).where(
+                PlatformRoleMapping.platform_role_id.in_(role_ids)
+            )
+        )
+        role_mapping = {
+            item.platform_role_id: item.local_role_id for item in mappings_result.scalars()
+        }
+        missing = set(role_ids) - set(role_mapping)
         if missing:
             raise ConflictError(
                 message="Platform membership references an unmapped role",
                 details={"reason": "ROLE_MAPPING_REQUIRED"},
+            )
+        local_roles_result = await session.execute(
+            select(Role.id).where(Role.id.in_(role_mapping.values()))
+        )
+        if set(local_roles_result.scalars()) != set(role_mapping.values()):
+            raise ConflictError(
+                message="Platform role mapping references a missing local role",
+                details={"reason": "ROLE_MAPPING_INVALID"},
             )
     await session.execute(
         delete(UserRole).where(
@@ -196,7 +218,7 @@ async def _apply_membership_event(session: AsyncSession, event: PlatformEvent) -
         [
             UserRole(
                 user_id=user_id,
-                role_id=role_id,
+                role_id=role_mapping[role_id],
                 study_id=study_id,
                 site_id=site_id,
                 assigned_by=assigned_by,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -14,6 +15,12 @@ from app.services.shared.platform_authorization import (
     PlatformAuthorizationClient,
     get_platform_authorization,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class PlatformObjectRegistration:
+    object_id: UUID
+    reference_id: UUID
 
 
 class PlatformObjectClient:
@@ -64,7 +71,7 @@ class PlatformObjectClient:
         classification: str,
         external_reference: str,
         retention_until: datetime | None = None,
-    ) -> UUID:
+    ) -> PlatformObjectRegistration:
         """Upload verified bytes and register the EDC-owned reference."""
 
         if not self._base_url:
@@ -118,10 +125,31 @@ class PlatformObjectClient:
                 },
             )
             referenced.raise_for_status()
-            return object_id
+            return PlatformObjectRegistration(
+                object_id=object_id,
+                reference_id=UUID(referenced.json()["id"]),
+            )
         except ServiceUnavailableError:
             raise
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as error:
+            raise ServiceUnavailableError(
+                "Platform object gateway is temporarily unavailable"
+            ) from error
+
+    async def release_reference(self, reference_id: UUID) -> None:
+        """Idempotently release one product reference after local retention permits it."""
+
+        if not self._base_url:
+            raise ServiceUnavailableError("Platform object gateway is not configured")
+        try:
+            response = await self._client.delete(
+                f"{self._base_url}/v1/object-references/{reference_id}",
+                headers={"Authorization": f"Bearer {self._authorization.service_token()}"},
+            )
+            response.raise_for_status()
+        except ServiceUnavailableError:
+            raise
+        except httpx.HTTPError as error:
             raise ServiceUnavailableError(
                 "Platform object gateway is temporarily unavailable"
             ) from error

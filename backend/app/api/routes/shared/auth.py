@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_db
+from app.core.config import get_settings
 from app.core.exceptions import AuthenticationError
 from app.core.security import InvalidTokenError
 from app.schemas.shared.auth import (
@@ -43,6 +44,13 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 
+def require_local_auth() -> None:
+    """Reject legacy password/session endpoints after the IdP cutover."""
+
+    if not get_settings().local_auth_enabled:
+        raise AuthenticationError("Local authentication is disabled; use the configured IdP")
+
+
 @router.post("/cognito/exchange", response_model=CognitoTokenResponse)
 async def cognito_exchange(body: CognitoCodeExchangeRequest) -> CognitoTokenResponse:
     """Exchange a Cognito authorization code using PKCE (no client secret)."""
@@ -67,7 +75,7 @@ async def cognito_refresh(body: CognitoRefreshRequest) -> CognitoTokenResponse:
         raise AuthenticationError(str(exc)) from None
 
 
-@router.post("/login", response_model=TokenPair)
+@router.post("/login", response_model=TokenPair, dependencies=[Depends(require_local_auth)])
 async def login(body: LoginRequest, session: DbSession) -> TokenPair:
     """Authenticate a user and issue a token pair.
 
@@ -85,7 +93,9 @@ async def login(body: LoginRequest, session: DbSession) -> TokenPair:
         raise AuthenticationError(str(exc)) from None
 
 
-@router.post("/refresh", response_model=AccessTokenResponse)
+@router.post(
+    "/refresh", response_model=AccessTokenResponse, dependencies=[Depends(require_local_auth)]
+)
 async def refresh(body: RefreshRequest, session: DbSession) -> AccessTokenResponse:
     """Issue a new access token from a valid refresh token.
 
@@ -98,7 +108,7 @@ async def refresh(body: RefreshRequest, session: DbSession) -> AccessTokenRespon
         raise AuthenticationError(str(exc)) from None
 
 
-@router.post("/logout", status_code=204)
+@router.post("/logout", status_code=204, dependencies=[Depends(require_local_auth)])
 async def logout(body: LogoutRequest, session: DbSession) -> None:
     """Revoke a refresh token on logout.
 
@@ -122,7 +132,9 @@ async def me(
     return await auth_service.me(session=session, user=current_user)
 
 
-@router.post("/forgot-password", status_code=202)
+@router.post(
+    "/forgot-password", status_code=202, dependencies=[Depends(require_local_auth)]
+)
 async def forgot_password(body: PasswordResetRequest, session: DbSession) -> dict:
     """Initiate a password reset by generating a single-use reset token.
 
@@ -133,7 +145,9 @@ async def forgot_password(body: PasswordResetRequest, session: DbSession) -> dic
     return {"message": "If the email exists, a reset link has been sent."}
 
 
-@router.post("/reset-password", status_code=200)
+@router.post(
+    "/reset-password", status_code=200, dependencies=[Depends(require_local_auth)]
+)
 async def reset_password(body: PasswordResetConfirm, session: DbSession) -> dict:
     """Complete a password reset using a valid reset token.
 

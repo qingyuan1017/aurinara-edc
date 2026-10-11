@@ -47,7 +47,7 @@ from app.models.shared.file_attachment import (
 )
 from app.services.edc.lock_service import LockService, lock_service
 from app.services.shared.permission_service import PermissionService
-from app.services.shared.platform_objects import get_platform_objects
+from app.services.shared.platform_objects import PlatformObjectRegistration, get_platform_objects
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +193,7 @@ class FileAttachmentService:
             )
 
         attachment_id = uuid.uuid4()
-        platform_object_id = await self._register_platform_bytes(
+        platform_registration = await self._register_platform_bytes(
             attachment_id=attachment_id,
             study_id=context.study_id,
             content=content,
@@ -217,7 +217,10 @@ class FileAttachmentService:
             content_type=content_type,
             size_bytes=len(content),
             storage_key=storage_key,
-            platform_object_id=platform_object_id,
+            platform_object_id=(platform_registration.object_id if platform_registration else None),
+            platform_reference_id=(
+                platform_registration.reference_id if platform_registration else None
+            ),
             uploaded_by=actor_id,
             uploaded_at=datetime.now(UTC),
         )
@@ -285,7 +288,7 @@ class FileAttachmentService:
         content, filename, content_type = await self._read_file(file)
         self._validate_operational_file(content, content_type)
         attachment_id = uuid.uuid4()
-        platform_object_id = await self._register_platform_bytes(
+        platform_registration = await self._register_platform_bytes(
             attachment_id=attachment_id,
             study_id=study_id,
             content=content,
@@ -310,7 +313,10 @@ class FileAttachmentService:
             content_type=content_type,
             size_bytes=len(content),
             storage_key=storage_key,
-            platform_object_id=platform_object_id,
+            platform_object_id=(platform_registration.object_id if platform_registration else None),
+            platform_reference_id=(
+                platform_registration.reference_id if platform_registration else None
+            ),
             uploaded_by=actor_id,
             uploaded_at=datetime.now(UTC),
             correlation_id=correlation_id,
@@ -346,7 +352,7 @@ class FileAttachmentService:
         content_type: str,
         classification: str,
         retention_until: datetime | None = None,
-    ) -> UUID | None:
+    ) -> PlatformObjectRegistration | None:
         gateway = get_platform_objects()
         if gateway.mode == "disabled":
             return None
@@ -761,6 +767,19 @@ class FileAttachmentService:
                 user, permission, study_id=attachment.study_id, site_id=attachment.site_id
             )
             self.permission_service.assert_object_access(user, attachment)
+        if attachment.platform_reference_id is not None:
+            gateway = get_platform_objects()
+            try:
+                await gateway.release_reference(attachment.platform_reference_id)
+            except ServiceUnavailableError:
+                if gateway.mode == "enforced":
+                    raise
+                logger.warning(
+                    "Platform object reference release deferred in shadow mode: "
+                    "attachment_id=%s reference_id=%s",
+                    attachment.id,
+                    attachment.platform_reference_id,
+                )
         await self.storage.delete(attachment.storage_key)
         await audit_service.record(
             session,

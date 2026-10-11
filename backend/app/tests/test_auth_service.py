@@ -6,6 +6,7 @@ Uses an in-memory SQLite database to test real DB interactions without external 
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pyotp
@@ -32,6 +33,31 @@ from app.models.shared.identity import (
 )
 from app.models.shared.revoked_token import RevokedToken
 from app.services.shared.auth_service import AuthenticationError, AuthService
+
+
+@pytest.mark.asyncio
+async def test_enforced_platform_mode_rejects_jit_external_user(
+    auth_service: AuthService, db_session: AsyncSession
+) -> None:
+    payload = CognitoTokenPayload(
+        sub="unprojected-subject",
+        email="unprojected@example.test",
+        email_verified=True,
+        token_use="id",
+        iss="https://issuer.example",
+        exp=datetime.now(UTC) + timedelta(minutes=5),
+        audience="client",
+    )
+    with (
+        patch("app.services.shared.auth_service.validate_oidc_token", return_value=None),
+        patch("app.services.shared.auth_service.validate_cognito_token", return_value=payload),
+        patch(
+            "app.services.shared.auth_service.get_settings",
+            return_value=SimpleNamespace(platform_authorization_mode="enforced"),
+        ),
+        pytest.raises(AuthenticationError),
+    ):
+        await auth_service.validate_external_token(db_session, "id-token")
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -405,8 +431,10 @@ class TestPasswordReset:
 class TestValidateExternalToken:
     """Test AuthService.validate_external_token."""
 
-    async def test_returns_none_when_cognito_not_configured(self, auth_service, db_session):
-        # Default settings have no Cognito configured
+    @patch("app.services.shared.auth_service.validate_cognito_token", return_value=None)
+    async def test_returns_none_when_cognito_not_configured(
+        self, _validate, auth_service, db_session
+    ):
         result = await auth_service.validate_external_token(db_session, "any-token")
         assert result is None
 

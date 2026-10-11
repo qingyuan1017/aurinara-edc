@@ -258,16 +258,29 @@ class PermissionService:
         if gateway.mode == "disabled":
             return local
         try:
-            central = [
-                study_id
-                for study_id in study_ids
-                if gateway.decide(
+            batch = getattr(gateway, "decide_batch", None)
+            if batch is not None:
+                decisions = batch(
                     user,
                     "study.read",
-                    study_id=study_id,
-                    site_id=None,
-                ).allowed
-            ]
+                    tuple((study_id, None) for study_id in study_ids),
+                )
+                central = [
+                    study_id
+                    for study_id, decision in zip(study_ids, decisions, strict=True)
+                    if decision.allowed
+                ]
+            else:
+                central = [
+                    study_id
+                    for study_id in study_ids
+                    if gateway.decide(
+                        user,
+                        "study.read",
+                        study_id=study_id,
+                        site_id=None,
+                    ).allowed
+                ]
         except ServiceUnavailableError:
             if gateway.mode == "enforced":
                 raise
@@ -312,16 +325,31 @@ class PermissionService:
         if gateway.mode == "disabled":
             return local
         try:
-            central = [
-                site_id
+            resources = tuple(
+                (site_study_ids.get(site_id) if site_study_ids else None, site_id)
                 for site_id in site_ids
-                if gateway.decide(
-                    user,
-                    "site.read",
-                    study_id=site_study_ids.get(site_id) if site_study_ids else None,
-                    site_id=site_id,
-                ).allowed
-            ]
+            )
+            batch = getattr(gateway, "decide_batch", None)
+            if batch is not None:
+                decisions = batch(user, "site.read", resources)
+                central = [
+                    site_id
+                    for site_id, decision in zip(site_ids, decisions, strict=True)
+                    if decision.allowed
+                ]
+            else:
+                central = [
+                    site_id
+                    for site_id, (study_id, resource_site_id) in zip(
+                        site_ids, resources, strict=True
+                    )
+                    if gateway.decide(
+                        user,
+                        "site.read",
+                        study_id=study_id,
+                        site_id=resource_site_id,
+                    ).allowed
+                ]
         except ServiceUnavailableError:
             if gateway.mode == "enforced":
                 raise

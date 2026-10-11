@@ -104,6 +104,12 @@ class FileAttachment(Base):
         index=True,
         comment="Opaque object ID in the shared platform catalog",
     )
+    platform_reference_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        nullable=True,
+        unique=True,
+        comment="Product reference ID in the shared platform catalog",
+    )
 
     # Upload provenance.
     uploaded_by: Mapped[uuid.UUID] = mapped_column(

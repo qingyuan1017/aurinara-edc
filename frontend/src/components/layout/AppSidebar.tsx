@@ -41,7 +41,7 @@ export interface AppSidebarProps {
 const navLinkClassName =
   'group flex min-h-9 items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground transition-colors duration-[var(--duration-fast)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar'
 const activeNavLinkClassName =
-  'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+  'bg-sidebar-accent font-medium text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-sidebar-primary)]'
 
 function sectionHeadingId(prefix: string, id: string) {
   return `${prefix}-nav-${id}`
@@ -313,10 +313,15 @@ export function AppSidebar({
         )}
       >
         <div className="flex h-[var(--header-height)] shrink-0 items-center justify-between border-b border-sidebar-border px-3">
-          <span className={cn('truncate text-sm font-semibold', collapsed && 'sr-only')}>
-            Clinical {moduleLabel}
-          </span>
-          {collapsed && <span className="text-sm font-semibold" aria-hidden="true">{moduleLabel}</span>}
+          <div className={cn('min-w-0 leading-tight', collapsed && 'sr-only')}>
+            <span className="block truncate font-display text-lg font-medium text-sidebar-foreground">
+              Aurinara
+            </span>
+            <span className="block truncate text-[0.625rem] font-semibold uppercase tracking-[0.16em] text-sidebar-primary">
+              Clinical {moduleLabel}
+            </span>
+          </div>
+          {collapsed && <span className="font-display text-xl text-sidebar-primary" aria-hidden="true">A</span>}
           <Button
             type="button"
             variant="ghost"
@@ -357,9 +362,9 @@ export function AppSidebar({
           className="w-[min(18rem,calc(100vw-1rem))] overflow-y-auto bg-sidebar p-4 text-sidebar-foreground md:hidden"
         >
           <SheetHeader className="pr-8 text-left">
-            <SheetTitle className="text-sidebar-foreground">Clinical {moduleLabel}</SheetTitle>
+            <SheetTitle className="font-display text-xl text-sidebar-foreground">Aurinara</SheetTitle>
             <SheetDescription className="text-sidebar-foreground/70">
-              Navigate the authenticated workspace.
+              Clinical {moduleLabel} · authenticated workspace
             </SheetDescription>
           </SheetHeader>
           {moduleSwitcher(true)}

@@ -374,11 +374,23 @@ class AuthService:
             provider = get_settings().auth_provider_name
             result = await session.execute(
                 select(User).where(
-                    User.external_identity_provider == provider,
+                    User.external_issuer == oidc_payload.iss,
                     User.external_subject == oidc_payload.sub,
                 )
             )
             user = result.scalars().first()
+            if user is None:
+                result = await session.execute(
+                    select(User).where(
+                        User.external_issuer.is_(None),
+                        User.external_identity_provider == provider,
+                        User.external_subject == oidc_payload.sub,
+                    )
+                )
+                user = result.scalars().first()
+                if user is not None:
+                    user.external_issuer = oidc_payload.iss
+                    await session.flush()
             if user is None:
                 raise AuthenticationError(
                     f"No internal user mapped to external identity: {oidc_payload.sub}"
@@ -396,18 +408,38 @@ class AuthService:
         # migration aid for a verified ID token and never a permanent key.
         result = await session.execute(
             select(User).where(
-                User.external_identity_provider == "cognito",
+                User.external_issuer == payload.iss,
                 User.external_subject == payload.sub,
             )
         )
         user = result.scalars().first()
-        if user is None and payload.token_use == "id" and payload.email and payload.email_verified:
+        if user is None:
+            result = await session.execute(
+                select(User).where(
+                    User.external_issuer.is_(None),
+                    User.external_identity_provider == "cognito",
+                    User.external_subject == payload.sub,
+                )
+            )
+            user = result.scalars().first()
+            if user is not None:
+                user.external_issuer = payload.iss
+                await session.flush()
+        platform_managed = get_settings().platform_authorization_mode == "enforced"
+        if (
+            user is None
+            and not platform_managed
+            and payload.token_use == "id"
+            and payload.email
+            and payload.email_verified
+        ):
             result = await session.execute(select(User).where(User.email == payload.email))
             candidate = result.scalars().first()
             if candidate is not None:
                 if candidate.external_identity_provider or candidate.external_subject:
                     raise AuthenticationError("External identity is already mapped")
                 candidate.external_identity_provider = "cognito"
+                candidate.external_issuer = payload.iss
                 candidate.external_subject = payload.sub
                 await session.flush()
                 user = candidate
@@ -419,7 +451,12 @@ class AuthService:
             # unverified/no-email tokens still raise the same error below, which
             # deps turns into a clean 401. All provisioning policy lives in
             # _provision_external_user so it can be changed in one place.
-            if payload.token_use == "id" and payload.email and payload.email_verified:
+            if (
+                not platform_managed
+                and payload.token_use == "id"
+                and payload.email
+                and payload.email_verified
+            ):
                 user = await self._provision_external_user(session, payload)
             else:
                 raise AuthenticationError(
@@ -477,6 +514,7 @@ class AuthService:
         user = User(
             email=payload.email,
             external_identity_provider="cognito",
+            external_issuer=payload.iss,
             external_subject=payload.sub,
             first_name=first_name,
             last_name=last_name,
@@ -496,7 +534,7 @@ class AuthService:
             # rollback above already discarded this request's failed INSERT.
             result = await session.execute(
                 select(User).where(
-                    User.external_identity_provider == "cognito",
+                    User.external_issuer == payload.iss,
                     User.external_subject == payload.sub,
                 )
             )

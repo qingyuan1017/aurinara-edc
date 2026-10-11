@@ -44,6 +44,7 @@ async def test_object_download_returns_gateway_url_without_storage_key() -> None
 @pytest.mark.asyncio
 async def test_register_bytes_uses_presigned_upload_and_opaque_reference() -> None:
     object_id = uuid4()
+    reference_id = uuid4()
     seen: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -63,7 +64,7 @@ async def test_register_bytes_uses_presigned_upload_and_opaque_reference() -> No
         if request.url.path.endswith("/finalize"):
             return httpx.Response(200, json={})
         if request.url.path.endswith("/references"):
-            return httpx.Response(201, json={})
+            return httpx.Response(201, json={"id": str(reference_id)})
         raise AssertionError(request.url)
 
     settings = Settings(
@@ -88,7 +89,8 @@ async def test_register_bytes_uses_presigned_upload_and_opaque_reference() -> No
         external_reference="file_attachment:1",
     )
 
-    assert result == object_id
+    assert result.object_id == object_id
+    assert result.reference_id == reference_id
     assert seen == [
         "/v1/objects/upload-sessions",
         "/part",

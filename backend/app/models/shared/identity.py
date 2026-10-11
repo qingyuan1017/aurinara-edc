@@ -71,6 +71,9 @@ class User(Base):
     external_identity_provider: Mapped[str | None] = mapped_column(
         String(50), nullable=True, comment="External identity provider, e.g. cognito"
     )
+    external_issuer: Mapped[str | None] = mapped_column(
+        String(512), nullable=True, comment="Immutable OIDC issuer URL"
+    )
     external_subject: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="Immutable provider subject (Cognito sub)"
     )
@@ -99,13 +102,13 @@ class User(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "external_identity_provider",
+            "external_issuer",
             "external_subject",
             name="uq_users_external_identity",
         ),
         Index(
             "ix_users_external_identity",
-            "external_identity_provider",
+            "external_issuer",
             "external_subject",
         ),
     )

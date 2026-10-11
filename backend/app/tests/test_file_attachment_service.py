@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.core.exceptions import ConflictError, ValidationError
+from app.core.exceptions import ConflictError, ServiceUnavailableError, ValidationError
 from app.core.storage import LocalObjectStorage
 from app.models.edc.study import Study
 from app.models.shared.file_attachment import FileAttachment
@@ -73,7 +73,13 @@ async def test_upload_stores_metadata_and_audits(study, actor_id):
     service = FileAttachmentService(storage=storage, lock_service_instance=locks)
     session = _session()
 
-    with patch("app.services.shared.file_attachment_service.audit_service") as audit:
+    with (
+        patch("app.services.shared.file_attachment_service.audit_service") as audit,
+        patch(
+            "app.services.shared.file_attachment_service.get_platform_objects",
+            return_value=SimpleNamespace(mode="disabled"),
+        ),
+    ):
         audit.record = AsyncMock()
         attachment = await service.upload(
             session,
@@ -127,7 +133,13 @@ async def test_download_requires_parent_read_access_and_audits(actor_id):
     service = FileAttachmentService(storage=storage, permission_service=permissions)
     user = MagicMock(id=actor_id)
 
-    with patch("app.services.shared.file_attachment_service.audit_service") as audit:
+    with (
+        patch("app.services.shared.file_attachment_service.audit_service") as audit,
+        patch(
+            "app.services.shared.file_attachment_service.get_platform_objects",
+            return_value=SimpleNamespace(mode="disabled"),
+        ),
+    ):
         audit.record = AsyncMock()
         content = await service.download(_session(), attachment, user)
 
@@ -209,7 +221,13 @@ async def test_upload_operational_uses_ctms_metadata_safe_key_and_audit(actor_id
     )
     user = MagicMock(id=actor_id)
 
-    with patch("app.services.shared.file_attachment_service.audit_service") as audit:
+    with (
+        patch("app.services.shared.file_attachment_service.audit_service") as audit,
+        patch(
+            "app.services.shared.file_attachment_service.get_platform_objects",
+            return_value=SimpleNamespace(mode="disabled"),
+        ),
+    ):
         audit.record = AsyncMock()
         attachment = await service.upload_operational(
             session,
@@ -288,6 +306,7 @@ async def test_operational_delete_restore_and_purge_are_audited_and_retention_gu
     storage = MemoryStorage()
     permissions = MagicMock(spec=PermissionService)
     service = FileAttachmentService(storage=storage, permission_service=permissions)
+    reference_id = uuid.uuid4()
     attachment = FileAttachment(
         id=uuid.uuid4(),
         module="CTMS",
@@ -301,11 +320,19 @@ async def test_operational_delete_restore_and_purge_are_audited_and_retention_gu
         storage_key="ctms-files/evidence.pdf",
         uploaded_by=actor_id,
         retention_until=datetime(2020, 1, 1, tzinfo=UTC),
+        platform_reference_id=reference_id,
     )
     storage.objects[attachment.storage_key] = b"evidence"
     user = MagicMock(id=actor_id)
 
-    with patch("app.services.shared.file_attachment_service.audit_service") as audit:
+    gateway = SimpleNamespace(mode="enforced", release_reference=AsyncMock())
+    with (
+        patch("app.services.shared.file_attachment_service.audit_service") as audit,
+        patch(
+            "app.services.shared.file_attachment_service.get_platform_objects",
+            return_value=gateway,
+        ),
+    ):
         audit.record = AsyncMock()
         await service.soft_delete(
             _session(), attachment, "retention complete", actor_id, user=user,
@@ -328,7 +355,46 @@ async def test_operational_delete_restore_and_purge_are_audited_and_retention_gu
     assert attachment.archived_at is not None
     assert attachment.archive_reason == "retention archived"
     assert attachment.storage_key not in storage.objects
+    gateway.release_reference.assert_awaited_once_with(reference_id)
     assert [call.kwargs["action"] for call in audit.record.await_args_list] == [
         "delete", "restore", "archive", "purge"
     ]
     assert all(call.kwargs["module"] == "CTMS" for call in audit.record.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_enforced_purge_keeps_bytes_when_reference_release_fails(actor_id):
+    storage = MemoryStorage()
+    attachment = FileAttachment(
+        id=uuid.uuid4(),
+        module="CTMS",
+        attachment_type="Operational_Attachment",
+        object_type="operational",
+        object_id=uuid.uuid4(),
+        study_id=uuid.uuid4(),
+        filename="evidence.pdf",
+        content_type="application/pdf",
+        size_bytes=7,
+        storage_key="ctms-files/evidence.pdf",
+        uploaded_by=actor_id,
+        archived_at=datetime(2020, 1, 1, tzinfo=UTC),
+        platform_reference_id=uuid.uuid4(),
+    )
+    storage.objects[attachment.storage_key] = b"evidence"
+    gateway = SimpleNamespace(
+        mode="enforced",
+        release_reference=AsyncMock(side_effect=ServiceUnavailableError()),
+    )
+
+    with patch(
+        "app.services.shared.file_attachment_service.get_platform_objects",
+        return_value=gateway,
+    ), pytest.raises(ServiceUnavailableError):
+        await FileAttachmentService(storage=storage).purge(
+            _session(),
+            attachment,
+            actor_id,
+            now=datetime(2021, 1, 1, tzinfo=UTC),
+        )
+
+    assert storage.objects[attachment.storage_key] == b"evidence"

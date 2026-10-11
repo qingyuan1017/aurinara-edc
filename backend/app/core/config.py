@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     auth_jwks_url: str | None = None
     auth_algorithms: str = "RS256"
     auth_provider_name: str = "oidc"
+    local_auth_enabled: bool = True
     logging_sink: str = "stdout"
     logging_namespace: str = "local"
     retention_days: int = 2555
@@ -130,10 +131,13 @@ class Settings(BaseSettings):
     platform_service_client_id: str | None = None
     platform_service_client_secret: SecretStr | None = None
     platform_service_audience: str = "aurinara-platform"
+    platform_service_scope: str = "https://aurinara-platform.local/service"
+    platform_service_resource: str | None = "https://aurinara-platform.local"
     platform_authorization_timeout_seconds: float = 2.0
     platform_authorization_cache_seconds: int = 30
     platform_event_queue_url: str | None = None
     platform_event_region: str = "us-east-1"
+    platform_event_endpoint_url: str | None = None
 
     # --- Object storage (local by default; S3-compatible when configured) ---
     object_storage_backend: str = "local"

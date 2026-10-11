@@ -55,6 +55,17 @@ Start FastAPI and leave this terminal running:
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+When the shared control plane is enabled, keep the canonical projection worker running
+as well:
+
+```bash
+docker compose up -d platform-projection-worker
+```
+
+The worker applies canonical user, study, and mapped-membership events. The Studies page
+refreshes its list every 30 seconds while active. Running FastAPI alone does not consume
+the platform SQS subscription.
+
 The backend reads `backend/.env` when commands are run from `backend`. The seed command is idempotent and creates or repairs the local development administrator.
 
 ### Backend URLs
@@ -196,4 +207,4 @@ Cognito is disabled unless all required values are configured. The backend uses 
 
 Use a Cognito **public app client with no client secret** for the SPA. Register the exact callback URL (for local development, typically `http://localhost:5173/auth/callback`) in the user pool app client. The SPA stores only short-lived OAuth state/PKCE verifier material in session storage and sends the authorization code to the backend exchange endpoint; it never handles a client secret. Do not put tokens or secrets in URLs.
 
-Cognito authenticates the person, but the application database remains authoritative for `users`, active/inactive status, roles, permissions, and study/site scopes. The API maps the verified immutable Cognito `sub` to a nullable `users.external_identity_provider`/`users.external_subject` pair. A legacy local user can be linked once from a verified Cognito ID token when the email is present and verified and no external mapping exists; access tokens without an email cannot perform that link. Cognito groups and claims are never used to grant application permissions.
+Cognito authenticates the person. The API maps each verified identity by its immutable `(issuer, subject)` pair in `users.external_issuer` and `users.external_subject`; provider labels and email addresses are not identity keys. During local or shadow rollout, a legacy local user can be linked once from a verified Cognito ID token when the email is present and verified and no external mapping exists. In enforced platform mode, email linking and just-in-time local users are disabled because the control-plane projection is authoritative. Access tokens without a verified email cannot perform legacy linking, and Cognito groups and claims never grant application permissions. Set `LOCAL_AUTH_ENABLED=false` only after Cognito enrollment and rollback-window reconciliation are complete to disable the local password lifecycle endpoints.

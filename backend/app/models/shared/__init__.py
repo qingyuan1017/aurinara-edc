@@ -22,6 +22,7 @@ from app.models.shared.notification import Notification, NotificationStatus
 from app.models.shared.platform_projection import (
     PlatformMembershipProjection,
     PlatformProjectionEvent,
+    PlatformRoleMapping,
 )
 from app.models.shared.revoked_token import RevokedToken
 
@@ -43,6 +44,7 @@ __all__ = [
     "Permission",
     "PlatformMembershipProjection",
     "PlatformProjectionEvent",
+    "PlatformRoleMapping",
     "RevokedToken",
     "Role",
     "RolePermission",

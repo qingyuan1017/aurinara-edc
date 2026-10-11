@@ -50,6 +50,7 @@ function formatDate(value?: string | null): string {
  */
 export function StudyVersioningPage({ studyId }: { studyId: string }) {
   const queryClient = useQueryClient()
+  const canCreate = usePermission(PERMISSIONS.DESIGNER_STUDY_VERSION_CREATE, studyId)
   const canConfigure = usePermission(PERMISSIONS.DESIGNER_STUDY_VERSION_AMEND, studyId)
   const canPublish = usePermission(PERMISSIONS.DESIGNER_VERSION_PUBLISH, studyId)
   const [showAmendmentForm, setShowAmendmentForm] = useState(false)
@@ -71,6 +72,24 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
   const versionsById = useMemo(() => new Map((versionsQuery.data ?? []).map((version) => [version.id, version])), [versionsQuery.data])
   const latestPublished = [...versions].reverse().find((version) => version.status === 'published')
   const openDraft = versions.find((version) => version.status === 'draft')
+
+  const createInitialDraft = useMutation({
+    mutationFn: async () => (
+      await api.post<StudyVersion>(`/designer/studies/${studyId}/versions`, {
+        version_number: '1.0',
+      })
+    ).data,
+    onSuccess: ({ version_number }) => {
+      queryClient.invalidateQueries({ queryKey: ['study-versions', studyId] })
+      queryClient.invalidateQueries({ queryKey: ['study', studyId] })
+      setMessage(`Initial draft version ${version_number} created.`)
+      setValidationError('')
+    },
+    onError: (error: unknown) => {
+      setValidationError(getApiErrorMessage(error, 'Could not create the initial draft.'))
+      setMessage('')
+    },
+  })
 
   const amendment = useMutation({
     mutationFn: async () => {
@@ -117,7 +136,7 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
         title="Study versioning"
         description={`${study.study_code} · ${study.title}${study.phase ? ` · Phase ${study.phase}` : ''}`}
         breadcrumbs={<a href={`/studies/${studyId}`} className="text-primary hover:underline">← Back to study</a>}
-        actions={canConfigure ? (
+        actions={canConfigure && latestPublished ? (
           <Button
             type="button"
             onClick={() => { setShowAmendmentForm(true); setValidationError(''); setMessage('') }}
@@ -143,7 +162,28 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
           </div>
         </CardHeader>
         <CardContent>
-          <DataTableShell label="Study version history" empty={!versions.length} emptyTitle="No study versions found." emptyDescription="Study versions will appear here after the study is configured.">
+          <DataTableShell
+            label="Study version history"
+            empty={!versions.length}
+            emptyTitle="No study versions found."
+            emptyDescription={canCreate
+              ? 'Create the first EDC-owned draft to begin configuring visits, forms, and edit checks.'
+              : 'A user with study-version creation permission must create the initial EDC draft.'}
+            emptyAction={canCreate ? (
+              <Button
+                type="button"
+                pending={createInitialDraft.isPending}
+                loadingText="Creating draft…"
+                onClick={() => {
+                  setValidationError('')
+                  setMessage('')
+                  createInitialDraft.mutate()
+                }}
+              >
+                Create initial draft
+              </Button>
+            ) : null}
+          >
             <Table>
               <caption className="sr-only">Study version history</caption>
               <TableHeader><TableRow>{['Version', 'Status', 'Amendment reason', 'Based on', 'Created', 'Published', 'Actions'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
