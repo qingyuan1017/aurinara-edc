@@ -1,0 +1,64 @@
+{
+  "forms": [],
+  "edit_checks": [
+    {
+      "name": "AE start date after end date",
+      "description": "Raises an error when the AE start date is later than the AE end date.",
+      "rule_json": {
+        "field": "AESTDAT",
+        "operator": "after",
+        "value_field": "AEENDAT"
+      },
+      "severity": "error",
+      "is_active": true
+    },
+    {
+      "name": "Serious AE missing criteria",
+      "description": "Raises a query when a serious AE has no seriousness criterion.",
+      "rule_json": {
+        "and": [
+          {
+            "field": "AESER",
+            "operator": "in",
+            "value": [true, "Yes", "Y", "YES"]
+          },
+          {
+            "or": [
+              { "field": "AESCRIT", "operator": "is_null" },
+              { "field": "AESCRIT", "operator": "==", "value": "" }
+            ]
+          }
+        ]
+      },
+      "severity": "query",
+      "is_active": true
+    },
+    {
+      "name": "Heart rate outside expected range",
+      "description": "Raises a warning when heart rate is below 30 or above 220 bpm.",
+      "rule_json": {
+        "or": [
+          { "field": "HR", "operator": "<", "value": 30 },
+          { "field": "HR", "operator": ">", "value": 220 }
+        ]
+      },
+      "severity": "warning",
+      "is_active": true
+    },
+    {
+      "name": "Subject identifier format",
+      "description": "Raises an error when the subject identifier does not match ABC-0001 format.",
+      "rule_json": {
+        "not": {
+          "field": "SUBJID",
+          "operator": "matches",
+          "value": "^[A-Z]{3}-[0-9]{4}$"
+        }
+      },
+      "severity": "error",
+      "is_active": true
+    }
+  ],
+  "codelists": [],
+  "visits": []
+}

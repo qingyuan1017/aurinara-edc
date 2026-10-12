@@ -18920,6 +18920,55 @@
         }
       }
     },
+    "/api/v1/designer/versions/{version_id}/validation": {
+      "get": {
+        "tags": [
+          "designer-versions"
+        ],
+        "summary": "Validate Version For Publication",
+        "description": "Return a read-only publication-readiness report for a design version.",
+        "operationId": "validate_version_for_publication_api_v1_designer_versions__version_id__validation_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignValidationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/designer/studies/{study_id}/forms": {
       "get": {
         "tags": [
@@ -19997,6 +20046,46 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "designer-edit-checks"
+        ],
+        "summary": "Delete Edit Check",
+        "description": "Delete an unused edit check only while its study version is mutable.",
+        "operationId": "delete_edit_check_api_v1_designer_edit_checks__edit_check_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "edit_check_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Edit Check Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/designer/edit-checks/{edit_check_id}/test": {
@@ -20842,6 +20931,144 @@
         }
       }
     },
+    "/api/v1/designer/versions/{version_id}/cycles/{cycle_id}/visits": {
+      "post": {
+        "tags": [
+          "designer-visits"
+        ],
+        "summary": "Create Cycle Visit",
+        "description": "Create a child visit owned exclusively by one cycle.",
+        "operationId": "create_cycle_visit_api_v1_designer_versions__version_id__cycles__cycle_id__visits_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "cycle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cycle Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitDefinitionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/visits/{visit_id}": {
+      "patch": {
+        "tags": [
+          "designer-visits"
+        ],
+        "summary": "Update Visit",
+        "description": "Update visit metadata or replace a cycle's selected visit members.",
+        "operationId": "update_visit_api_v1_designer_versions__version_id__visits__visit_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "visit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Visit Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitDefinitionUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/designer/visits/{visit_id}/dependencies": {
       "post": {
         "tags": [
@@ -21062,7 +21289,127 @@
         }
       }
     },
+    "/api/v1/designer/versions/{version_id}/arms/{arm_id}": {
+      "patch": {
+        "tags": [
+          "designer-arms"
+        ],
+        "summary": "Update Arm",
+        "description": "Update an Arm_Definition within a draft Design_Version.",
+        "operationId": "update_arm_api_v1_designer_versions__version_id__arms__arm_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "arm_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Arm Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArmDefinitionUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArmDefinitionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/designer/versions/{version_id}/crf-access": {
+      "get": {
+        "tags": [
+          "designer-crf-access"
+        ],
+        "summary": "List Crf Access",
+        "description": "List CRF access definitions for a draft or published Design_Version.",
+        "operationId": "list_crf_access_api_v1_designer_versions__version_id__crf_access_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrfAccessDefinitionResponse"
+                  },
+                  "title": "Response List Crf Access Api V1 Designer Versions  Version Id  Crf Access Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "designer-crf-access"
@@ -21122,6 +21469,57 @@
       }
     },
     "/api/v1/designer/versions/{version_id}/raw-data-variables": {
+      "get": {
+        "tags": [
+          "designer-raw-data-variables"
+        ],
+        "summary": "List Raw Data Variables",
+        "description": "List configured raw-data field suffixes for one design version.",
+        "operationId": "list_raw_data_variables_api_v1_designer_versions__version_id__raw_data_variables_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RawDataVariableSettingResponse"
+                  },
+                  "title": "Response List Raw Data Variables Api V1 Designer Versions  Version Id  Raw Data Variables Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "designer-raw-data-variables"
@@ -21180,7 +21578,180 @@
         }
       }
     },
+    "/api/v1/designer/versions/{version_id}/raw-data-datasets": {
+      "get": {
+        "tags": [
+          "designer-raw-data-variables"
+        ],
+        "summary": "List Raw Data Datasets",
+        "description": "Preview the generated variable schema for each form-owned dataset.",
+        "operationId": "list_raw_data_datasets_api_v1_designer_versions__version_id__raw_data_datasets_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RawDatasetDefinitionResponse"
+                  },
+                  "title": "Response List Raw Data Datasets Api V1 Designer Versions  Version Id  Raw Data Datasets Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/versions/{version_id}/raw-data-variables/fields/{field_definition_id}": {
+      "put": {
+        "tags": [
+          "designer-raw-data-variables"
+        ],
+        "summary": "Configure Field Raw Data Variables",
+        "description": "Configure companion suffixes for one codelist, numeric, or date field.",
+        "operationId": "configure_field_raw_data_variables_api_v1_designer_versions__version_id__raw_data_variables_fields__field_definition_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "field_definition_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Field Definition Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RawDataFieldVariableConfigure"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RawDataVariableSettingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/designer/versions/{version_id}/coding-settings": {
+      "get": {
+        "tags": [
+          "designer-coding-settings"
+        ],
+        "summary": "List Coding Settings",
+        "description": "List coding settings for a draft or published Design_Version.",
+        "operationId": "list_coding_settings_api_v1_designer_versions__version_id__coding_settings_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CodingSettingResponse"
+                  },
+                  "title": "Response List Coding Settings Api V1 Designer Versions  Version Id  Coding Settings Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "designer-coding-settings"
@@ -21222,6 +21793,84 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CodingSettingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/designer/studies/{study_id}/bulk-import": {
+      "post": {
+        "tags": [
+          "designer-import"
+        ],
+        "summary": "Bulk Import Designer Definitions",
+        "description": "Validate and create all supplied definitions in one transaction.",
+        "operationId": "bulk_import_designer_definitions_api_v1_designer_studies__study_id__bulk_import_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "study_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Study Id"
+            }
+          },
+          {
+            "name": "study_version_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target draft version; defaults to the latest draft.",
+              "title": "Study Version Id"
+            },
+            "description": "Target draft version; defaults to the latest draft."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesignerBulkImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignerBulkImportResponse"
                 }
               }
             }
@@ -22044,7 +22693,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse_SubjectResponse_"
+                  "$ref": "#/components/schemas/PaginatedResponse_SubjectListResponse_"
                 }
               }
             }
@@ -22208,6 +22857,112 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SubjectResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subjects/{subject_id}/phase": {
+      "get": {
+        "tags": [
+          "subjects"
+        ],
+        "summary": "Get Subject Phase",
+        "description": "Return the subject's phase/arm state and published configuration.",
+        "operationId": "get_subject_phase_api_v1_subjects__subject_id__phase_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectPhaseStateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "subjects"
+        ],
+        "summary": "Update Subject Phase",
+        "description": "Update the current phase, requiring an arm choice for arm phases.",
+        "operationId": "update_subject_phase_api_v1_subjects__subject_id__phase_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubjectPhaseUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectPhaseStateResponse"
                 }
               }
             }
@@ -26604,6 +27359,15 @@
         "title": "AccessTokenResponse",
         "description": "New access token issued on successful refresh."
       },
+      "AccessType": {
+        "type": "string",
+        "enum": [
+          "open_access",
+          "restricted_edit",
+          "general_blind"
+        ],
+        "title": "AccessType"
+      },
       "ActivationActionCompletion": {
         "properties": {
           "evidence_reference": {
@@ -27141,7 +27905,66 @@
           "created_at"
         ],
         "title": "ArmDefinitionResponse",
-        "description": "Response schema for a persisted Arm_Definition.\n\n``visit_definition_ids`` lists the arm's member visits (plain visits and\ncycles). The route constructs this field explicitly from ``arm.visits``;\n``model_validate(arm)`` cannot populate it because the ORM relationship is\nnamed ``visits``."
+        "description": "Response schema for a persisted Arm_Definition.\n\n``visit_definition_ids`` lists the arm's real member visits (standalone and\ncycle-owned leaves). The route constructs this field explicitly from ``arm.visits``;\n``model_validate(arm)`` cannot populate it because the ORM relationship is\nnamed ``visits``."
+      },
+      "ArmDefinitionUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "display_order": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 999,
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Order"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "visit_definition_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Definition Ids"
+          }
+        },
+        "type": "object",
+        "title": "ArmDefinitionUpdate",
+        "description": "Request body for editing an Arm_Definition (partial PATCH)."
       },
       "AssessmentResponse": {
         "properties": {
@@ -28005,6 +28828,63 @@
             "format": "uuid",
             "title": "Study Version Id"
           },
+          "current_phase_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Phase Definition Id"
+          },
+          "current_phase_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Phase Name"
+          },
+          "current_phase_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Phase Type"
+          },
+          "arm_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arm Definition Id"
+          },
+          "arm_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arm Name"
+          },
           "visits": {
             "items": {
               "$ref": "#/components/schemas/CasebookVisitEntry"
@@ -28866,6 +29746,7 @@
       "ControlType": {
         "type": "string",
         "enum": [
+          "label",
           "text",
           "textarea",
           "integer",
@@ -28876,12 +29757,17 @@
           "radio",
           "checkbox",
           "dropdown",
+          "listbox",
           "multi-select",
           "boolean",
           "file_upload",
           "calculated",
           "repeating_table",
-          "coded_term"
+          "coded_term",
+          "float",
+          "slider",
+          "body_image",
+          "unit"
         ],
         "title": "ControlType",
         "description": "The field control types supported by the form builder (Requirement 4.2)."
@@ -29565,6 +30451,244 @@
           "updated_at"
         ],
         "title": "DashboardQueryResponse"
+      },
+      "DesignValidationCounts": {
+        "properties": {
+          "forms": {
+            "type": "integer",
+            "title": "Forms",
+            "default": 0
+          },
+          "sections": {
+            "type": "integer",
+            "title": "Sections",
+            "default": 0
+          },
+          "fields": {
+            "type": "integer",
+            "title": "Fields",
+            "default": 0
+          },
+          "visits": {
+            "type": "integer",
+            "title": "Visits",
+            "default": 0
+          },
+          "scheduled_form_mappings": {
+            "type": "integer",
+            "title": "Scheduled Form Mappings",
+            "default": 0
+          },
+          "codelists": {
+            "type": "integer",
+            "title": "Codelists",
+            "default": 0
+          },
+          "codelist_items": {
+            "type": "integer",
+            "title": "Codelist Items",
+            "default": 0
+          },
+          "edit_checks": {
+            "type": "integer",
+            "title": "Edit Checks",
+            "default": 0
+          },
+          "subject_phases": {
+            "type": "integer",
+            "title": "Subject Phases",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "DesignValidationCounts",
+        "description": "Definition totals included in the publication-readiness response."
+      },
+      "DesignValidationIssue": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "entity_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "title": "DesignValidationIssue",
+        "description": "One sanitized, actionable publication-readiness finding."
+      },
+      "DesignValidationResponse": {
+        "properties": {
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "valid": {
+            "type": "boolean",
+            "title": "Valid"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/DesignValidationCounts"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/DesignValidationIssue"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version_id",
+          "valid",
+          "counts",
+          "issues"
+        ],
+        "title": "DesignValidationResponse",
+        "description": "Aggregate validation result for one Design_Version."
+      },
+      "DesignerBulkImportRequest": {
+        "properties": {
+          "forms": {
+            "items": {
+              "$ref": "#/components/schemas/FormDefinitionImport"
+            },
+            "type": "array",
+            "maxItems": 250,
+            "title": "Forms"
+          },
+          "edit_checks": {
+            "items": {
+              "$ref": "#/components/schemas/EditCheckCreate"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "title": "Edit Checks"
+          },
+          "codelists": {
+            "items": {
+              "$ref": "#/components/schemas/CodelistCreate"
+            },
+            "type": "array",
+            "maxItems": 250,
+            "title": "Codelists"
+          },
+          "visits": {
+            "items": {
+              "$ref": "#/components/schemas/VisitDefinitionCreate"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "title": "Visits"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DesignerBulkImportRequest",
+        "description": "Designer definitions created together in a single transaction."
+      },
+      "DesignerBulkImportResponse": {
+        "properties": {
+          "study_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Id"
+          },
+          "study_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Study Version Id"
+          },
+          "forms_created": {
+            "type": "integer",
+            "title": "Forms Created"
+          },
+          "sections_created": {
+            "type": "integer",
+            "title": "Sections Created"
+          },
+          "fields_created": {
+            "type": "integer",
+            "title": "Fields Created"
+          },
+          "edit_checks_created": {
+            "type": "integer",
+            "title": "Edit Checks Created"
+          },
+          "codelists_created": {
+            "type": "integer",
+            "title": "Codelists Created"
+          },
+          "codelist_items_created": {
+            "type": "integer",
+            "title": "Codelist Items Created"
+          },
+          "visits_created": {
+            "type": "integer",
+            "title": "Visits Created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "study_id",
+          "study_version_id",
+          "forms_created",
+          "sections_created",
+          "fields_created",
+          "edit_checks_created",
+          "codelists_created",
+          "codelist_items_created",
+          "visits_created"
+        ],
+        "title": "DesignerBulkImportResponse"
+      },
+      "DetailType": {
+        "type": "string",
+        "enum": [
+          "log",
+          "grid"
+        ],
+        "title": "DetailType"
       },
       "EditCheckCreate": {
         "properties": {
@@ -31051,11 +32175,74 @@
             "minLength": 1,
             "title": "Label"
           },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "text_align": {
+            "$ref": "#/components/schemas/TextAlign",
+            "default": "left"
+          },
           "variable_name": {
             "type": "string",
             "maxLength": 255,
             "minLength": 1,
             "title": "Variable Name"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
+          },
+          "crf_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crf Id"
+          },
+          "odm_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Odm Id"
           },
           "control_type": {
             "$ref": "#/components/schemas/ControlType"
@@ -31232,6 +32419,271 @@
         "title": "FieldDefinitionCreate",
         "description": "Request body for creating a field definition (Requirement 4.2).\n\nSupports every control type and field attribute."
       },
+      "FieldDefinitionImport": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "text_align": {
+            "$ref": "#/components/schemas/TextAlign",
+            "default": "left"
+          },
+          "variable_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Variable Name"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
+          },
+          "crf_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crf Id"
+          },
+          "odm_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Odm Id"
+          },
+          "control_type": {
+            "$ref": "#/components/schemas/ControlType"
+          },
+          "data_type": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Data Type"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order",
+            "description": "Sort order within the section"
+          },
+          "is_required": {
+            "type": "boolean",
+            "title": "Is Required",
+            "default": false
+          },
+          "codelist_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codelist Id"
+          },
+          "default_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Value"
+          },
+          "help_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help Text"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "min_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Value"
+          },
+          "max_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Value"
+          },
+          "max_length": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Length"
+          },
+          "decimal_precision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decimal Precision"
+          },
+          "regex_validation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regex Validation"
+          },
+          "visibility_rule": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility Rule"
+          },
+          "is_read_only": {
+            "type": "boolean",
+            "title": "Is Read Only",
+            "default": false
+          },
+          "is_calculated": {
+            "type": "boolean",
+            "title": "Is Calculated",
+            "default": false
+          },
+          "calculation_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Expression"
+          },
+          "codelist_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codelist Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "variable_name",
+          "control_type",
+          "data_type",
+          "display_order"
+        ],
+        "title": "FieldDefinitionImport",
+        "description": "A field that may refer to a codelist by portable code instead of UUID."
+      },
       "FieldDefinitionResponse": {
         "properties": {
           "id": {
@@ -31248,9 +32700,68 @@
             "type": "string",
             "title": "Label"
           },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "text_align": {
+            "type": "string",
+            "title": "Text Align"
+          },
           "variable_name": {
             "type": "string",
             "title": "Variable Name"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
+          },
+          "crf_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crf Id"
+          },
+          "odm_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Odm Id"
           },
           "control_type": {
             "type": "string",
@@ -31407,6 +32918,7 @@
           "id",
           "form_section_id",
           "label",
+          "text_align",
           "variable_name",
           "control_type",
           "data_type",
@@ -31433,6 +32945,39 @@
             ],
             "title": "Label"
           },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "text_align": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TextAlign"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "variable_name": {
             "anyOf": [
               {
@@ -31445,6 +32990,42 @@
               }
             ],
             "title": "Variable Name"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
+          },
+          "crf_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crf Id"
+          },
+          "odm_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Odm Id"
           },
           "control_type": {
             "anyOf": [
@@ -32011,6 +33592,113 @@
             "title": "Is Repeating",
             "description": "Whether the form is repeating",
             "default": false
+          },
+          "form_type": {
+            "$ref": "#/components/schemas/FormType",
+            "default": "simple"
+          },
+          "access_type": {
+            "$ref": "#/components/schemas/AccessType",
+            "default": "open_access"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "grid_rows": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Rows"
+          },
+          "grid_columns": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Columns"
+          },
+          "header_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Name"
+          },
+          "detail_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail Name"
+          },
+          "detail_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DetailType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "show_variable_name": {
+            "type": "boolean",
+            "title": "Show Variable Name",
+            "default": false
+          },
+          "show_crf_id": {
+            "type": "boolean",
+            "title": "Show Crf Id",
+            "default": false
+          },
+          "show_odm_id": {
+            "type": "boolean",
+            "title": "Show Odm Id",
+            "default": false
           }
         },
         "type": "object",
@@ -32021,6 +33709,156 @@
         ],
         "title": "FormDefinitionCreate",
         "description": "Request body for creating a form definition (Requirement 4.1)."
+      },
+      "FormDefinitionImport": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "form_code": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Form Code",
+            "description": "e.g. \"AE\", \"CM\", \"DM\""
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order",
+            "description": "Sort order within the version"
+          },
+          "is_repeating": {
+            "type": "boolean",
+            "title": "Is Repeating",
+            "description": "Whether the form is repeating",
+            "default": false
+          },
+          "form_type": {
+            "$ref": "#/components/schemas/FormType",
+            "default": "simple"
+          },
+          "access_type": {
+            "$ref": "#/components/schemas/AccessType",
+            "default": "open_access"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "grid_rows": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Rows"
+          },
+          "grid_columns": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Columns"
+          },
+          "header_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Name"
+          },
+          "detail_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail Name"
+          },
+          "detail_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DetailType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "show_variable_name": {
+            "type": "boolean",
+            "title": "Show Variable Name",
+            "default": false
+          },
+          "show_crf_id": {
+            "type": "boolean",
+            "title": "Show Crf Id",
+            "default": false
+          },
+          "show_odm_id": {
+            "type": "boolean",
+            "title": "Show Odm Id",
+            "default": false
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/FormSectionImport"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Sections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "form_code",
+          "display_order"
+        ],
+        "title": "FormDefinitionImport"
       },
       "FormDefinitionResponse": {
         "properties": {
@@ -32050,6 +33888,103 @@
             "type": "boolean",
             "title": "Is Repeating"
           },
+          "form_type": {
+            "type": "string",
+            "title": "Form Type"
+          },
+          "access_type": {
+            "type": "string",
+            "title": "Access Type"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "grid_rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Rows"
+          },
+          "grid_columns": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Columns"
+          },
+          "header_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Name"
+          },
+          "detail_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail Name"
+          },
+          "detail_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail Type"
+          },
+          "show_variable_name": {
+            "type": "boolean",
+            "title": "Show Variable Name"
+          },
+          "show_crf_id": {
+            "type": "boolean",
+            "title": "Show Crf Id"
+          },
+          "show_odm_id": {
+            "type": "boolean",
+            "title": "Show Odm Id"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -32070,6 +34005,11 @@
           "form_code",
           "display_order",
           "is_repeating",
+          "form_type",
+          "access_type",
+          "show_variable_name",
+          "show_crf_id",
+          "show_odm_id",
           "created_at"
         ],
         "title": "FormDefinitionResponse",
@@ -32124,6 +34064,143 @@
               }
             ],
             "title": "Is Repeating"
+          },
+          "form_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FormType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "access_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccessType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "grid_rows": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Rows"
+          },
+          "grid_columns": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Columns"
+          },
+          "header_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Name"
+          },
+          "detail_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail Name"
+          },
+          "detail_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DetailType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "show_variable_name": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Show Variable Name"
+          },
+          "show_crf_id": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Show Crf Id"
+          },
+          "show_odm_id": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Show Odm Id"
           }
         },
         "type": "object",
@@ -32517,10 +34594,48 @@
             "minLength": 1,
             "title": "Name"
           },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
           "display_order": {
             "type": "integer",
             "title": "Display Order",
             "description": "Sort order within the form"
+          },
+          "is_label_only": {
+            "type": "boolean",
+            "title": "Is Label Only",
+            "default": false
+          },
+          "output_to_dataset": {
+            "type": "boolean",
+            "title": "Output To Dataset",
+            "default": true
+          },
+          "help_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help Text"
+          },
+          "access_type": {
+            "$ref": "#/components/schemas/AccessType",
+            "default": "open_access"
           }
         },
         "type": "object",
@@ -32530,6 +34645,73 @@
         ],
         "title": "FormSectionCreate",
         "description": "Request body for creating a form section (Requirement 4.2)."
+      },
+      "FormSectionImport": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order",
+            "description": "Sort order within the form"
+          },
+          "is_label_only": {
+            "type": "boolean",
+            "title": "Is Label Only",
+            "default": false
+          },
+          "output_to_dataset": {
+            "type": "boolean",
+            "title": "Output To Dataset",
+            "default": true
+          },
+          "help_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help Text"
+          },
+          "access_type": {
+            "$ref": "#/components/schemas/AccessType",
+            "default": "open_access"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldDefinitionImport"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "title": "Fields"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "display_order"
+        ],
+        "title": "FormSectionImport"
       },
       "FormSectionResponse": {
         "properties": {
@@ -32547,9 +34729,36 @@
             "type": "string",
             "title": "Name"
           },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
           "display_order": {
             "type": "integer",
             "title": "Display Order"
+          },
+          "is_label_only": {
+            "type": "boolean",
+            "title": "Is Label Only"
+          },
+          "output_to_dataset": {
+            "type": "boolean",
+            "title": "Output To Dataset"
+          },
+          "help_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help Text"
+          },
+          "access_type": {
+            "type": "string",
+            "title": "Access Type"
           },
           "fields": {
             "items": {
@@ -32564,10 +34773,24 @@
           "id",
           "form_definition_id",
           "name",
-          "display_order"
+          "label",
+          "display_order",
+          "is_label_only",
+          "output_to_dataset",
+          "access_type"
         ],
         "title": "FormSectionResponse",
         "description": "Response schema for a form section (Requirement 4.2)."
+      },
+      "FormType": {
+        "type": "string",
+        "enum": [
+          "simple",
+          "log",
+          "grid",
+          "header_details"
+        ],
+        "title": "FormType"
       },
       "FreezeLockObjectType": {
         "type": "string",
@@ -37375,11 +39598,11 @@
         ],
         "title": "PaginatedResponse[StudyResponse]"
       },
-      "PaginatedResponse_SubjectResponse_": {
+      "PaginatedResponse_SubjectListResponse_": {
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/SubjectResponse"
+              "$ref": "#/components/schemas/SubjectListResponse"
             },
             "type": "array",
             "title": "Items"
@@ -37408,7 +39631,7 @@
           "page_size",
           "total"
         ],
-        "title": "PaginatedResponse[SubjectResponse]"
+        "title": "PaginatedResponse[SubjectListResponse]"
       },
       "PaginatedResponse_TaskResponse_": {
         "properties": {
@@ -38307,6 +40530,61 @@
         "title": "QueryType",
         "description": "Origin of the query — manual or system-generated."
       },
+      "RawDataFieldVariableConfigure": {
+        "properties": {
+          "suffix": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suffix"
+          },
+          "year_suffix": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year Suffix"
+          },
+          "month_suffix": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Month Suffix"
+          },
+          "day_suffix": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Suffix"
+          }
+        },
+        "type": "object",
+        "title": "RawDataFieldVariableConfigure",
+        "description": "Configure generated companion variables for one form field."
+      },
       "RawDataVariableSettingCreate": {
         "properties": {
           "name": {
@@ -38406,6 +40684,51 @@
             ],
             "title": "Suffix"
           },
+          "field_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Definition Id"
+          },
+          "year_suffix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year Suffix"
+          },
+          "month_suffix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Month Suffix"
+          },
+          "day_suffix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Suffix"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -38432,6 +40755,79 @@
         ],
         "title": "RawDataVariableSettingResponse",
         "description": "Response schema for a persisted Raw_Data_Variable_Setting."
+      },
+      "RawDatasetDefinitionResponse": {
+        "properties": {
+          "form_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Form Definition Id"
+          },
+          "form_code": {
+            "type": "string",
+            "title": "Form Code"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "variables": {
+            "items": {
+              "$ref": "#/components/schemas/RawDatasetVariableResponse"
+            },
+            "type": "array",
+            "title": "Variables"
+          }
+        },
+        "type": "object",
+        "required": [
+          "form_definition_id",
+          "form_code",
+          "dataset_name"
+        ],
+        "title": "RawDatasetDefinitionResponse",
+        "description": "Generated raw-data schema for one form."
+      },
+      "RawDatasetVariableResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "data_type": {
+            "type": "string",
+            "title": "Data Type"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "field_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Definition Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "data_type",
+          "label",
+          "source"
+        ],
+        "title": "RawDatasetVariableResponse",
+        "description": "One generated column in a form-owned raw dataset."
       },
       "ReadinessCriterionCreate": {
         "properties": {
@@ -41433,6 +43829,42 @@
         "title": "SubAreaSurface",
         "description": "A structured operational sub-area surface response.\n\nUsed by sub-areas whose operational data model is not yet established. The\nresponse is a stable, typed shape (never a bare ``null``) so each sub-area\nendpoint is mountable and smoke-testable as the operational surface\nboundary. ``design_version_id`` is populated for design-dependent reads\nresolved through the Design_Consumption_Contract (R8.14)."
       },
+      "SubjectArmOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "display_order"
+        ],
+        "title": "SubjectArmOption",
+        "description": "One configured arm available for assignment."
+      },
       "SubjectCreate": {
         "properties": {
           "site_id": {
@@ -41470,11 +43902,23 @@
             "minLength": 1,
             "title": "Name"
           },
+          "phase_type": {
+            "$ref": "#/components/schemas/SubjectPhaseType",
+            "default": "common"
+          },
           "display_order": {
             "type": "integer",
             "maximum": 999,
             "minimum": 1,
             "title": "Display Order"
+          },
+          "visit_definition_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Visit Definition Ids"
           }
         },
         "type": "object",
@@ -41501,9 +43945,20 @@
             "type": "string",
             "title": "Name"
           },
+          "phase_type": {
+            "$ref": "#/components/schemas/SubjectPhaseType"
+          },
           "display_order": {
             "type": "integer",
             "title": "Display Order"
+          },
+          "visit_definition_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Visit Definition Ids"
           },
           "created_at": {
             "type": "string",
@@ -41526,6 +43981,7 @@
           "id",
           "design_version_id",
           "name",
+          "phase_type",
           "display_order",
           "created_at"
         ],
@@ -41547,6 +44003,16 @@
             ],
             "title": "Name"
           },
+          "phase_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubjectPhaseType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "display_order": {
             "anyOf": [
               {
@@ -41559,11 +44025,194 @@
               }
             ],
             "title": "Display Order"
+          },
+          "visit_definition_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Definition Ids"
           }
         },
         "type": "object",
         "title": "SubjectPhaseDefinitionUpdate",
         "description": "Request body for editing a Subject_Phase_Definition (partial PATCH)."
+      },
+      "SubjectListResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SubjectResponse"
+          }
+        ],
+        "properties": {
+          "site_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Name"
+          },
+          "current_phase_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Phase Name"
+          },
+          "current_phase_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Phase Type"
+          }
+        },
+        "type": "object",
+        "title": "SubjectListResponse",
+        "description": "Subject row enriched with human-readable site and phase details."
+      },
+      "SubjectPhaseOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "phase_type": {
+            "type": "string",
+            "title": "Phase Type"
+          },
+          "display_order": {
+            "type": "integer",
+            "title": "Display Order"
+          },
+          "visit_definition_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Visit Definition Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "phase_type",
+          "display_order"
+        ],
+        "title": "SubjectPhaseOption",
+        "description": "One configured phase available for the subject's published design."
+      },
+      "SubjectPhaseStateResponse": {
+        "properties": {
+          "current_phase_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Phase Definition Id"
+          },
+          "current_phase_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Phase Name"
+          },
+          "current_phase_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Phase Type"
+          },
+          "arm_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arm Definition Id"
+          },
+          "arm_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arm Name"
+          },
+          "phases": {
+            "items": {
+              "$ref": "#/components/schemas/SubjectPhaseOption"
+            },
+            "type": "array",
+            "title": "Phases"
+          },
+          "next_phases": {
+            "items": {
+              "$ref": "#/components/schemas/SubjectPhaseOption"
+            },
+            "type": "array",
+            "title": "Next Phases"
+          },
+          "arms": {
+            "items": {
+              "$ref": "#/components/schemas/SubjectArmOption"
+            },
+            "type": "array",
+            "title": "Arms"
+          }
+        },
+        "type": "object",
+        "title": "SubjectPhaseStateResponse",
+        "description": "Current phase/arm state plus choices from the published design."
       },
       "SubjectPhaseTransitionCreate": {
         "properties": {
@@ -41669,6 +44318,45 @@
         "title": "SubjectPhaseTransitionResponse",
         "description": "Response schema for a persisted subject-phase transition.\n\n``updated_at`` is intentionally omitted for parity with\n``VisitDependencyResponse``."
       },
+      "SubjectPhaseType": {
+        "type": "string",
+        "enum": [
+          "registered",
+          "screen_failure",
+          "common",
+          "complete",
+          "arm"
+        ],
+        "title": "SubjectPhaseType",
+        "description": "Operational behavior of a configured subject phase."
+      },
+      "SubjectPhaseUpdate": {
+        "properties": {
+          "phase_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Phase Definition Id"
+          },
+          "arm_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arm Definition Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phase_definition_id"
+        ],
+        "title": "SubjectPhaseUpdate",
+        "description": "Move a subject to a configured phase, selecting an arm when required."
+      },
       "SubjectResponse": {
         "properties": {
           "id": {
@@ -41690,6 +44378,30 @@
             "type": "string",
             "format": "uuid",
             "title": "Study Version Id"
+          },
+          "current_phase_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Phase Definition Id"
+          },
+          "arm_definition_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arm Definition Id"
           },
           "subject_number": {
             "type": "string",
@@ -42135,6 +44847,15 @@
         "type": "object",
         "title": "TaskUpdate"
       },
+      "TextAlign": {
+        "type": "string",
+        "enum": [
+          "left",
+          "center",
+          "right"
+        ],
+        "title": "TextAlign"
+      },
       "TokenPair": {
         "properties": {
           "access_token": {
@@ -42520,6 +45241,16 @@
         "title": "VersionUpgradeResult",
         "description": "Outcome of a successful Version Upgrade rebind (R8.3).\n\nReports the scope that was upgraded, the versions involved, and how many\nOperational_Records were rebound per table so the caller can confirm the\nrebind was complete."
       },
+      "VisitCategory": {
+        "type": "string",
+        "enum": [
+          "screening",
+          "pretreatment",
+          "treatment",
+          "follow_up"
+        ],
+        "title": "VisitCategory"
+      },
       "VisitDateRecord": {
         "properties": {
           "visit_date": {
@@ -42556,19 +45287,59 @@
             "minLength": 1,
             "title": "Name"
           },
+          "definition_kind": {
+            "$ref": "#/components/schemas/VisitDefinitionKind",
+            "default": "visit"
+          },
           "visit_number": {
-            "type": "integer",
-            "maximum": 9999,
-            "minimum": 1,
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 9999,
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Visit Number",
             "description": "Ordinal number of the visit (1-9999)"
           },
           "visit_type": {
-            "type": "string",
-            "maxLength": 50,
-            "minLength": 1,
-            "title": "Visit Type",
-            "description": "e.g. scheduled, unscheduled, screening"
+            "$ref": "#/components/schemas/VisitType",
+            "default": "scheduled"
+          },
+          "parent_folder_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Folder Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisitCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subtype": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisitSubtype"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "target_day": {
             "anyOf": [
@@ -42661,17 +45432,33 @@
             ],
             "title": "Cycle Length",
             "description": "Cycle-only: nominal length in days of one iteration"
+          },
+          "member_visit_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Member Visit Ids"
           }
         },
         "type": "object",
         "required": [
           "name",
-          "visit_number",
-          "visit_type",
           "display_order"
         ],
         "title": "VisitDefinitionCreate",
         "description": "Request body for defining a study visit (Requirement 4.2).\n\nPersisted against a draft Design_Version. ``target_day`` and the window\nbounds are optional (e.g. for screening or unscheduled visit types); when\nprovided they must fall within the inclusive bounds below. The ordering rule\n(lower window bound ≤ upper window bound) is enforced in the service so the\nrejection error can identify the invalid window (Requirement 4.3)."
+      },
+      "VisitDefinitionKind": {
+        "type": "string",
+        "enum": [
+          "visit",
+          "cycle_visit",
+          "folder",
+          "cycle"
+        ],
+        "title": "VisitDefinitionKind"
       },
       "VisitDefinitionResponse": {
         "properties": {
@@ -42696,6 +45483,44 @@
           "visit_type": {
             "type": "string",
             "title": "Visit Type"
+          },
+          "definition_kind": {
+            "type": "string",
+            "title": "Definition Kind"
+          },
+          "parent_folder_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Folder Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtype"
           },
           "target_day": {
             "anyOf": [
@@ -42771,6 +45596,14 @@
             ],
             "title": "Cycle Length"
           },
+          "member_visit_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Member Visit Ids"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -42783,12 +45616,201 @@
           "name",
           "visit_number",
           "visit_type",
+          "definition_kind",
           "display_order",
           "is_required",
           "created_at"
         ],
         "title": "VisitDefinitionResponse",
         "description": "Response schema for a visit definition (Requirement 4.2)."
+      },
+      "VisitDefinitionUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "visit_number": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 9999,
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Number"
+          },
+          "visit_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisitType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parent_folder_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Folder Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisitCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subtype": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisitSubtype"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 99999,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Day"
+          },
+          "window_before": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 99999,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Before"
+          },
+          "window_after": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 99999,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window After"
+          },
+          "display_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Order"
+          },
+          "is_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Required"
+          },
+          "repeat_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Min"
+          },
+          "repeat_max": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Max"
+          },
+          "cycle_length": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Length"
+          },
+          "member_visit_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Visit Ids",
+            "description": "Read-only membership; create child visits through the owning cycle",
+            "deprecated": true
+          }
+        },
+        "type": "object",
+        "title": "VisitDefinitionUpdate"
       },
       "VisitDependencyCreate": {
         "properties": {
@@ -42964,6 +45986,26 @@
         ],
         "title": "VisitInstanceStatus",
         "description": "Visit instance lifecycle status (Requirement 8.2, 8.3, 8.5)."
+      },
+      "VisitSubtype": {
+        "type": "string",
+        "enum": [
+          "ecoa",
+          "ediary"
+        ],
+        "title": "VisitSubtype"
+      },
+      "VisitType": {
+        "type": "string",
+        "enum": [
+          "scheduled",
+          "unscheduled",
+          "common",
+          "screening",
+          "visit",
+          "cycle"
+        ],
+        "title": "VisitType"
       },
       "WhoDrugCodingRequest": {
         "properties": {

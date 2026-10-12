@@ -24,6 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.security import create_access_token, hash_password
 from app.main import create_app
+from app.models.designer.arm_definition import ArmDefinition
+from app.models.designer.subject_phase_definition import (
+    SubjectPhaseDefinition,
+    SubjectPhaseType,
+)
 from app.models.edc.site import Site, SiteStatus
 from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject, SubjectStatus
@@ -47,11 +52,43 @@ async def async_engine():
     # Create only the tables needed by the subject routes. The full metadata
     # includes Postgres-only JSONB columns (form metadata) that SQLite cannot
     # render, so we restrict creation to the relevant tables.
+    # Casebook reads visit and form instances; create those tables (and the
+    # definition tables they reference) too. Their JSONB columns use a SQLite
+    # JSON variant so they render on the in-memory engine.
+    from app.models.designer.arm_definition import ArmDefinition as ArmDefinitionModel
+    from app.models.designer.arm_definition import arm_definition_visits
+    from app.models.designer.form_metadata import (
+        FieldDefinition as FieldDefinitionModel,
+    )
+    from app.models.designer.form_metadata import (
+        FormDefinition as FormDefinitionModel,
+    )
+    from app.models.designer.form_metadata import (
+        FormSection as FormSectionModel,
+    )
+    from app.models.designer.schedule_of_assessment import (
+        ScheduleOfAssessment as ScheduleOfAssessmentModel,
+    )
+    from app.models.designer.schedule_of_assessment import (
+        ScheduleOfAssessmentEntry as ScheduleOfAssessmentEntryModel,
+    )
+    from app.models.designer.subject_phase_definition import (
+        SubjectPhaseDefinition as SubjectPhaseDefinitionModel,
+    )
+    from app.models.designer.subject_phase_definition import (
+        SubjectPhaseVisitDefinition as SubjectPhaseVisitDefinitionModel,
+    )
+    from app.models.designer.subject_phase_transition import (
+        SubjectPhaseTransition as SubjectPhaseTransitionModel,
+    )
+    from app.models.designer.visit import VisitDefinition as VisitDefinitionModel
+    from app.models.edc.form_data import FormInstance as FormInstanceModel
     from app.models.edc.site import Site as SiteModel
     from app.models.edc.site import StudySiteUser as StudySiteUserModel
     from app.models.edc.study import Study as StudyModel
     from app.models.edc.study import StudyVersion as StudyVersionModel
     from app.models.edc.subject import Subject as SubjectModel
+    from app.models.edc.visit import VisitInstance as VisitInstanceModel
     from app.models.shared.audit import AuditEvent
     from app.models.shared.identity import (
         Permission as PermissionModel,
@@ -69,22 +106,6 @@ async def async_engine():
         UserRole as UserRoleModel,
     )
 
-    # Casebook reads visit and form instances; create those tables (and the
-    # definition tables they reference) too. Their JSONB columns use a SQLite
-    # JSON variant so they render on the in-memory engine.
-    from app.models.designer.form_metadata import (
-        FieldDefinition as FieldDefinitionModel,
-    )
-    from app.models.designer.form_metadata import (
-        FormDefinition as FormDefinitionModel,
-    )
-    from app.models.designer.form_metadata import (
-        FormSection as FormSectionModel,
-    )
-    from app.models.designer.visit import VisitDefinition as VisitDefinitionModel
-    from app.models.edc.form_data import FormInstance as FormInstanceModel
-    from app.models.edc.visit import VisitInstance as VisitInstanceModel
-
     tables = [
         m.__table__
         for m in (
@@ -97,6 +118,10 @@ async def async_engine():
             StudyVersionModel,
             SiteModel,
             StudySiteUserModel,
+            SubjectPhaseDefinitionModel,
+            SubjectPhaseVisitDefinitionModel,
+            SubjectPhaseTransitionModel,
+            ArmDefinitionModel,
             SubjectModel,
             AuditEvent,
             VisitDefinitionModel,
@@ -104,9 +129,12 @@ async def async_engine():
             FormDefinitionModel,
             FormSectionModel,
             FieldDefinitionModel,
+            ScheduleOfAssessmentModel,
+            ScheduleOfAssessmentEntryModel,
             FormInstanceModel,
         )
     ]
+    tables.append(arm_definition_visits)
     async with engine.begin() as conn:
         await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=tables))
     yield engine
@@ -292,6 +320,8 @@ class TestListSubjectsRoute:
         assert {"items", "page", "page_size", "total"} <= data.keys()
         assert data["total"] == 1
         assert data["items"][0]["id"] == str(subject.id)
+        assert data["items"][0]["site_name"] == seeded["site"].name
+        assert "current_phase_name" in data["items"][0]
 
     async def test_list_subjects_status_filter(self, client, seeded, subject):
         resp = await client.get(
@@ -319,16 +349,12 @@ class TestListSubjectsRoute:
 
 class TestGetSubjectRoute:
     async def test_get_subject_success(self, client, seeded, subject):
-        resp = await client.get(
-            f"/api/v1/subjects/{subject.id}", headers=_auth(seeded["user"])
-        )
+        resp = await client.get(f"/api/v1/subjects/{subject.id}", headers=_auth(seeded["user"]))
         assert resp.status_code == 200
         assert resp.json()["id"] == str(subject.id)
 
     async def test_get_subject_not_found(self, client, seeded):
-        resp = await client.get(
-            f"/api/v1/subjects/{uuid.uuid4()}", headers=_auth(seeded["user"])
-        )
+        resp = await client.get(f"/api/v1/subjects/{uuid.uuid4()}", headers=_auth(seeded["user"]))
         assert resp.status_code == 404
 
 
@@ -350,6 +376,37 @@ class TestUpdateSubjectRoute:
         )
         assert resp.status_code == 200
         assert resp.json()["subject_number"] == "101-0001"
+
+
+class TestSubjectPhaseRoutes:
+    async def test_arm_phase_requires_and_returns_selected_arm(
+        self, client, db_session, seeded, subject
+    ):
+        phase = SubjectPhaseDefinition(
+            design_version_id=seeded["version"].id,
+            name="Randomization",
+            phase_type=SubjectPhaseType.arm,
+            display_order=1,
+        )
+        arm = ArmDefinition(
+            study_version_id=seeded["version"].id,
+            name="Arm A",
+            display_order=1,
+        )
+        db_session.add_all([phase, arm])
+        await db_session.flush()
+
+        updated = await client.patch(
+            f"/api/v1/subjects/{subject.id}/phase",
+            json={
+                "phase_definition_id": str(phase.id),
+                "arm_definition_id": str(arm.id),
+            },
+            headers=_auth(seeded["user"]),
+        )
+        assert updated.status_code == 200
+        assert updated.json()["current_phase_type"] == "arm"
+        assert updated.json()["arm_name"] == "Arm A"
 
 
 # ---------------------------------------------------------------------------
@@ -406,9 +463,7 @@ class TestCasebookRoute:
 
 
 class TestSubjectPermissionEnforcement:
-    async def test_no_permission_forbidden(
-        self, client, db_session, seeded, subject
-    ):
+    async def test_no_permission_forbidden(self, client, db_session, seeded, subject):
         """A user without subject permissions gets 403."""
         nobody = User(
             id=uuid.uuid4(),
@@ -423,7 +478,5 @@ class TestSubjectPermissionEnforcement:
         db_session.add(nobody)
         await db_session.flush()
 
-        resp = await client.get(
-            f"/api/v1/subjects/{subject.id}", headers=_auth(nobody)
-        )
+        resp = await client.get(f"/api/v1/subjects/{subject.id}", headers=_auth(nobody))
         assert resp.status_code == 403

@@ -51,5 +51,30 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  edc-export-worker:
+    build:
+      context: ./backend
+    command:
+      [
+        "python",
+        "-m",
+        "app.workers.export_queue_worker",
+        "--watch",
+        "--poll-interval",
+        "1",
+      ]
+    environment: *backend-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    read_only: true
+    volumes:
+      - ./backend/exports:/app/exports
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   edc_postgres_data:

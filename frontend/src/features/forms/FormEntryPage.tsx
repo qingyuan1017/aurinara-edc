@@ -27,10 +27,24 @@ function buildZodSchema(sections: FormSection[]) {
       switch (field.control_type) {
         case 'integer':
         case 'decimal':
+        case 'float':
+        case 'slider':
           fieldSchema = field.is_required ? z.number({ error: `${field.label} must be a number` }) : z.union([z.number(), z.nan()]).optional()
           break
         case 'boolean': fieldSchema = z.boolean().optional(); break
-        case 'checkbox': fieldSchema = field.is_required ? z.array(z.string()).min(1, `${field.label} is required`) : z.array(z.string()).optional(); break
+        case 'checkbox':
+          fieldSchema = field.codelist_items?.length
+            ? (field.is_required ? z.array(z.string()).min(1, `${field.label} is required`) : z.array(z.string()).optional())
+            : z.boolean().optional()
+          break
+        case 'multi-select':
+        case 'repeating_table':
+          fieldSchema = field.is_required ? z.array(z.string()).min(1, `${field.label} is required`) : z.array(z.string()).optional()
+          break
+        case 'label':
+        case 'calculated':
+          fieldSchema = z.unknown().optional()
+          break
         default: fieldSchema = field.is_required ? z.string().min(1, `${field.label} is required`) : z.string().optional()
       }
       shape[field.id] = fieldSchema
@@ -166,7 +180,7 @@ export function FormEntryPage({ formInstanceId }: FormEntryPageProps) {
               <Card key={section.id}>
                 <CardHeader><CardTitle className="text-lg">{section.title}</CardTitle></CardHeader>
                 <CardContent><fieldset className="grid grid-cols-1 gap-5 md:grid-cols-2"><legend className="sr-only">{section.title}</legend>
-                  {section.fields.map((field) => <div key={field.id} className={field.control_type === 'textarea' ? 'md:col-span-2' : ''}><FormField field={field} disabled={isDisabled} onFieldFocus={handleFieldFocus} />{serverErrors[field.id] ? <p className="mt-1 text-xs text-destructive" role="alert">{serverErrors[field.id]}</p> : null}</div>)}
+                  {section.fields.map((field) => <div key={field.id} className={['textarea', 'label', 'body_image', 'repeating_table'].includes(field.control_type) ? 'md:col-span-2' : ''}><FormField field={field} disabled={isDisabled} onFieldFocus={handleFieldFocus} />{serverErrors[field.id] ? <p className="mt-1 text-xs text-destructive" role="alert">{serverErrors[field.id]}</p> : null}</div>)}
                 </fieldset></CardContent>
               </Card>
             ))}

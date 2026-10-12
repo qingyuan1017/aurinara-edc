@@ -29,6 +29,8 @@ env/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+backend/exports/*
+!backend/exports/.gitignore
 
 # --- Environment ---
 .env

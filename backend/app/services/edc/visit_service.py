@@ -149,7 +149,10 @@ class VisitService:
         """
         result = await session.execute(
             select(VisitDefinition)
-            .where(VisitDefinition.study_version_id == subject.study_version_id)
+            .where(
+                VisitDefinition.study_version_id == subject.study_version_id,
+                VisitDefinition.definition_kind.in_({"visit", "cycle_visit"}),
+            )
             .order_by(VisitDefinition.display_order)
         )
         definitions = result.scalars().all()

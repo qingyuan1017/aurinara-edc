@@ -24,7 +24,9 @@ from app.services.designer.study_version_service import StudyVersionService, stu
 @pytest.fixture
 def service():
     """Fresh StudyVersionService instance for each test."""
-    return StudyVersionService()
+    validation_service = MagicMock()
+    validation_service.require_publishable = AsyncMock()
+    return StudyVersionService(validation_service=validation_service)
 
 
 @pytest.fixture
@@ -65,7 +67,9 @@ def published_version():
 class TestPublish:
     """Tests for StudyVersionService.publish()."""
 
-    async def test_publish_transitions_draft_to_published(self, service, mock_session, draft_version):
+    async def test_publish_transitions_draft_to_published(
+        self, service, mock_session, draft_version
+    ):
         """publish() should set status to published on a draft version."""
         actor_id = uuid.uuid4()
 
@@ -101,7 +105,9 @@ class TestPublish:
         assert call_kwargs["action"] == "publish"
         assert call_kwargs["actor_id"] == actor_id
 
-    async def test_publish_rejects_already_published(self, service, mock_session, published_version):
+    async def test_publish_rejects_already_published(
+        self, service, mock_session, published_version
+    ):
         """publish() should raise BusinessRuleError if version is already published."""
         actor_id = uuid.uuid4()
 
@@ -117,6 +123,25 @@ class TestPublish:
             await service.publish(mock_session, draft_version, actor_id)
 
         mock_session.flush.assert_awaited_once()
+
+    async def test_publish_rejects_incomplete_design_without_changing_draft(
+        self, mock_session, draft_version
+    ):
+        validation_service = MagicMock()
+        validation_service.require_publishable = AsyncMock(
+            side_effect=ValidationError("Study design is not ready to publish")
+        )
+        service = StudyVersionService(validation_service=validation_service)
+
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            with pytest.raises(ValidationError, match="not ready to publish"):
+                await service.publish(mock_session, draft_version, uuid.uuid4())
+
+        assert draft_version.status == StudyVersionStatus.draft
+        assert draft_version.published_at is None
+        assert draft_version.published_by is None
+        mock_audit.record.assert_not_awaited()
 
 
 class TestGuardMutable:
@@ -143,9 +168,7 @@ class TestCreateVersion:
 
         with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            result = await service.create_version(
-                mock_session, study_id, "1.0", actor_id=actor_id
-            )
+            result = await service.create_version(mock_session, study_id, "1.0", actor_id=actor_id)
 
         assert isinstance(result, StudyVersion)
         assert result.study_id == study_id
@@ -254,8 +277,14 @@ class TestCreateAmendment:
         repository.add = AsyncMock(side_effect=lambda session, version: version)
         return repository
 
+    @pytest.fixture
+    def clone_service(self):
+        service = MagicMock()
+        service.clone_version = AsyncMock(return_value={"forms": 2, "visits": 3})
+        return service
+
     async def test_create_amendment_creates_draft_with_reason_and_source(
-        self, mock_session, published_source, amendment_repository
+        self, mock_session, published_source, amendment_repository, clone_service
     ):
         study = Study(
             id=published_source.study_id,
@@ -264,7 +293,7 @@ class TestCreateAmendment:
             created_by=uuid.uuid4(),
         )
         actor_id = uuid.uuid4()
-        service = StudyVersionService(amendment_repository)
+        service = StudyVersionService(amendment_repository, clone_service=clone_service)
 
         with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
@@ -277,11 +306,16 @@ class TestCreateAmendment:
         assert result.amendment_reason == "Protocol amendment v2"
         assert result.amended_from_version_id == published_source.id
         amendment_repository.add.assert_awaited_once_with(mock_session, result)
+        clone_service.clone_version.assert_awaited_once_with(
+            mock_session,
+            source_version_id=published_source.id,
+            target_version_id=result.id,
+        )
         mock_audit.record.assert_awaited_once()
         assert mock_audit.record.call_args.kwargs["reason"] == "Protocol amendment v2"
 
     async def test_create_amendment_rejects_blank_reason(
-        self, mock_session, published_source, amendment_repository
+        self, mock_session, published_source, amendment_repository, clone_service
     ):
         study = Study(
             id=published_source.study_id,
@@ -289,7 +323,7 @@ class TestCreateAmendment:
             title="Test Study",
             created_by=uuid.uuid4(),
         )
-        service = StudyVersionService(amendment_repository)
+        service = StudyVersionService(amendment_repository, clone_service=clone_service)
 
         with pytest.raises(ValidationError, match="Amendment reason is required"):
             await service.create_amendment(mock_session, study, "  ", uuid.uuid4())
@@ -297,7 +331,7 @@ class TestCreateAmendment:
         amendment_repository.latest_published.assert_not_awaited()
 
     async def test_create_amendment_preserves_published_source_and_rejects_second_draft(
-        self, mock_session, published_source, amendment_repository
+        self, mock_session, published_source, amendment_repository, clone_service
     ):
         study = Study(
             id=published_source.study_id,
@@ -312,7 +346,7 @@ class TestCreateAmendment:
             status=StudyVersionStatus.draft,
         )
         amendment_repository.draft_for_study.return_value = existing_draft
-        service = StudyVersionService(amendment_repository)
+        service = StudyVersionService(amendment_repository, clone_service=clone_service)
 
         with pytest.raises(ConflictError, match="draft study version already exists"):
             await service.create_amendment(mock_session, study, "Another change", uuid.uuid4())
@@ -372,9 +406,7 @@ class TestPublishValidationSuccessFailure:
 
         assert result.status == StudyVersionStatus.published
 
-    async def test_publish_validation_failure_leaves_version_as_draft(
-        self, service, mock_session
-    ):
+    async def test_publish_validation_failure_leaves_version_as_draft(self, service, mock_session):
         """An invalid publish (non-draft) is rejected and the version stays unchanged.
 
         Validates: Requirements 2.3
@@ -429,6 +461,12 @@ class TestAmendmentReasonBounds:
         return repository
 
     @pytest.fixture
+    def clone_service(self):
+        service = MagicMock()
+        service.clone_version = AsyncMock(return_value={})
+        return service
+
+    @pytest.fixture
     def study(self, published_source):
         return Study(
             id=published_source.study_id,
@@ -438,10 +476,10 @@ class TestAmendmentReasonBounds:
         )
 
     async def test_reason_zero_chars_rejected_no_draft(
-        self, mock_session, amendment_repository, study
+        self, mock_session, amendment_repository, study, clone_service
     ):
         """0 chars (empty) is rejected and no draft is created (R2.10)."""
-        service = StudyVersionService(amendment_repository)
+        service = StudyVersionService(amendment_repository, clone_service=clone_service)
 
         with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
@@ -452,44 +490,40 @@ class TestAmendmentReasonBounds:
         mock_audit.record.assert_not_awaited()
 
     async def test_reason_one_char_accepted_creates_draft(
-        self, mock_session, amendment_repository, study
+        self, mock_session, amendment_repository, study, clone_service
     ):
         """1 char (lower bound) is accepted and creates exactly one draft (R2.9, R2.10)."""
-        service = StudyVersionService(amendment_repository)
+        service = StudyVersionService(amendment_repository, clone_service=clone_service)
         reason = "x"
 
         with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            result = await service.create_amendment(
-                mock_session, study, reason, uuid.uuid4()
-            )
+            result = await service.create_amendment(mock_session, study, reason, uuid.uuid4())
 
         assert result.status == StudyVersionStatus.draft
         assert result.amendment_reason == reason
         amendment_repository.add.assert_awaited_once()
 
     async def test_reason_four_thousand_chars_accepted_creates_draft(
-        self, mock_session, amendment_repository, study
+        self, mock_session, amendment_repository, study, clone_service
     ):
         """4000 chars (upper bound) is accepted and creates exactly one draft (R2.9, R2.10)."""
-        service = StudyVersionService(amendment_repository)
+        service = StudyVersionService(amendment_repository, clone_service=clone_service)
         reason = "a" * 4000
 
         with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            result = await service.create_amendment(
-                mock_session, study, reason, uuid.uuid4()
-            )
+            result = await service.create_amendment(mock_session, study, reason, uuid.uuid4())
 
         assert result.status == StudyVersionStatus.draft
         assert len(result.amendment_reason) == 4000
         amendment_repository.add.assert_awaited_once()
 
     async def test_reason_four_thousand_one_chars_rejected_no_draft(
-        self, mock_session, amendment_repository, study
+        self, mock_session, amendment_repository, study, clone_service
     ):
         """4001 chars (over bound) is rejected and no draft is created (R2.10)."""
-        service = StudyVersionService(amendment_repository)
+        service = StudyVersionService(amendment_repository, clone_service=clone_service)
         reason = "a" * 4001
 
         with patch("app.services.designer.study_version_service.audit_service") as mock_audit:

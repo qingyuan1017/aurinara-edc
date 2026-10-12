@@ -122,7 +122,7 @@ This table is the heart of the refactor. "MOVE" means the existing artifact's ow
 | `exports` routes, `export_service`                                                                     | STAY (operational) / SHARED (platform export) | `edc` reporting uses shared export                                         | R9                   |
 | **NEW:** subject phase definitions                                                                     | NEW                                           | `designer`                                                                 | R3                   |
 | **NEW:** schedule of assessment                                                                        | NEW                                           | `designer`                                                                 | R4.1                 |
-| cycle definitions → folded into `visit_definitions` (`visit_type='cycle'`), migration 0052             | FOLDED                                        | `designer`                                                                 | R4.4                 |
+| cycle definitions → represented in `visit_definitions` as `definition_kind='cycle'`, with exclusively owned `cycle_visit` children | FOLDED / EXTENDED                         | `designer`                                                                 | R4.4, R4.13–R4.15    |
 | **NEW:** arm definitions                                                                               | NEW                                           | `designer`                                                                 | R4.5                 |
 | **NEW:** CRF access definitions                                                                        | NEW                                           | `designer`                                                                 | R4.6                 |
 | **NEW:** raw-data variable settings                                                                    | NEW                                           | `designer`                                                                 | R4.7                 |
@@ -134,7 +134,7 @@ This table is the heart of the refactor. "MOVE" means the existing artifact's ow
 - **`study_version_service`** (moved) — owns the `Design_Version` lifecycle: create draft, validate, publish, amend. Reuses the existing `StudyVersion` draft/published mechanics.
 - **`form_metadata_service`**, **`form_templates`** (moved) — form/section/field definitions and templates.
 - **`edit_check_service`**, **`edit_check_examples`** (moved) — declarative rule authoring and design-time rule testing (R5.3: evaluate a test case without creating any Operational_Record).
-- **New services:** `subject_phase_service`, `schedule_of_assessment_service`, `arm_service`, `crf_access_service`, `raw_data_variable_service`, `coding_setting_service`, `codelist_service` (codelist design split out from form metadata), `form_dependency_service`, `visit_dependency_service`. Cycle authoring is part of the visit authoring service (`visit_definition_service`), since a cycle is a visit of `visit_type='cycle'`.
+- **New services:** `subject_phase_service`, `schedule_of_assessment_service`, `arm_service`, `crf_access_service`, `raw_data_variable_service`, `coding_setting_service`, `codelist_service` (codelist design split out from form metadata), `form_dependency_service`, `visit_dependency_service`. Folder and cycle authoring are part of `visit_definition_service`; `definition_kind` distinguishes standalone visits, cycle-owned child visits, and organizational containers. Each `cycle_visit` is created within one cycle and has exactly one `cycle_member` ownership edge.
 - **`DesignConsumptionService`** — the read port described below.
 
 ### EDC_Module services (slimmed)
@@ -152,7 +152,7 @@ class DesignConsumptionService:
     def get_latest_published_design(self, study_id: UUID) -> PublishedDesignView | None: ...
     def list_forms(self, design_version_id: UUID) -> list[FormDefinitionView]: ...
     def get_form_fields(self, design_version_id: UUID, form_id: UUID) -> list[FieldDefinitionView]: ...
-    def list_visit_definitions(self, design_version_id: UUID) -> list[VisitDefinitionView]: ...  # now includes cycles (visit_type == 'cycle')
+    def list_visit_definitions(self, design_version_id: UUID) -> list[VisitDefinitionView]: ...  # visits plus folder/cycle organization
     def list_arm_definitions(self, design_version_id: UUID) -> list[ArmDefinitionView]: ...
     def list_form_dependencies(self, design_version_id: UUID) -> list[FormDependencyView]: ...
     def list_visit_dependencies(self, design_version_id: UUID) -> list[VisitDependencyView]: ...
@@ -175,28 +175,31 @@ Contract guarantees:
 
 ### Router aggregates
 
-- **`designer_router`** — new aggregate in `app/api/routes/designer/__init__.py` collecting design-authoring resource routers (study versions, forms/fields, form dependencies, edit checks, codelists, subject phases, SoA, arms, visits, visit dependencies, CRF access, raw-data variables, coding). The arm router also exposes a list route. Mounted with a `/designer` prefix.
+- **`designer_router`** — new aggregate in `app/api/routes/designer/__init__.py` collecting design-authoring resource routers (study versions, forms/fields, form dependencies, edit checks, codelists, subject phases, SoA, arms, visits, visit dependencies, CRF access, raw-data variables, coding). The arm router exposes list, create, and draft-only update routes. Mounted with a `/designer` prefix.
+- **Designer version selector** — every standard Designer module displays a shared study-version selector. The current draft remains the default editable selection; choosing a retained published version changes each module's existing list/detail reads to that version and suppresses every mutation control. The selected version is retained while navigating between forms/fields, visits, schedule, phases, arms, edit checks, codelists, CRF access, raw-data variables, and coding settings. Version History links published rows back into the normal Designer Forms route with that version selected (R2.12).
 - **`edc_router`** — unchanged mounting style (no added prefix); its resource list is slimmed to operational routers (subjects, visit instances, form_data, records, queries, sdv, reviews, locks, signatures, dashboards, exports, operational study-info reads). Design-authoring routers are removed from this aggregate.
 
 **Requirements covered:** R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11.
 
 ## Data Models
 
-The refactor **reassigns ownership** of existing tables and adds a small set of new design-time tables plus additive `design_version_id` binding columns where operational tables do not yet carry one. **No table or column renames are required**; disposition is a code-layer ownership change plus additive migrations (R11.1, R11.2 — stored values unchanged).
+The refactor **reassigns ownership** of existing tables and adds a small set of new design-time tables plus additive `design_version_id` binding columns where operational tables do not yet carry one. Migration 0057 performs the requested `cdash_domain`/`cdash_label` to `domain`/`label` metadata rename without transforming stored values; other ownership changes remain code-layer or additive migrations (R11.1, R11.2).
 
 ### Designer-owned tables
 
 - **`study_versions`** — reused directly as **`Design_Version`**. `status in {draft, published}` already maps to `Draft_Design` / `Published_Design`; `amended_from_version_id` already models amendment lineage (R2.9–R2.11); `published_at` / `published_by` capture publication actor/timestamp (R2.2).
-- **`form_definitions`, `form_sections`, `field_definitions`** — reassigned to Designer (R4), each FK to `study_versions`.
+- **`form_definitions`, `form_sections`, `field_definitions`** — reassigned to Designer (R4), each FK to `study_versions`. Form definitions carry type/access/domain/label metadata, grid row/column layout, header-details configuration, and identifier display flags. Sections carry label/output/help/access metadata; fields carry the complete item-control and question/caption/alignment/data/record metadata set plus CRF and ODM identifiers (migrations 0056–0057). Form and field configuration is edited in right-side drawers. The Form Builder renders a disabled preview of each configured control, while operational data entry renders the interactive equivalent from the same control-type contract. Scalar controls persist scalar values; checkbox groups, multi-selects, and repeating rows persist structured JSON values so they round-trip without string coercion.
 - **`codelists`, `codelist_items`** — reassigned to Designer (R6), FK to `study_versions`.
-- **`edit_checks`** — reassigned to Designer (R5), FK to `study_versions`, stored declaratively (R5.5).
-- **`visit_definitions`** — reassigned to Designer (R4.2–R4.4), FK to `study_versions`. Now carries a `visit_type` discriminator (`visit` | `cycle`, plus the legacy `scheduled`/`unscheduled`/`screening` values) and nullable cycle metadata (`repeat_min`, `repeat_max`, `cycle_length`); the former `cycle_definitions` / `cycle_definition_visits` tables are folded in and dropped (migration 0052). (`visit_instances` stays in EDC.)
-- **NEW `subject_phase_definitions`** — `(design_version_id FK, name, display_order, …)`, unique name within a design version (R3).
+- **`edit_checks`** — reassigned to Designer (R5), FK to `study_versions`, stored declaratively (R5.5). An authorized designer may delete an unused check only from a mutable draft; deletion is audited and is rejected for published designs or checks with persisted validation results (R5.6).
+- **`visit_definitions`** — reassigned to Designer (R4.2–R4.4), FK to `study_versions`. `definition_kind` distinguishes standalone `visit`, cycle-owned `cycle_visit`, `folder`, and `cycle`. Standalone and cycle visits carry scheduled/unscheduled/common type plus optional category and subtype; only standalone visits may use a parent folder. A cycle behaves as a special folder: its child visits are created inside it and linked by exclusive `cycle_member` ownership edges. Legacy `visit_type='cycle'` rows are preserved and classified as `definition_kind='cycle'` by migration 0056. (`visit_instances` stays in EDC.)
+- **NEW `subject_phase_definitions`** — `(design_version_id FK, name, phase_type, display_order, …)`, unique name within a design version. `phase_type` is one of registered, screen-failure, common, complete, or arm (R3).
+- **NEW `subject_phase_visit_definitions`** — ordered subject-phase↔real-visit membership for registered, screen-failure, and common phases. Both definitions must belong to the same design version; standalone and cycle-owned visits are accepted while folder and cycle containers are rejected (migrations 0057 and 0059).
+- **`subjects.current_phase_definition_id` / `subjects.arm_definition_id`** — operational pointers into the subject's bound published design. Study Data derives the displayed subject status from the current phase, exposes only outgoing targets from the published phase-transition graph, and enforces the same rule server-side. Phase updates are audited; arm phases require an arm assignment, complete phases set the subject lifecycle to completed, and casebook/visit reads filter protocol visits by current phase or selected arm (migration 0059). Subject list projections include the human-readable Site name. Subject and form breadcrumbs resolve the subject number and form name from their clinical records, while the selected study/site context is persisted across internal route navigation and document reloads and cleared on sign-out.
 - **NEW `subject_phase_transitions`** — typed self-referential subject-phase → subject-phase edges `(design_version_id FK, from_phase_id FK, to_phase_id FK, label, condition_expression)`, self-guarded (a phase cannot transition to itself) and unique per `(design_version_id, from_phase_id, to_phase_id)`; soft-deletable, and cascaded when an incident phase is soft-deleted. Migration 0053.
-- **NEW `arm_definitions`** — study arms/treatment groups, FK to `study_versions` (R4.5); arm↔visit membership via **NEW `arm_definition_visits`** (R: arm defines which visits occur in the arm).
-- **NEW `schedule_of_assessment`** — mapping of forms/procedures to visit definitions (cycles included, single `visit_definition_id`), FK to `study_versions` (R4.1).
+- **NEW `arm_definitions`** — study arms/treatment groups, FK to `study_versions` (R4.5); arm↔visit membership via **NEW `arm_definition_visits`**. The arm editor presents folders and cycles as hierarchy-level selectors, expands a selected container or legacy stored container membership into its real descendant visits, permits child overrides, and persists only standalone or cycle-owned visit IDs through create and draft-only update operations. The service and publication validator reject container membership (R4.23).
+- **NEW `schedule_of_assessment`** — mapping of forms/procedures to standalone visits or cycle-owned child visits, FK to `study_versions` (R4.1). Folder and cycle containers are rejected. Matrix columns are derived by sorting top-level definitions at their hierarchy level, then emitting each container's separately sorted descendants at the container's position; therefore a cycle numbered 3 remains between top-level visits 2 and 4 regardless of child display order (R4.22).
 - **NEW `crf_access_definitions`** — design-time read/write access of each operational role to each form/field, FK to `study_versions` (R4.6), with a form/question-level `blinded` flag and optional `unblind_role`.
-- **NEW `raw_data_variable_settings`** — raw-data variable name/type/attributes per captured item, FK to `study_versions` (R4.7), plus explicit `label` and `suffix` dataset-generation columns.
+- **NEW `raw_data_variable_settings`** — raw-data variable name/type/attributes per captured item, FK to `study_versions` (R4.7), plus explicit field binding and configurable companion/year/month/day suffix columns. Each form produces a dataset schema beginning with the fixed PROTOCOL, SITE, SUBJINIT, VISIT, FORM, PROCEDUR, VISITINS, FORMINS, GROUPINS, LRMODDTS, ERMODDDTS, and LRMODBY variables. Codelist and numeric fields add one companion variable; date fields add year, month, and day component variables (migration 0058).
 - **NEW `coding_settings`** — dictionary reference + coding rule per coded item, FK to `study_versions` (R4.8).
 - **NEW `form_definition_dependencies`** — typed self-referential form→form dependencies (self-guarded).
 - **NEW `visit_definition_dependencies`** — typed self-referential visit→visit dependencies (cycles included, self-guarded).
@@ -227,6 +230,7 @@ erDiagram
     STUDY_VERSIONS ||--o{ SUBJECT_PHASE_DEFINITIONS : contains
     SUBJECT_PHASE_DEFINITIONS ||--o{ SUBJECT_PHASE_TRANSITIONS : "transitions from"
     SUBJECT_PHASE_DEFINITIONS ||--o{ SUBJECT_PHASE_TRANSITIONS : "transitions to"
+    SUBJECT_PHASE_DEFINITIONS }o--o{ VISIT_DEFINITIONS : "includes visits"
     STUDY_VERSIONS ||--o{ SCHEDULE_OF_ASSESSMENT : contains
     SCHEDULE_OF_ASSESSMENT ||--o{ SCHEDULE_OF_ASSESSMENT_ENTRIES : contains
     SCHEDULE_OF_ASSESSMENT_ENTRIES }o--o| VISIT_DEFINITIONS : "collected at"
@@ -242,7 +246,7 @@ erDiagram
     FORM_INSTANCES ||--o{ FORM_RECORDS : "operational"
 ```
 
-A `CYCLE` is a `VISIT_DEFINITION` with `visit_type = 'cycle'`; SoA, arms, and dependencies reference visits uniformly. (`SCHEDULE_OF_ASSESSMENT_ENTRIES`, `ARM_DEFINITION_VISITS`, and the two dependency tables are the net-new nodes/edges of the domain-model refactor.)
+A folder or cycle is stored as a `VISIT_DEFINITION` organizational container with `definition_kind = 'folder'` or `'cycle'`. A cycle acts as a special folder: child visits are authored within that cycle as `definition_kind = 'cycle_visit'`, and each child has exactly one `cycle_member` edge pointing to its owning cycle. SoA entries may reference `visit` and `cycle_visit` rows, preventing organizational containers from becoming assessment columns while keeping standalone visits and another cycle's children out of membership.
 
 The dotted edge from `STUDY_VERSIONS` to `SUBJECTS` is the **binding**, not ownership: EDC owns `subjects` and the operational tree below it, and each binds to the published `Design_Version` it runs against. This formalizes the existing metadata-vs-clinical separation into explicit module ownership.
 

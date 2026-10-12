@@ -8,6 +8,13 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/lib/auth'
 import { PERMISSIONS } from '@/lib/permissions'
 
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ to, params, children, ...props }: { to: string; params?: Record<string, string>; children: React.ReactNode; [key: string]: unknown }) => {
+    const href = Object.entries(params ?? {}).reduce((path, [key, value]) => path.replace(`$${key}`, value), to)
+    return <a href={href} {...props}>{children}</a>
+  },
+}))
+
 function renderWithQueryClient(ui: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
@@ -30,6 +37,7 @@ describe('detail, casebook, audit, and notification composition', () => {
   it('preserves study detail and version contracts while using detail cards and tabs', async () => {
     const get = vi.spyOn(api, 'get').mockImplementation((url) => {
       if (String(url) === '/studies/study-1') return Promise.resolve({ data: { id: 'study-1', study_code: 'A-001', title: 'A Study', phase: 'II', status: 'Draft', description: 'Study description', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z' } }) as never
+      if (String(url) === '/designer/versions/version-1/validation') return Promise.resolve({ data: { version_id: 'version-1', valid: true, counts: { forms: 1, sections: 1, fields: 2, visits: 1, scheduled_form_mappings: 1, codelists: 0, codelist_items: 0, edit_checks: 1, subject_phases: 1 }, issues: [] } }) as never
       return Promise.resolve({ data: [{ id: 'version-1', version_number: '1.0', status: 'draft', created_at: '2026-01-01T00:00:00Z' }] }) as never
     })
     const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {} } as never)
@@ -44,6 +52,8 @@ describe('detail, casebook, audit, and notification composition', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Versions' }))
     expect(await screen.findByText('v1.0')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    expect(await screen.findByText('This design passed all blocking publication checks.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Publish version' }))
     await waitFor(() => expect(post).toHaveBeenCalledWith('/designer/versions/version-1/publish'))
   })
 

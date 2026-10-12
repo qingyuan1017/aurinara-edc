@@ -20,18 +20,30 @@ from app.core.exceptions import (
     BusinessRuleError,
     ConflictError,
     NotFoundError,
+    ValidationError,
 )
 from app.models.edc.site import Site, SiteStatus
 from app.models.edc.study import StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject, SubjectStatus
+from app.models.edc.visit import VisitInstance, VisitInstanceStatus
 from app.schemas.edc.subject import SubjectCreate
 from app.services.edc.subject_service import SubjectService, subject_service
 
 
 @pytest.fixture
-def service():
+def design_service():
+    service = MagicMock()
+    service.get_schedule_of_assessment = AsyncMock(return_value=SimpleNamespace(entries=()))
+    service.list_subject_phase_definitions = AsyncMock(return_value=[])
+    service.list_subject_phase_transitions = AsyncMock(return_value=[])
+    service.list_arm_definitions = AsyncMock(return_value=[])
+    return service
+
+
+@pytest.fixture
+def service(design_service):
     """Fresh SubjectService instance for each test."""
-    return SubjectService()
+    return SubjectService(design_service=design_service)
 
 
 @pytest.fixture
@@ -145,9 +157,7 @@ class TestCreateSubject:
             ) as mock_form_init,
         ):
             mock_audit.record = AsyncMock()
-            subject = await service.create_subject(
-                mock_session, study_id, data, actor_id
-            )
+            subject = await service.create_subject(mock_session, study_id, data, actor_id)
 
         assert subject.study_id == study_id
         assert subject.site_id == site_id
@@ -189,9 +199,7 @@ class TestCreateSubject:
             ),
         ):
             mock_audit.record = AsyncMock()
-            subject = await service.create_subject(
-                mock_session, study_id, data, actor_id
-            )
+            subject = await service.create_subject(mock_session, study_id, data, actor_id)
 
         assert subject.subject_number == "CUSTOM-007"
 
@@ -283,6 +291,204 @@ class TestCreateSubject:
             assert call_kwargs["study_id"] == study_id
 
 
+class TestSubjectPhaseState:
+    """Operational phase selection, arm assignment, and visit visibility."""
+
+    async def test_phase_state_offers_only_outgoing_flow_targets(
+        self, service, design_service, mock_session
+    ):
+        current = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Registered",
+            phase_type="registered",
+            display_order=1,
+            visit_definition_ids=(),
+        )
+        next_phase = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Treatment",
+            phase_type="common",
+            display_order=2,
+            visit_definition_ids=(),
+        )
+        unreachable = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Complete",
+            phase_type="complete",
+            display_order=3,
+            visit_definition_ids=(),
+        )
+        subject = _make_subject()
+        subject.current_phase_definition_id = current.id
+        design_service.list_subject_phase_definitions.return_value = [
+            current,
+            next_phase,
+            unreachable,
+        ]
+        design_service.list_subject_phase_transitions.return_value = [
+            SimpleNamespace(from_phase_id=current.id, to_phase_id=next_phase.id)
+        ]
+
+        state = await service.get_phase_state(mock_session, subject)
+
+        assert [phase["id"] for phase in state["next_phases"]] == [next_phase.id]
+
+    async def test_phase_update_rejects_jump_outside_configured_flow(
+        self, service, design_service, mock_session, actor_id
+    ):
+        current_id = uuid.uuid4()
+        allowed = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Treatment",
+            phase_type="common",
+            display_order=2,
+            visit_definition_ids=(),
+        )
+        blocked = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Complete",
+            phase_type="complete",
+            display_order=3,
+            visit_definition_ids=(),
+        )
+        subject = _make_subject()
+        subject.current_phase_definition_id = current_id
+        design_service.list_subject_phase_definitions.return_value = [allowed, blocked]
+        design_service.list_subject_phase_transitions.return_value = [
+            SimpleNamespace(from_phase_id=current_id, to_phase_id=allowed.id)
+        ]
+
+        with pytest.raises(ValidationError, match="not a valid next step"):
+            await service.update_phase(
+                mock_session,
+                subject,
+                phase_definition_id=blocked.id,
+                arm_definition_id=None,
+                actor_id=actor_id,
+            )
+
+        assert subject.current_phase_definition_id == current_id
+
+    async def test_arm_phase_requires_and_persists_configured_arm(
+        self, service, design_service, mock_session, actor_id
+    ):
+        subject = _make_subject()
+        phase = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Randomization",
+            phase_type="arm",
+            display_order=1,
+            visit_definition_ids=(),
+        )
+        arm = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Arm A",
+            display_order=1,
+            description=None,
+            visit_definition_ids=(uuid.uuid4(),),
+        )
+        design_service.list_subject_phase_definitions.return_value = [phase]
+        design_service.list_arm_definitions.return_value = [arm]
+
+        with pytest.raises(ValidationError, match="arm must be selected"):
+            await service.update_phase(
+                mock_session,
+                subject,
+                phase_definition_id=phase.id,
+                arm_definition_id=None,
+                actor_id=actor_id,
+            )
+
+        with patch("app.services.edc.subject_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            await service.update_phase(
+                mock_session,
+                subject,
+                phase_definition_id=phase.id,
+                arm_definition_id=arm.id,
+                actor_id=actor_id,
+            )
+
+        assert subject.current_phase_definition_id == phase.id
+        assert subject.arm_definition_id == arm.id
+        mock_audit.record.assert_awaited_once()
+
+    async def test_complete_phase_marks_subject_completed(
+        self, service, design_service, mock_session, actor_id
+    ):
+        subject = _make_subject(status=SubjectStatus.on_treatment)
+        phase = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Complete",
+            phase_type="complete",
+            display_order=9,
+            visit_definition_ids=(),
+        )
+        design_service.list_subject_phase_definitions.return_value = [phase]
+
+        with patch("app.services.edc.subject_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            await service.update_phase(
+                mock_session,
+                subject,
+                phase_definition_id=phase.id,
+                arm_definition_id=None,
+                actor_id=actor_id,
+            )
+
+        assert subject.status == SubjectStatus.completed
+
+    async def test_current_phase_shows_only_associated_visits(
+        self, service, design_service, mock_session
+    ):
+        allowed_id = uuid.uuid4()
+        hidden_id = uuid.uuid4()
+        subject = _make_subject()
+        subject.current_phase_definition_id = uuid.uuid4()
+        design_service.list_subject_phase_definitions.return_value = [
+            SimpleNamespace(
+                id=subject.current_phase_definition_id,
+                name="Registered",
+                phase_type="registered",
+                display_order=1,
+                visit_definition_ids=(allowed_id,),
+            )
+        ]
+        visits = [
+            VisitInstance(
+                id=uuid.uuid4(),
+                subject_id=subject.id,
+                visit_definition_id=allowed_id,
+                design_version_id=subject.study_version_id,
+                name="Allowed",
+                status=VisitInstanceStatus.scheduled,
+            ),
+            VisitInstance(
+                id=uuid.uuid4(),
+                subject_id=subject.id,
+                visit_definition_id=hidden_id,
+                design_version_id=subject.study_version_id,
+                name="Hidden",
+                status=VisitInstanceStatus.scheduled,
+            ),
+            VisitInstance(
+                id=uuid.uuid4(),
+                subject_id=subject.id,
+                visit_definition_id=None,
+                design_version_id=subject.study_version_id,
+                name="Unscheduled",
+                status=VisitInstanceStatus.unscheduled,
+            ),
+        ]
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = visits
+        mock_session.execute.return_value = result
+
+        visible = await service.list_visible_visits(mock_session, subject)
+
+        assert [visit.name for visit in visible] == ["Allowed"]
+
+
 class TestTransitionStatus:
     """Tests for SubjectService.transition_status()."""
 
@@ -309,9 +515,7 @@ class TestTransitionStatus:
 
         with patch("app.services.edc.subject_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            result = await service.transition_status(
-                mock_session, subject, target, actor_id
-            )
+            result = await service.transition_status(mock_session, subject, target, actor_id)
 
         assert result.status == target
         assert result.updated_at is not None
@@ -342,17 +546,13 @@ class TestTransitionStatus:
         assert exc_info.value.details["current_status"] == current.value
         assert exc_info.value.details["target_status"] == target.value
 
-    async def test_transition_writes_audit_event(
-        self, service, mock_session, actor_id
-    ):
+    async def test_transition_writes_audit_event(self, service, mock_session, actor_id):
         """transition_status writes an Audit_Event with old/new status (Req 7.6)."""
         subject = _make_subject(status=SubjectStatus.screening)
 
         with patch("app.services.edc.subject_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            await service.transition_status(
-                mock_session, subject, SubjectStatus.enrolled, actor_id
-            )
+            await service.transition_status(mock_session, subject, SubjectStatus.enrolled, actor_id)
 
             mock_audit.record.assert_awaited_once()
             call_kwargs = mock_audit.record.call_args.kwargs
@@ -363,16 +563,12 @@ class TestTransitionStatus:
             assert call_kwargs["new_value"] == "Enrolled"
             assert call_kwargs["actor_id"] == actor_id
 
-    async def test_transition_to_same_status_raises_error(
-        self, service, mock_session, actor_id
-    ):
+    async def test_transition_to_same_status_raises_error(self, service, mock_session, actor_id):
         """Transitioning to the same status is not allowed."""
         subject = _make_subject(status=SubjectStatus.enrolled)
 
         with pytest.raises(BusinessRuleError):
-            await service.transition_status(
-                mock_session, subject, SubjectStatus.enrolled, actor_id
-            )
+            await service.transition_status(mock_session, subject, SubjectStatus.enrolled, actor_id)
 
 
 class TestGetCasebook:
@@ -400,7 +596,7 @@ class TestGetCasebook:
         assert casebook["visits"] == []
 
     async def test_get_casebook_includes_visit_instances_and_their_forms(
-        self, service, mock_session
+        self, service, design_service, mock_session
     ):
         """Casebook surfaces the subject's visit instances with their forms (Req 7.5).
 
@@ -426,6 +622,14 @@ class TestGetCasebook:
             status="Not Started",
             created_at=datetime.now(UTC),
         )
+        design_service.get_schedule_of_assessment.return_value = SimpleNamespace(
+            entries=(
+                SimpleNamespace(
+                    visit_definition_id=visit.visit_definition_id,
+                    form_definition_id=form.form_definition_id,
+                ),
+            )
+        )
 
         subject_result = MagicMock()
         subject_result.scalars.return_value.first.return_value = subject
@@ -433,9 +637,7 @@ class TestGetCasebook:
         visits_result.scalars.return_value.all.return_value = [visit]
         forms_result = MagicMock()
         forms_result.scalars.return_value.all.return_value = [form]
-        mock_session.execute = AsyncMock(
-            side_effect=[subject_result, visits_result, forms_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[subject_result, visits_result, forms_result])
 
         casebook = await service.get_casebook(mock_session, subject.id)
 
@@ -447,9 +649,59 @@ class TestGetCasebook:
         assert entry["forms"][0]["form_instance_id"] == form.id
         assert entry["forms"][0]["name"] == "Vitals"
 
-    async def test_get_casebook_missing_subject_raises_not_found(
-        self, service, mock_session
+    async def test_get_casebook_hides_forms_not_in_schedule(
+        self, service, design_service, mock_session
     ):
+        """Unchecked SoA cells are excluded from the casebook."""
+        subject = _make_subject(status=SubjectStatus.enrolled)
+        visit = SimpleNamespace(
+            id=uuid.uuid4(),
+            visit_definition_id=uuid.uuid4(),
+            name="Screening",
+            status="scheduled",
+            visit_date=None,
+            created_at=datetime.now(UTC),
+        )
+        scheduled_form_id = uuid.uuid4()
+        unscheduled_form_id = uuid.uuid4()
+        scheduled = SimpleNamespace(
+            id=uuid.uuid4(),
+            visit_instance_id=visit.id,
+            form_definition_id=scheduled_form_id,
+            form_definition=SimpleNamespace(name="Vitals"),
+            status="Not Started",
+            created_at=datetime.now(UTC),
+        )
+        legacy_extra = SimpleNamespace(
+            id=uuid.uuid4(),
+            visit_instance_id=visit.id,
+            form_definition_id=unscheduled_form_id,
+            form_definition=SimpleNamespace(name="Physical Examination"),
+            status="Not Started",
+            created_at=datetime.now(UTC),
+        )
+        design_service.get_schedule_of_assessment.return_value = SimpleNamespace(
+            entries=(
+                SimpleNamespace(
+                    visit_definition_id=visit.visit_definition_id,
+                    form_definition_id=scheduled_form_id,
+                ),
+            )
+        )
+
+        subject_result = MagicMock()
+        subject_result.scalars.return_value.first.return_value = subject
+        visits_result = MagicMock()
+        visits_result.scalars.return_value.all.return_value = [visit]
+        forms_result = MagicMock()
+        forms_result.scalars.return_value.all.return_value = [scheduled, legacy_extra]
+        mock_session.execute = AsyncMock(side_effect=[subject_result, visits_result, forms_result])
+
+        casebook = await service.get_casebook(mock_session, subject.id)
+
+        assert [form["name"] for form in casebook["visits"][0]["forms"]] == ["Vitals"]
+
+    async def test_get_casebook_missing_subject_raises_not_found(self, service, mock_session):
         """get_casebook raises NotFoundError for a missing subject."""
         mock_result = MagicMock()
         mock_result.scalars.return_value.first.return_value = None
@@ -462,17 +714,13 @@ class TestGetCasebook:
 class TestSoftDelete:
     """Tests for SubjectService.soft_delete()."""
 
-    async def test_soft_delete_sets_deletion_fields(
-        self, service, mock_session, actor_id
-    ):
+    async def test_soft_delete_sets_deletion_fields(self, service, mock_session, actor_id):
         """soft_delete sets deleted_at/by/reason and retains the record (Req 22.2)."""
         subject = _make_subject()
 
         with patch("app.services.edc.subject_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            result = await service.soft_delete(
-                mock_session, subject, "entered in error", actor_id
-            )
+            result = await service.soft_delete(mock_session, subject, "entered in error", actor_id)
 
         assert result.deleted_at is not None
         assert result.deleted_by == actor_id
@@ -488,9 +736,7 @@ class TestSoftDelete:
         with pytest.raises(ConflictError):
             await service.soft_delete(mock_session, subject, "reason", actor_id)
 
-    async def test_soft_delete_writes_audit_event(
-        self, service, mock_session, actor_id
-    ):
+    async def test_soft_delete_writes_audit_event(self, service, mock_session, actor_id):
         """soft_delete writes an Audit_Event with the reason."""
         subject = _make_subject()
 

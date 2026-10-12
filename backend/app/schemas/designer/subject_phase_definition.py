@@ -18,6 +18,7 @@ from uuid import UUID
 
 from pydantic import Field
 
+from app.models.designer.subject_phase_definition import SubjectPhaseType
 from app.schemas.shared.base import (
     BaseCreateSchema,
     BaseSchema,
@@ -30,14 +31,18 @@ class SubjectPhaseDefinitionCreate(BaseCreateSchema):
     """Request body for creating a Subject_Phase_Definition in a Draft_Design."""
 
     name: str = Field(..., min_length=1, max_length=100)
+    phase_type: SubjectPhaseType = SubjectPhaseType.common
     display_order: int = Field(..., ge=1, le=999)
+    visit_definition_ids: list[UUID] = Field(default_factory=list)
 
 
 class SubjectPhaseDefinitionUpdate(BaseUpdateSchema):
     """Request body for editing a Subject_Phase_Definition (partial PATCH)."""
 
     name: str | None = Field(None, min_length=1, max_length=100)
+    phase_type: SubjectPhaseType | None = None
     display_order: int | None = Field(None, ge=1, le=999)
+    visit_definition_ids: list[UUID] | None = None
 
 
 class SubjectPhaseDefinitionResponse(BaseSchema):
@@ -46,7 +51,9 @@ class SubjectPhaseDefinitionResponse(BaseSchema):
     id: UUID
     design_version_id: UUID
     name: str
+    phase_type: SubjectPhaseType
     display_order: int
+    visit_definition_ids: list[UUID] = Field(default_factory=list)
     created_at: UtcDatetime
     updated_at: UtcDatetime | None = None
 
@@ -55,4 +62,5 @@ __all__ = [
     "SubjectPhaseDefinitionCreate",
     "SubjectPhaseDefinitionResponse",
     "SubjectPhaseDefinitionUpdate",
+    "SubjectPhaseType",
 ]

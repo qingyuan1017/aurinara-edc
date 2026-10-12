@@ -19,6 +19,8 @@ function renderWithQueryClient(ui: React.ReactNode) {
 describe('Phase 2 workflow controls', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    localStorage.clear()
+    window.history.replaceState({}, '', window.location.pathname)
     useAuthStore.setState({
       user: { id: 'user-1', email: 'dm@example.com', first_name: 'Data', last_name: 'Manager', roles: [], permissions: ['lock.manage', 'file.upload', 'query.respond', 'query.close', 'query.reopen', 'sdv.manage', 'review.manage', 'designer.editcheck.configure'] },
       isAuthenticated: true,
@@ -141,13 +143,15 @@ describe('Phase 2 workflow controls', () => {
   })
 
   it('validates edit-check JSON before saving and sends a valid rule to the API', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue({ data: [] } as never)
+    vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({ data: url === '/studies/study-1/versions'
+      ? [{ id: 'ver-draft', study_id: 'study-1', version_number: '1', status: 'draft', created_at: 'x' }]
+      : [] } as never))
     const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {
       id: 'check-1', name: 'Required weight', description: null, rule_json: { field: 'weight', operator: 'not_null' }, severity: 'warning', is_active: true, created_at: '2026-01-01T10:00:00Z',
     } } as never)
 
     renderWithQueryClient(<EditCheckBuilderPage studyId="study-1" />)
-    const name = screen.getByPlaceholderText('AE start before end')
+    const name = await screen.findByPlaceholderText('AE start before end')
     fireEvent.change(name, { target: { value: 'Required weight' } })
     fireEvent.change(screen.getByRole('textbox', { name: 'Rule definition' }), { target: { value: '{invalid' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save check' }))
@@ -158,6 +162,28 @@ describe('Phase 2 workflow controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save check' }))
     await waitFor(() => expect(post).toHaveBeenCalledWith('/designer/studies/study-1/edit-checks', {
       name: 'Required weight', description: null, severity: 'warning', rule_json: { field: 'weight', operator: 'not_null' }, is_active: true,
-    }))
+    }, { params: { study_version_id: 'ver-draft' } }))
+  })
+
+  it('deletes a selected draft edit check after confirmation', async () => {
+    const checks = [{
+      id: 'check-1', name: 'Required weight', description: null,
+      rule_json: { field: 'weight', operator: 'not_null' }, severity: 'warning',
+      is_active: true, created_at: '2026-01-01T10:00:00Z',
+    }]
+    vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({ data: url === '/studies/study-1/versions'
+      ? [{ id: 'ver-draft', study_id: 'study-1', version_number: '1', status: 'draft', created_at: 'x' }]
+      : checks } as never))
+    const remove = vi.spyOn(api, 'delete').mockResolvedValue({ data: undefined } as never)
+
+    renderWithQueryClient(<EditCheckBuilderPage studyId="study-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Required weight/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete check' }))
+    expect(screen.getByRole('dialog', { name: 'Delete edit check?' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }))
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('/designer/edit-checks/check-1'))
+    expect(await screen.findByText('Edit check deleted.')).toBeInTheDocument()
   })
 })

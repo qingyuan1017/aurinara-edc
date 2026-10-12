@@ -1,0 +1,106 @@
+{
+  "forms": [
+    {
+      "name": "Vital Signs",
+      "form_code": "VS",
+      "display_order": 1,
+      "is_repeating": true,
+      "sections": [
+        {
+          "name": "Measurements",
+          "display_order": 1,
+          "fields": [
+            {
+              "label": "Assessment Date",
+              "variable_name": "VSDAT",
+              "control_type": "date",
+              "data_type": "date",
+              "display_order": 1,
+              "is_required": true
+            },
+            {
+              "label": "Systolic Blood Pressure",
+              "variable_name": "SYSBP",
+              "control_type": "integer",
+              "data_type": "integer",
+              "display_order": 2,
+              "is_required": true,
+              "unit": "mmHg",
+              "min_value": 40,
+              "max_value": 300
+            },
+            {
+              "label": "Diastolic Blood Pressure",
+              "variable_name": "DIABP",
+              "control_type": "integer",
+              "data_type": "integer",
+              "display_order": 3,
+              "is_required": true,
+              "unit": "mmHg",
+              "min_value": 20,
+              "max_value": 200
+            },
+            {
+              "label": "Temperature",
+              "variable_name": "TEMP",
+              "control_type": "decimal",
+              "data_type": "decimal",
+              "display_order": 4,
+              "unit": "C",
+              "min_value": 30,
+              "max_value": 45,
+              "decimal_precision": 1
+            }
+          ]
+        },
+        {
+          "name": "Comments",
+          "display_order": 2,
+          "fields": [
+            {
+              "label": "Clinical Comments",
+              "variable_name": "VSCOM",
+              "control_type": "textarea",
+              "data_type": "string",
+              "display_order": 1,
+              "max_length": 2000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Physical Examination",
+      "form_code": "PE",
+      "display_order": 2,
+      "is_repeating": false,
+      "sections": [
+        {
+          "name": "Examination",
+          "display_order": 1,
+          "fields": [
+            {
+              "label": "Examination Date",
+              "variable_name": "PEDAT",
+              "control_type": "date",
+              "data_type": "date",
+              "display_order": 1,
+              "is_required": true
+            },
+            {
+              "label": "Findings",
+              "variable_name": "PEFIND",
+              "control_type": "textarea",
+              "data_type": "string",
+              "display_order": 2,
+              "max_length": 4000
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "edit_checks": [],
+  "codelists": [],
+  "visits": []
+}

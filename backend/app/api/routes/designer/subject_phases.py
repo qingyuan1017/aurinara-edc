@@ -81,7 +81,9 @@ async def create_subject_phase(
         session,
         design_version_id=version.id,
         name=body.name,
+        phase_type=body.phase_type,
         display_order=body.display_order,
+        visit_definition_ids=body.visit_definition_ids,
         actor_id=current_user.id,
     )
     return SubjectPhaseDefinitionResponse.model_validate(phase)
@@ -116,7 +118,9 @@ async def update_subject_phase(
         session,
         phase_id,
         name=body.name,
+        phase_type=body.phase_type,
         display_order=body.display_order,
+        visit_definition_ids=body.visit_definition_ids,
         actor_id=current_user.id,
     )
     return SubjectPhaseDefinitionResponse.model_validate(updated)

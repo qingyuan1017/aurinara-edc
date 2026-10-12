@@ -7,8 +7,8 @@ mounting contract holds end-to-end:
 - The Designer aggregate mounts under ``/api/v1/designer`` and serves the
   design-authoring surfaces (study versions, forms/fields, edit-check testing,
   codelists, subject phases, schedule of assessment, visits, arms, CRF access,
-  raw-data variables, coding settings). Cycles are authored as visits of
-  ``visit_type == 'cycle'`` through the visits surface (no separate cycle route).
+  raw-data variables, coding settings). Cycles are authored through the visits
+  surface, with their owned child visits created through a nested cycle route.
 - The slimmed EDC aggregate preserves its operational paths with NO added
   prefix (``/api/v1/studies`` list, ``/api/v1/subjects``, ``/api/v1/visits``,
   ``/api/v1/queries``, ``/api/v1/studies/{study_id}/dashboard``), and
@@ -54,6 +54,7 @@ def _methods(paths: dict[str, dict], path: str) -> set[str]:
         # Form / field metadata authoring
         (f"{API_V1}/designer/studies/{{study_id}}/forms", "post"),
         (f"{API_V1}/designer/forms/{{form_id}}/fields", "post"),
+        (f"{API_V1}/designer/edit-checks/{{edit_check_id}}", "delete"),
         # Edit-check authoring and design-time testing
         (f"{API_V1}/designer/edit-checks/{{edit_check_id}}/test", "post"),
         # Additional designer definition surfaces
@@ -61,15 +62,28 @@ def _methods(paths: dict[str, dict], path: str) -> set[str]:
         (f"{API_V1}/designer/versions/{{version_id}}/subject-phases", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/schedule-of-assessment", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/visits", "post"),
+        (
+            f"{API_V1}/designer/versions/{{version_id}}/cycles/{{cycle_id}}/visits",
+            "post",
+        ),
         (f"{API_V1}/designer/versions/{{version_id}}/arms", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/arms", "get"),
+        (f"{API_V1}/designer/versions/{{version_id}}/arms/{{arm_id}}", "patch"),
         # Form / visit dependency authoring
         (f"{API_V1}/designer/forms/{{form_id}}/dependencies", "post"),
         (f"{API_V1}/designer/forms/{{form_id}}/dependencies", "get"),
         (f"{API_V1}/designer/visits/{{visit_id}}/dependencies", "post"),
         (f"{API_V1}/designer/visits/{{visit_id}}/dependencies", "get"),
+        (f"{API_V1}/designer/versions/{{version_id}}/crf-access", "get"),
         (f"{API_V1}/designer/versions/{{version_id}}/crf-access", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/raw-data-variables", "post"),
+        (f"{API_V1}/designer/versions/{{version_id}}/raw-data-variables", "get"),
+        (f"{API_V1}/designer/versions/{{version_id}}/raw-data-datasets", "get"),
+        (
+            f"{API_V1}/designer/versions/{{version_id}}/raw-data-variables/fields/{{field_definition_id}}",
+            "put",
+        ),
+        (f"{API_V1}/designer/versions/{{version_id}}/coding-settings", "get"),
         (f"{API_V1}/designer/versions/{{version_id}}/coding-settings", "post"),
     ],
 )
@@ -109,6 +123,8 @@ def test_every_designer_path_carries_the_designer_prefix(paths: dict[str, dict])
     [
         (f"{API_V1}/studies", "get"),  # operational study list
         (f"{API_V1}/subjects/{{subject_id}}", "get"),
+        (f"{API_V1}/subjects/{{subject_id}}/phase", "get"),
+        (f"{API_V1}/subjects/{{subject_id}}/phase", "patch"),
         (f"{API_V1}/studies/{{study_id}}/subjects", "get"),
         (f"{API_V1}/visits/{{visit_id}}", "get"),
         (f"{API_V1}/subjects/{{subject_id}}/visits", "get"),

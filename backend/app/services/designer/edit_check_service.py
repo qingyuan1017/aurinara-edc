@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import audit_service
 from app.core.ctms import Module
 from app.core.edit_check_dsl import evaluate_rule, validate_rule
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.designer.edit_check import EditCheck, ValidationResult
 from app.models.designer.study_version import StudyVersion
 from app.models.edc.form_data import FieldValue, FormInstance
@@ -198,8 +198,10 @@ class EditCheckService:
         a system Query is created in that same transaction and linked to the
         Form_Instance, which is one of the Query_Service's allowed targets.
         """
-        context = dict(sample_data) if sample_data is not None else await self._form_context(
-            session, form_instance
+        context = (
+            dict(sample_data)
+            if sample_data is not None
+            else await self._form_context(session, form_instance)
         )
         if not evaluate_rule(edit_check.rule_json, context):
             return None
@@ -343,7 +345,9 @@ class EditCheckService:
     ) -> EditCheck:
         """Update a draft rule, validating a replacement rule before mutation."""
         study_version_service.guard_mutable(version)
-        changes = data.model_dump(exclude_unset=True) if isinstance(data, EditCheckUpdate) else dict(data)
+        changes = (
+            data.model_dump(exclude_unset=True) if isinstance(data, EditCheckUpdate) else dict(data)
+        )
         if "rule_json" in changes:
             changes["rule_json"] = validate_rule(changes["rule_json"])
         if "severity" in changes:
@@ -367,6 +371,60 @@ class EditCheckService:
         )
         return edit_check
 
+    async def delete_edit_check(
+        self,
+        session: AsyncSession,
+        version: StudyVersion,
+        edit_check: EditCheck,
+        actor_id: UUID,
+    ) -> None:
+        """Delete an unused edit check from a mutable draft design.
+
+        Design-time checks can be removed while their owning version is a
+        draft. A check with persisted operational validation results is kept so
+        deletion cannot cascade away regulated execution history.
+        """
+        study_version_service.guard_mutable(version)
+        result_id = await session.scalar(
+            select(ValidationResult.id)
+            .where(ValidationResult.edit_check_id == edit_check.id)
+            .limit(1)
+        )
+        if result_id is not None:
+            raise ConflictError(
+                "Edit checks with validation results cannot be deleted",
+                details={"edit_check_id": str(edit_check.id)},
+            )
+
+        await audit_service.record(
+            session,
+            entity_type="edit_check",
+            entity_id=edit_check.id,
+            action="delete",
+            module=Module.DESIGNER,
+            study_id=version.study_id,
+            actor_id=actor_id,
+            old_value=json.dumps(
+                {
+                    "name": edit_check.name,
+                    "description": edit_check.description,
+                    "rule_json": edit_check.rule_json,
+                    "severity": edit_check.severity,
+                    "is_active": edit_check.is_active,
+                },
+                default=str,
+                sort_keys=True,
+            ),
+        )
+        await session.delete(edit_check)
+        await session.flush()
+        logger.info(
+            "Edit check deleted: id=%s version_id=%s actor=%s",
+            edit_check.id,
+            version.id,
+            actor_id,
+        )
+
     async def get_edit_check(self, session: AsyncSession, edit_check_id: UUID) -> EditCheck:
         edit_check = await self.repository.get(session, edit_check_id)
         if edit_check is None:
@@ -375,7 +433,9 @@ class EditCheckService:
             )
         return edit_check
 
-    async def list_edit_checks(self, session: AsyncSession, study_version_id: UUID) -> list[EditCheck]:
+    async def list_edit_checks(
+        self, session: AsyncSession, study_version_id: UUID
+    ) -> list[EditCheck]:
         return await self.repository.list_for_version(session, study_version_id)
 
     @staticmethod
@@ -517,7 +577,11 @@ class EditCheckService:
             field = rule.get("field")
             try:
                 candidate = context.get(field) if isinstance(field, str) else None
-                return UUID(field) if isinstance(field, str) and field in context and candidate is not None else None
+                return (
+                    UUID(field)
+                    if isinstance(field, str) and field in context and candidate is not None
+                    else None
+                )
             except (ValueError, TypeError):
                 return None
         return None

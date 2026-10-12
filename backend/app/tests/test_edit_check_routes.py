@@ -55,9 +55,7 @@ async def seeded(db_session: AsyncSession):
         code="designer.editcheck.test",
         description="Test edit checks",
     )
-    role = Role(
-        id=uuid.uuid4(), name="Designer_Role", scope_level="system", is_system=True
-    )
+    role = Role(id=uuid.uuid4(), name="Designer_Role", scope_level="system", is_system=True)
     user = User(
         id=uuid.uuid4(),
         email="edit-checks@example.test",
@@ -130,9 +128,7 @@ async def seeded(db_session: AsyncSession):
         data_jsonb={"age": 21},
         created_at=datetime.now(UTC),
     )
-    db_session.add_all(
-        [study, version, site, subject, form_definition, form_instance]
-    )
+    db_session.add_all([study, version, site, subject, form_definition, form_instance])
     await db_session.flush()
     return {
         "user": user,
@@ -149,9 +145,7 @@ def app(async_engine):
     application = create_app()
 
     async def override_get_db():
-        factory = async_sessionmaker(
-            bind=async_engine, class_=AsyncSession, expire_on_commit=False
-        )
+        factory = async_sessionmaker(bind=async_engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             try:
                 yield session
@@ -197,9 +191,7 @@ class TestEditCheckRoutes:
         assert listed.status_code == 200
         assert [item["id"] for item in listed.json()] == [check_id]
 
-        fetched = await client.get(
-            f"/api/v1/designer/edit-checks/{check_id}", headers=headers
-        )
+        fetched = await client.get(f"/api/v1/designer/edit-checks/{check_id}", headers=headers)
         assert fetched.status_code == 200
 
         patched = await client.patch(
@@ -219,6 +211,77 @@ class TestEditCheckRoutes:
             )
         ).scalar_one()
         assert event.actor_id == seeded["user"].id
+
+        deleted = await client.delete(f"/api/v1/designer/edit-checks/{check_id}", headers=headers)
+        assert deleted.status_code == 204
+        assert (
+            await db_session.get(EditCheck, uuid.UUID(check_id), populate_existing=True)
+        ) is None
+        delete_event = (
+            await db_session.execute(
+                select(AuditEvent).where(
+                    AuditEvent.entity_type == "edit_check",
+                    AuditEvent.entity_id == uuid.UUID(check_id),
+                    AuditEvent.action == "delete",
+                )
+            )
+        ).scalar_one()
+        assert delete_event.actor_id == seeded["user"].id
+
+    async def test_delete_rejects_check_with_validation_results(self, client, seeded, db_session):
+        check = EditCheck(
+            id=uuid.uuid4(),
+            study_version_id=seeded["version"].id,
+            name="Executed check",
+            rule_json=RULE,
+            severity="warning",
+            is_active=True,
+            created_at=datetime.now(UTC),
+        )
+        result = ValidationResult(
+            id=uuid.uuid4(),
+            edit_check_id=check.id,
+            form_instance_id=seeded["form_instance"].id,
+            severity="warning",
+            outcome="failed",
+            message="Persisted validation result",
+            is_resolved=False,
+            created_at=datetime.now(UTC),
+        )
+        db_session.add_all([check, result])
+        await db_session.flush()
+
+        response = await client.delete(
+            f"/api/v1/designer/edit-checks/{check.id}",
+            headers=auth(seeded["user"]),
+        )
+
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "ConflictError"
+        assert await db_session.get(EditCheck, check.id) is not None
+
+    async def test_delete_rejects_check_from_published_version(self, client, seeded, db_session):
+        seeded["version"].status = StudyVersionStatus.published
+        check = EditCheck(
+            id=uuid.uuid4(),
+            study_version_id=seeded["version"].id,
+            name="Published check",
+            rule_json=RULE,
+            severity="warning",
+            is_active=True,
+            created_at=datetime.now(UTC),
+        )
+        db_session.add(check)
+        await db_session.flush()
+
+        response = await client.delete(
+            f"/api/v1/designer/edit-checks/{check.id}",
+            headers=auth(seeded["user"]),
+        )
+
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "BusinessRuleError"
+        assert await db_session.get(EditCheck, check.id) is not None
 
     async def test_test_endpoint_evaluates_without_persistence(self, client, seeded, db_session):
         check = EditCheck(
@@ -241,9 +304,7 @@ class TestEditCheckRoutes:
         assert response.status_code == 200
         assert response.json()["outcome"] is True
         assert response.json()["persisted"] is False
-        assert (
-            await db_session.execute(select(ValidationResult))
-        ).scalars().all() == []
+        assert (await db_session.execute(select(ValidationResult))).scalars().all() == []
 
     async def test_run_evaluates_forms_and_persists_failures(self, client, seeded, db_session):
         check = EditCheck(

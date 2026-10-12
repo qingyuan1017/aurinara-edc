@@ -37,6 +37,15 @@ class RawDataVariableSettingCreate(BaseCreateSchema):
     suffix: str | None = Field(None, max_length=50)
 
 
+class RawDataFieldVariableConfigure(BaseCreateSchema):
+    """Configure generated companion variables for one form field."""
+
+    suffix: str | None = Field(None, max_length=50)
+    year_suffix: str | None = Field(None, max_length=50)
+    month_suffix: str | None = Field(None, max_length=50)
+    day_suffix: str | None = Field(None, max_length=50)
+
+
 class RawDataVariableSettingResponse(BaseSchema):
     """Response schema for a persisted Raw_Data_Variable_Setting."""
 
@@ -47,11 +56,37 @@ class RawDataVariableSettingResponse(BaseSchema):
     attributes: dict[str, Any] = Field(default_factory=dict)
     label: str | None = None
     suffix: str | None = None
+    field_definition_id: UUID | None = None
+    year_suffix: str | None = None
+    month_suffix: str | None = None
+    day_suffix: str | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime | None = None
 
 
+class RawDatasetVariableResponse(BaseSchema):
+    """One generated column in a form-owned raw dataset."""
+
+    name: str
+    data_type: str
+    label: str
+    source: str
+    field_definition_id: UUID | None = None
+
+
+class RawDatasetDefinitionResponse(BaseSchema):
+    """Generated raw-data schema for one form."""
+
+    form_definition_id: UUID
+    form_code: str
+    dataset_name: str
+    variables: list[RawDatasetVariableResponse] = Field(default_factory=list)
+
+
 __all__ = [
+    "RawDataFieldVariableConfigure",
     "RawDataVariableSettingCreate",
     "RawDataVariableSettingResponse",
+    "RawDatasetDefinitionResponse",
+    "RawDatasetVariableResponse",
 ]

@@ -10,7 +10,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { FormActions, FormField, LoadingState, ErrorState, EmptyState, PageContainer, PageHeader, StatusBadge } from '@/components/patterns'
+import { ConfirmDialog, FormActions, FormField, LoadingState, ErrorState, EmptyState, PageContainer, PageHeader, StatusBadge } from '@/components/patterns'
+import { DesignerJsonImport } from '@/features/designer/DesignerJsonImport'
+import { DraftGate } from '@/features/designer/shared'
 
 interface EditCheck {
   id: string
@@ -25,7 +27,7 @@ interface EditCheck {
 const EMPTY_RULE = '{\n  "field": "field_name",\n  "operator": "not_null"\n}'
 const SEVERITIES = ['info', 'warning', 'error', 'query'] as const
 
-export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
+function EditCheckBuilderInner({ studyId, versionId, readOnly }: { studyId: string; versionId: string; readOnly: boolean }) {
   const client = useQueryClient()
   const [selectedId, setSelectedId] = useState('')
   const [name, setName] = useState('')
@@ -35,10 +37,11 @@ export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
   const [sampleText, setSampleText] = useState('{}')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const checksQuery = useQuery({
-    queryKey: ['edit-checks', studyId],
-    queryFn: async () => (await api.get<EditCheck[]>(`/designer/studies/${studyId}/edit-checks`)).data,
+    queryKey: ['edit-checks', studyId, versionId],
+    queryFn: async () => (await api.get<EditCheck[]>(`/designer/studies/${studyId}/edit-checks`, { params: { study_version_id: versionId } })).data,
   })
   const selected = useMemo(() => checksQuery.data?.find((item) => item.id === selectedId), [checksQuery.data, selectedId])
 
@@ -65,7 +68,7 @@ export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
       const payload = { name: name.trim(), description: description.trim() || null, severity, rule_json: rule, is_active: true }
       return selectedId
         ? api.patch<EditCheck>(`/designer/edit-checks/${selectedId}`, payload)
-        : api.post<EditCheck>(`/designer/studies/${studyId}/edit-checks`, payload)
+        : api.post<EditCheck>(`/designer/studies/${studyId}/edit-checks`, payload, { params: { study_version_id: versionId } })
     },
     onSuccess: ({ data }) => {
       client.invalidateQueries({ queryKey: ['edit-checks', studyId] })
@@ -95,6 +98,25 @@ export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
     onError: (err: Error) => setError(err.message || 'Could not test this edit check.'),
   })
 
+  const remove = useMutation({
+    mutationFn: async () => {
+      if (!selectedId) throw new Error('Select an edit check to delete.')
+      await api.delete(`/designer/edit-checks/${selectedId}`)
+    },
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['edit-checks', studyId] })
+      resetEditor()
+      setDeleteOpen(false)
+      setMessage('Edit check deleted.')
+    },
+    onError: (err: unknown) => {
+      const responseMessage = (err as { response?: { data?: { error?: { message?: string } } } })
+        ?.response?.data?.error?.message
+      setDeleteOpen(false)
+      setError(responseMessage ?? (err instanceof Error ? err.message : 'Could not delete the edit check.'))
+    },
+  })
+
   const run = useMutation({
     mutationFn: () => api.post(`/designer/studies/${studyId}/edit-checks/run`),
     onSuccess: ({ data }) => setMessage(`Validation run complete: ${data.evaluated_form_instances} forms evaluated, ${data.failed_checks} failed checks.`),
@@ -102,19 +124,19 @@ export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
   })
 
   return (
-    <PermissionGuard permission={PERMISSIONS.DESIGNER_EDITCHECK_CONFIGURE} studyId={studyId}>
       <PageContainer wide>
         <PageHeader
           title="Edit-check builder"
-          description="Create safe, declarative validation rules for the current draft version."
-          actions={
+          description={readOnly ? 'Review declarative validation rules retained in this published design version.' : 'Create safe, declarative validation rules for the current draft version.'}
+          actions={!readOnly ? (
             <>
+              <DesignerJsonImport studyId={studyId} />
               <Button type="button" variant="outline" onClick={() => resetEditor()}>New check</Button>
               <Button type="button" pending={run.isPending} loadingText="Running…" onClick={() => run.mutate()}>
                 Run active checks
               </Button>
             </>
-          }
+          ) : undefined}
         />
 
         {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
@@ -130,7 +152,7 @@ export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
               {checksQuery.isLoading ? <LoadingState label="edit checks" className="border-0 p-0 shadow-none" /> : null}
               {checksQuery.isError ? <ErrorState message="Unable to load edit checks." onRetry={() => void checksQuery.refetch()} /> : null}
               {!checksQuery.isLoading && !checksQuery.isError && !checksQuery.data?.length ? (
-                <EmptyState title="No checks configured" description="Create a check to validate study data." className="min-h-32 p-4" />
+                <EmptyState title="No checks configured" description={readOnly ? 'No edit checks were retained in this version.' : 'Create a check to validate study data.'} className="min-h-32 p-4" />
               ) : null}
               {checksQuery.data?.map((check) => (
                 <button
@@ -149,17 +171,17 @@ export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{selectedId ? 'Edit check' : 'New check'}</CardTitle>
+              <CardTitle className="text-base">{selectedId ? (readOnly ? 'Check detail' : 'Edit check') : (readOnly ? 'Select a check' : 'New check')}</CardTitle>
             </CardHeader>
             <CardContent>
               <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); save.mutate() }}>
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField label="Name" id="edit-check-name" name="name" required>
-                    <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="AE start before end" required />
+                    <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="AE start before end" required readOnly={readOnly} />
                   </FormField>
                   <div className="relative space-y-1.5">
                     <Label htmlFor="edit-check-severity">Severity</Label>
-                    <Select value={severity} onValueChange={(value) => setSeverity(value as EditCheck['severity'])}>
+                    <Select value={severity} onValueChange={(value) => setSeverity(value as EditCheck['severity'])} disabled={readOnly}>
                       <SelectTrigger id="edit-check-severity" aria-label="Severity">
                         <SelectValue />
                       </SelectTrigger>
@@ -170,26 +192,50 @@ export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
                   </div>
                 </div>
                 <FormField label="Description" id="edit-check-description" name="description">
-                  <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Explain the clinical data-quality rule." />
+                  <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Explain the clinical data-quality rule." readOnly={readOnly} />
                 </FormField>
                 <FormField label="Rule definition (JSON DSL)" id="rule-definition" name="rule" description="Provide a valid JSON object describing the declarative rule.">
-                  <Textarea aria-label="Rule definition" value={ruleText} onChange={(event) => setRuleText(event.target.value)} className="min-h-48 font-mono text-sm" />
+                  <Textarea aria-label="Rule definition" value={ruleText} onChange={(event) => setRuleText(event.target.value)} className="min-h-48 font-mono text-sm" readOnly={readOnly} />
                 </FormField>
-                <FormActions pending={save.isPending} submitLabel={selectedId ? 'Update check' : 'Save check'} pendingLabel="Saving…" />
+                {!readOnly ? <FormActions pending={save.isPending} submitLabel={selectedId ? 'Update check' : 'Save check'} pendingLabel="Saving…" /> : null}
+                {selected && !readOnly ? (
+                  <Button type="button" variant="destructive" disabled={remove.isPending} onClick={() => setDeleteOpen(true)}>
+                    Delete check
+                  </Button>
+                ) : null}
               </form>
 
-              <div className="mt-6 border-t pt-5">
+              {!readOnly ? <div className="mt-6 border-t pt-5">
                 <h3 className="font-semibold">Test sample data</h3>
                 <p className="mt-1 text-sm text-muted-foreground">Testing evaluates the rule without persisting clinical data.</p>
                 <Textarea aria-label="Sample data" value={sampleText} onChange={(event) => setSampleText(event.target.value)} className="mt-3 min-h-24 font-mono text-sm" />
                 <Button type="button" className="mt-2" variant="outline" onClick={() => test.mutate()} pending={test.isPending} loadingText="Testing…" disabled={!selected}>
                   Test rule
                 </Button>
-              </div>
+              </div> : null}
             </CardContent>
           </Card>
         </div>
+        {!readOnly ? <ConfirmDialog
+          open={deleteOpen && Boolean(selected)}
+          title="Delete edit check?"
+          description={<>Delete <strong>{selected?.name}</strong> from this draft design? This action cannot be undone.</>}
+          confirmLabel="Confirm delete"
+          pending={remove.isPending}
+          onConfirm={() => remove.mutate()}
+          onCancel={() => setDeleteOpen(false)}
+          onOpenChange={setDeleteOpen}
+        /> : null}
       </PageContainer>
+  )
+}
+
+export function EditCheckBuilderPage({ studyId }: { studyId: string }) {
+  return (
+    <PermissionGuard permission={PERMISSIONS.DESIGNER_EDITCHECK_CONFIGURE} studyId={studyId}>
+      <DraftGate studyId={studyId}>
+        {(versionId, selection) => <EditCheckBuilderInner studyId={studyId} versionId={versionId} readOnly={selection.isReadOnly} />}
+      </DraftGate>
     </PermissionGuard>
   )
 }

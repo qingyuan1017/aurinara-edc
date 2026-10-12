@@ -9,6 +9,7 @@ Satisfies Requirements:
          version.
 
 Endpoints:
+  - GET  /versions/{version_id}/crf-access   list CRF access definitions
   - POST /versions/{version_id}/crf-access   create a CRF access definition
 """
 
@@ -35,6 +36,23 @@ logger = logging.getLogger(__name__)
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 router = APIRouter(prefix="/versions", tags=["designer-crf-access"])
+
+
+@router.get(
+    "/{version_id}/crf-access",
+    response_model=list[CrfAccessDefinitionResponse],
+)
+async def list_crf_access(
+    version_id: UUID,
+    session: DbSession,
+    current_user: Annotated[User, Depends(require_permission("designer.crf_access.configure"))],
+) -> list[CrfAccessDefinitionResponse]:
+    """List CRF access definitions for a draft or published Design_Version."""
+    await study_version_service.get_version(session, version_id)
+    return [
+        CrfAccessDefinitionResponse.model_validate(item)
+        for item in await crf_access_service.list_access_definitions(session, version_id)
+    ]
 
 
 @router.post(

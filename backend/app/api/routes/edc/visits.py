@@ -20,11 +20,9 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_permission
-from app.models.edc.visit import VisitInstance
 from app.models.shared.identity import User
 from app.schemas.edc.visit import (
     UnscheduledVisitCreate,
@@ -61,14 +59,8 @@ async def list_subject_visits(
     Requirement 8.3/8.5: Returns each visit instance with window/lifecycle status.
     """
     # Validate the subject exists (and is not soft-deleted).
-    await subject_service.get_subject(session, subject_id)
-
-    result = await session.execute(
-        select(VisitInstance)
-        .where(VisitInstance.subject_id == subject_id)
-        .order_by(VisitInstance.created_at)
-    )
-    instances = result.scalars().all()
+    subject = await subject_service.get_subject(session, subject_id)
+    instances = await subject_service.list_visible_visits(session, subject)
     return [VisitInstanceResponse.model_validate(i) for i in instances]
 
 

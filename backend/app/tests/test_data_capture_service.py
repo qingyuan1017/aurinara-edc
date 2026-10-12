@@ -148,13 +148,9 @@ class TestSaveDraft:
         sync_result = MagicMock()
         sync_result.scalars.return_value.all.return_value = []
 
-        mock_session.execute = AsyncMock(
-            side_effect=[result_mock, sync_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[result_mock, sync_result])
 
-        with patch(
-            "app.services.edc.data_capture_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.edc.data_capture_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.save_draft(
                 mock_session, fi, {str(field_def_id): "value1"}, actor_id
@@ -168,9 +164,7 @@ class TestSaveDraft:
         mock_session = AsyncMock()
 
         with pytest.raises(BusinessRuleError, match="Frozen"):
-            await service.save_draft(
-                mock_session, fi, {str(field_def_id): "value"}, actor_id
-            )
+            await service.save_draft(mock_session, fi, {str(field_def_id): "value"}, actor_id)
 
     async def test_rejects_locked_form(self, service, actor_id, field_def_id):
         """save_draft rejects a Locked form (Req 10.7)."""
@@ -178,9 +172,7 @@ class TestSaveDraft:
         mock_session = AsyncMock()
 
         with pytest.raises(BusinessRuleError, match="Locked"):
-            await service.save_draft(
-                mock_session, fi, {str(field_def_id): "value"}, actor_id
-            )
+            await service.save_draft(mock_session, fi, {str(field_def_id): "value"}, actor_id)
 
     async def test_writes_audit_event(self, service, actor_id, field_def_id):
         """save_draft writes an Audit_Event for each created field (Req 10.8)."""
@@ -194,17 +186,11 @@ class TestSaveDraft:
         sync_result = MagicMock()
         sync_result.scalars.return_value.all.return_value = []
 
-        mock_session.execute = AsyncMock(
-            side_effect=[result_mock, sync_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[result_mock, sync_result])
 
-        with patch(
-            "app.services.edc.data_capture_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.edc.data_capture_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            await service.save_draft(
-                mock_session, fi, {str(field_def_id): "value1"}, actor_id
-            )
+            await service.save_draft(mock_session, fi, {str(field_def_id): "value1"}, actor_id)
 
             # Audit was called for the field value creation
             mock_audit.record.assert_awaited_once()
@@ -226,23 +212,24 @@ class TestSubmit:
         field_def = _make_field_definition(is_required=True, data_type="string")
 
         # Mock _get_field_definitions
-        with patch.object(
-            service, "_get_field_definitions", return_value=[field_def]
-        ), patch.object(
-            service, "_get_field_value_map",
-            return_value={
-                field_def.id: FieldValue(
-                    id=uuid.uuid4(),
-                    form_instance_id=fi.id,
-                    field_definition_id=field_def.id,
-                    value="Hello",
-                    is_not_applicable=False,
-                    created_at=datetime.now(UTC),
-                )
-            },
-        ), patch(
-            "app.services.edc.data_capture_service.audit_service"
-        ) as mock_audit:
+        with (
+            patch.object(service, "_get_field_definitions", return_value=[field_def]),
+            patch.object(
+                service,
+                "_get_field_value_map",
+                return_value={
+                    field_def.id: FieldValue(
+                        id=uuid.uuid4(),
+                        form_instance_id=fi.id,
+                        field_definition_id=field_def.id,
+                        value="Hello",
+                        is_not_applicable=False,
+                        created_at=datetime.now(UTC),
+                    )
+                },
+            ),
+            patch("app.services.edc.data_capture_service.audit_service") as mock_audit,
+        ):
             mock_audit.record = AsyncMock()
             result = await service.submit(mock_session, fi, actor_id)
 
@@ -260,13 +247,12 @@ class TestSubmit:
             is_required=True, data_type="string", variable_name="weight"
         )
 
-        with patch.object(
-            service, "_get_field_definitions", return_value=[field_def]
-        ), patch.object(
-            service, "_get_field_value_map", return_value={}
-        ), patch(
-            "app.services.edc.data_capture_service.audit_service"
-        ), pytest.raises(ValidationError) as exc_info:
+        with (
+            patch.object(service, "_get_field_definitions", return_value=[field_def]),
+            patch.object(service, "_get_field_value_map", return_value={}),
+            patch("app.services.edc.data_capture_service.audit_service"),
+            pytest.raises(ValidationError) as exc_info,
+        ):
             await service.submit(mock_session, fi, actor_id)
 
         # Values are preserved (status unchanged)
@@ -281,23 +267,25 @@ class TestSubmit:
 
         field_def = _make_field_definition(data_type="integer")
 
-        with patch.object(
-            service, "_get_field_definitions", return_value=[field_def]
-        ), patch.object(
-            service, "_get_field_value_map",
-            return_value={
-                field_def.id: FieldValue(
-                    id=uuid.uuid4(),
-                    form_instance_id=fi.id,
-                    field_definition_id=field_def.id,
-                    value="not_a_number",
-                    is_not_applicable=False,
-                    created_at=datetime.now(UTC),
-                )
-            },
-        ), patch(
-            "app.services.edc.data_capture_service.audit_service"
-        ), pytest.raises(ValidationError) as exc_info:
+        with (
+            patch.object(service, "_get_field_definitions", return_value=[field_def]),
+            patch.object(
+                service,
+                "_get_field_value_map",
+                return_value={
+                    field_def.id: FieldValue(
+                        id=uuid.uuid4(),
+                        form_instance_id=fi.id,
+                        field_definition_id=field_def.id,
+                        value="not_a_number",
+                        is_not_applicable=False,
+                        created_at=datetime.now(UTC),
+                    )
+                },
+            ),
+            patch("app.services.edc.data_capture_service.audit_service"),
+            pytest.raises(ValidationError) as exc_info,
+        ):
             await service.submit(mock_session, fi, actor_id)
 
         errors = exc_info.value.details["field_errors"]
@@ -315,23 +303,25 @@ class TestSubmit:
             max_value=Decimal("100"),
         )
 
-        with patch.object(
-            service, "_get_field_definitions", return_value=[field_def]
-        ), patch.object(
-            service, "_get_field_value_map",
-            return_value={
-                field_def.id: FieldValue(
-                    id=uuid.uuid4(),
-                    form_instance_id=fi.id,
-                    field_definition_id=field_def.id,
-                    value="150",
-                    is_not_applicable=False,
-                    created_at=datetime.now(UTC),
-                )
-            },
-        ), patch(
-            "app.services.edc.data_capture_service.audit_service"
-        ), pytest.raises(ValidationError) as exc_info:
+        with (
+            patch.object(service, "_get_field_definitions", return_value=[field_def]),
+            patch.object(
+                service,
+                "_get_field_value_map",
+                return_value={
+                    field_def.id: FieldValue(
+                        id=uuid.uuid4(),
+                        form_instance_id=fi.id,
+                        field_definition_id=field_def.id,
+                        value="150",
+                        is_not_applicable=False,
+                        created_at=datetime.now(UTC),
+                    )
+                },
+            ),
+            patch("app.services.edc.data_capture_service.audit_service"),
+            pytest.raises(ValidationError) as exc_info,
+        ):
             await service.submit(mock_session, fi, actor_id)
 
         errors = exc_info.value.details["field_errors"]
@@ -357,9 +347,7 @@ class TestLockServiceIntegration:
         lock_check.return_value = True
 
         with pytest.raises(BusinessRuleError, match="frozen or locked"):
-            await service.change_value(
-                AsyncMock(), fi, field_def_id, "new", "corrected", actor_id
-            )
+            await service.change_value(AsyncMock(), fi, field_def_id, "new", "corrected", actor_id)
 
         lock_check.assert_awaited_once()
         args, kwargs = lock_check.call_args
@@ -396,9 +384,7 @@ class TestChangeValue:
         mock_session = AsyncMock()
 
         with pytest.raises(ValidationError, match="Reason_For_Change"):
-            await service.change_value(
-                mock_session, fi, field_def_id, "new_val", None, actor_id
-            )
+            await service.change_value(mock_session, fi, field_def_id, "new_val", None, actor_id)
 
     async def test_accepts_reason_after_submission(self, service, actor_id, field_def_id):
         """change_value succeeds with a reason post-submission (Req 10.5)."""
@@ -421,17 +407,12 @@ class TestChangeValue:
         sync_result = MagicMock()
         sync_result.scalars.return_value.all.return_value = [existing_fv]
 
-        mock_session.execute = AsyncMock(
-            side_effect=[result_mock, sync_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[result_mock, sync_result])
 
-        with patch(
-            "app.services.edc.data_capture_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.edc.data_capture_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.change_value(
-                mock_session, fi, field_def_id, "new_val",
-                "Data entry error", actor_id
+                mock_session, fi, field_def_id, "new_val", "Data entry error", actor_id
             )
 
         assert result == fi
@@ -445,9 +426,7 @@ class TestChangeValue:
         mock_session = AsyncMock()
 
         with pytest.raises(BusinessRuleError, match="Locked"):
-            await service.change_value(
-                mock_session, fi, field_def_id, "x", "reason", actor_id
-            )
+            await service.change_value(mock_session, fi, field_def_id, "x", "reason", actor_id)
 
 
 class TestMarkNotApplicable:
@@ -475,17 +454,11 @@ class TestMarkNotApplicable:
         sync_result = MagicMock()
         sync_result.scalars.return_value.all.return_value = [existing_fv]
 
-        mock_session.execute = AsyncMock(
-            side_effect=[get_result, sync_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[get_result, sync_result])
 
-        with patch(
-            "app.services.edc.data_capture_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.edc.data_capture_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            await service.mark_not_applicable(
-                mock_session, fi, field_def_id, actor_id
-            )
+            await service.mark_not_applicable(mock_session, fi, field_def_id, actor_id)
 
         assert existing_fv.is_not_applicable is True
         mock_audit.record.assert_awaited_once()
@@ -496,9 +469,7 @@ class TestMarkNotApplicable:
         mock_session = AsyncMock()
 
         with pytest.raises(BusinessRuleError, match="Frozen"):
-            await service.mark_not_applicable(
-                mock_session, fi, field_def_id, actor_id
-            )
+            await service.mark_not_applicable(mock_session, fi, field_def_id, actor_id)
 
 
 class TestValidation:
@@ -539,6 +510,7 @@ class TestValidation:
         fd = _make_field_definition(data_type="boolean")
         assert service._validate_data_type(fd, "true") is None
         assert service._validate_data_type(fd, "False") is None
+        assert service._validate_data_type(fd, True) is None
 
     def test_validate_data_type_boolean_invalid(self, service):
         """Boolean validation fails for non-boolean strings."""
@@ -575,6 +547,22 @@ class TestValidation:
         """Regex validation fails for non-matching values."""
         fd = _make_field_definition(regex_validation=r"[A-Z]{2}\d{4}")
         assert service._validate_regex(fd, "123") is not None
+
+    def test_structured_widget_values_round_trip(self, service):
+        """Checkbox, multi-select, and repeating-row values retain structure."""
+        values = ["MILD", "MODERATE"]
+        serialized = service._serialize_value(values)
+        assert serialized == '__edc_json__:["MILD","MODERATE"]'
+        assert service._deserialize_value(serialized) == values
+
+    def test_boolean_widget_value_round_trips_as_boolean(self, service):
+        serialized = service._serialize_value(True)
+        assert serialized == "__edc_json__:true"
+        assert service._deserialize_value(serialized) is True
+
+    @pytest.mark.parametrize("value", ["42", "true", "null", '["free text"]'])
+    def test_text_values_are_not_coerced_during_round_trip(self, service, value):
+        assert service._deserialize_value(service._serialize_value(value)) == value
 
 
 class TestSingleton:

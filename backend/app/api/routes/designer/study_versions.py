@@ -22,19 +22,29 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, require_permission
+from app.api.deps import (
+    get_current_user,
+    get_db,
+    get_permission_service,
+    require_permission,
+)
 from app.models.shared.identity import User
 from app.schemas.designer.study_version import (
+    DesignValidationResponse,
     StudyAmendmentCreate,
     StudyVersionCreate,
     StudyVersionResponse,
 )
+from app.services.designer.design_validation_service import design_validation_service
 from app.services.designer.study_version_service import study_version_service
 from app.services.edc.study_service import study_service
+from app.services.shared.permission_service import PermissionService
 
 logger = logging.getLogger(__name__)
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
+PermissionSvc = Annotated[PermissionService, Depends(get_permission_service)]
 
 # Study-scoped version authoring (mounted at /studies)
 study_versions_router = APIRouter(prefix="/studies", tags=["designer-versions"])
@@ -50,9 +60,7 @@ async def create_version(
     study_id: UUID,
     body: StudyVersionCreate,
     session: DbSession,
-    current_user: Annotated[
-        User, Depends(require_permission("designer.study_version.create"))
-    ],
+    current_user: Annotated[User, Depends(require_permission("designer.study_version.create"))],
 ) -> StudyVersionResponse:
     """Create a new draft Design_Version for a study.
 
@@ -79,9 +87,7 @@ async def create_amendment(
     study_id: UUID,
     body: StudyAmendmentCreate,
     session: DbSession,
-    current_user: Annotated[
-        User, Depends(require_permission("designer.study_version.amend"))
-    ],
+    current_user: Annotated[User, Depends(require_permission("designer.study_version.amend"))],
 ) -> StudyVersionResponse:
     """Create a draft amendment from the latest published version.
 
@@ -102,9 +108,8 @@ async def create_amendment(
 async def publish_version(
     version_id: UUID,
     session: DbSession,
-    current_user: Annotated[
-        User, Depends(require_permission("designer.version.publish"))
-    ],
+    current_user: CurrentUser,
+    permission_service: PermissionSvc,
 ) -> StudyVersionResponse:
     """Publish a draft Design_Version (draft -> published).
 
@@ -112,10 +117,35 @@ async def publish_version(
     Requirement 2.1: Transition draft -> published, recording actor and timestamp.
     """
     version = await study_version_service.get_version(session, version_id)
+    permission_service.require(
+        current_user,
+        "designer.version.publish",
+        study_id=version.study_id,
+    )
     published = await study_version_service.publish(
         session=session, version=version, actor_id=current_user.id
     )
     return StudyVersionResponse.model_validate(published)
+
+
+@versions_router.get("/{version_id}/validation", response_model=DesignValidationResponse)
+async def validate_version_for_publication(
+    version_id: UUID,
+    session: DbSession,
+    current_user: CurrentUser,
+    permission_service: PermissionSvc,
+) -> DesignValidationResponse:
+    """Return a read-only publication-readiness report for a design version."""
+
+    version = await study_version_service.get_version(session, version_id)
+    permission_service.require(
+        current_user,
+        "designer.study_version.read",
+        study_id=version.study_id,
+    )
+    return await design_validation_service.validate(session, version)
+
+
 
 
 __all__ = ["study_versions_router", "versions_router"]

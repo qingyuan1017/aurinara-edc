@@ -1,0 +1,60 @@
+{
+  "forms": [],
+  "edit_checks": [],
+  "codelists": [],
+  "visits": [
+    {
+      "name": "Screening",
+      "visit_number": 1,
+      "visit_type": "screening",
+      "target_day": 0,
+      "window_before": 28,
+      "window_after": 0,
+      "display_order": 1,
+      "is_required": true
+    },
+    {
+      "name": "Baseline",
+      "visit_number": 2,
+      "visit_type": "scheduled",
+      "target_day": 1,
+      "window_before": 0,
+      "window_after": 2,
+      "display_order": 2,
+      "is_required": true
+    },
+    {
+      "name": "Treatment Cycle",
+      "visit_number": 3,
+      "visit_type": "cycle",
+      "target_day": 28,
+      "window_before": 3,
+      "window_after": 3,
+      "display_order": 3,
+      "is_required": true,
+      "repeat_min": 1,
+      "repeat_max": 6,
+      "cycle_length": 28
+    },
+    {
+      "name": "End of Treatment",
+      "visit_number": 4,
+      "visit_type": "scheduled",
+      "target_day": 196,
+      "window_before": 7,
+      "window_after": 7,
+      "display_order": 4,
+      "is_required": true
+    },
+    {
+      "name": "Unscheduled",
+      "visit_number": 999,
+      "visit_type": "unscheduled",
+      "target_day": null,
+      "window_before": null,
+      "window_after": null,
+      "display_order": 5,
+      "is_required": false
+    }
+  ]
+}

@@ -366,6 +366,66 @@ server-side default-deny authorization via the shared `permission_service`.
 - [~] 22. Final checkpoint — ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
+- [x] 23. Expand Designer form and visit authoring
+  - [x] 23.1 Add form type/access/domain/label, section output/help/access, and complete item metadata/control types
+  - [x] 23.2 Add explicit visit/folder/cycle kinds, folder hierarchy, visit category/subtype, and editable cycle membership
+  - [x] 23.3 Restrict SoA columns to real visits and add migration, API, UI, and focused tests
+  - _Requirements: 4.10–4.15_
+
+- [x] 24. Render control-specific form widgets
+  - [x] 24.1 Preview each configured field control in the Form Builder
+  - [x] 24.2 Render the corresponding interactive control in operational data entry
+  - [x] 24.3 Preserve scalar, boolean, and multi-value field data across save and reload
+  - _Requirements: 4.20_
+
+- [x] 25. Generate form-owned raw-data variable schemas
+  - [x] 25.1 Add the required fixed variables to every form dataset definition
+  - [x] 25.2 Generate configurable codelist and numeric companion variables
+  - [x] 25.3 Generate configurable date year, month, and day variables
+  - [x] 25.4 Add dataset previews and per-field suffix configuration to Designer
+  - _Requirements: 4.21_
+
+- [x] 26. Make each cycle an owning folder for its own visits
+  - [x] 26.1 Add cycle-owned `cycle_visit` definitions and nested authoring UI
+  - [x] 26.2 Enforce same-version, single-cycle ownership for every cycle visit
+  - [x] 26.3 Include standalone and cycle visits in the SoA while excluding containers
+  - _Requirements: 4.13–4.15_
+
+- [x] 27. Add typed operational subject phases to Study Data
+  - [x] 27.1 Add registered, screen-failure, common, complete, and arm phase types
+  - [x] 27.2 Enforce phase-specific visit membership rules in Designer
+  - [x] 27.3 Persist and audit each subject's current phase and selected arm
+  - [x] 27.4 Filter Study Data visits by the current phase or selected arm
+  - [x] 27.5 Prompt for a configured arm when entering an arm phase and complete the subject when entering a complete phase
+  - [x] 27.6 Restrict Study Data phase actions and API mutations to outgoing published phase-flow transitions
+  - [x] 27.7 Show Site names and phase-consistent subject status in the Subjects list
+  - _Requirements: 3.4–3.11_
+
+- [x] 28. Preserve visit hierarchy in schedules and arm selection
+  - [x] 28.1 Sort Schedule of Assessment columns at each hierarchy level and keep cycle visits at their cycle's top-level position
+  - [x] 28.2 Add folder/cycle group selection with independently selectable descendants to the arm editor
+  - [x] 28.3 Persist only real visit leaves in arm membership and reject container membership during authoring and publication
+  - [x] 28.4 Add draft arm editing and expand legacy folder/cycle membership to real descendant visits for remediation
+  - _Requirements: 4.22–4.23_
+
+- [x] 29. Delete unused draft edit checks
+  - [x] 29.1 Add an authorized, draft-only, audited delete service and endpoint
+  - [x] 29.2 Reject deletion when persisted validation results exist
+  - [x] 29.3 Add a confirmed delete action to the Edit Check Builder
+  - _Requirements: 5.6_
+
+- [x] 30. View retained published designs
+  - [x] 30.1 Add a shared Designer version selector that defaults to the current draft and persists while navigating between Designer modules
+  - [x] 30.2 Link published rows in Version History to the normal Designer Forms module with the selected version
+  - [x] 30.3 Read retained forms, visits, schedule, phases, arms, rules, codelists, and design settings through their standard Designer modules without mutation controls
+  - _Requirements: 2.11–2.12_
+
+- [x] 31. Preserve Study Data navigation context
+  - [x] 31.1 Resolve subject and form breadcrumb labels from clinical record names instead of internal IDs
+  - [x] 31.2 Persist the selected study and site across internal navigation and reloads, while clearing them on sign-out
+  - [x] 31.3 Replace clinical study, subject, and form document-reload links with router navigation
+  - _Requirements: 3.12–3.13_
+
 ## Notes
 
 - Tasks marked with `*` are optional (tests) and can be skipped for a faster MVP;
@@ -422,3 +482,10 @@ server-side default-deny authorization via the shared `permission_service`.
   ]
 }
 ```
+
+- [x] 24. Expand form layout settings and subject-phase visit membership
+  - Rename CDASH domain/label contracts to domain/label.
+  - Add grid row/column and header-details metadata, identifier display flags,
+    CRF/ODM item identifiers, and right-side form/field settings drawers.
+  - Add validated, ordered subject-phase-to-visit associations and expose them
+    through authoring and published-design contracts.

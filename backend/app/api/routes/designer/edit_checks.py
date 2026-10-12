@@ -67,10 +67,7 @@ async def _get_version(
         conditions.append(StudyVersion.status == StudyVersionStatus.draft)
 
     result = await session.execute(
-        select(StudyVersion)
-        .where(*conditions)
-        .order_by(StudyVersion.created_at.desc())
-        .limit(1)
+        select(StudyVersion).where(*conditions).order_by(StudyVersion.created_at.desc()).limit(1)
     )
     version = result.scalars().first()
     if version is None:
@@ -138,9 +135,7 @@ async def list_edit_checks(
     return [EditCheckResponse.model_validate(check) for check in checks]
 
 
-@study_router.post(
-    "/{study_id}/edit-checks", response_model=EditCheckResponse, status_code=201
-)
+@study_router.post("/{study_id}/edit-checks", response_model=EditCheckResponse, status_code=201)
 async def create_edit_check(
     study_id: UUID,
     body: EditCheckCreate,
@@ -192,6 +187,24 @@ async def update_edit_check(
     return EditCheckResponse.model_validate(updated)
 
 
+@router.delete("/{edit_check_id}", status_code=204)
+async def delete_edit_check(
+    edit_check_id: UUID,
+    session: DbSession,
+    current_user: CurrentUser,
+    permission_service: PermissionSvc,
+) -> None:
+    """Delete an unused edit check only while its study version is mutable."""
+    check, version = await _get_check_version(session, edit_check_id)
+    _require_access(current_user, permission_service, version.study_id)
+    await edit_check_service.delete_edit_check(
+        session,
+        version,
+        check,
+        actor_id=current_user.id,
+    )
+
+
 @router.post("/{edit_check_id}/test", response_model=EditCheckTestResponse)
 async def test_edit_check(
     edit_check_id: UUID,
@@ -230,9 +243,7 @@ async def run_edit_checks(
     await study_service.get_study(session, study_id)
     _require_access(current_user, permission_service, study_id)
     request = body or EditCheckRunRequest()
-    version = await _get_version(
-        session, study_id, request.study_version_id, draft_only=False
-    )
+    version = await _get_version(session, study_id, request.study_version_id, draft_only=False)
 
     requested_ids = set(request.form_instance_ids)
     if request.form_instance_id is not None:

@@ -37,6 +37,7 @@ const FORM_DETAIL = {
 
 function mockBase() {
   vi.mocked(api.get).mockImplementation((url: string) => {
+    if (url === '/studies/study-1/versions') return Promise.resolve({ data: [{ id: 'ver-draft', study_id: 'study-1', version_number: '1', status: 'draft', created_at: 'x' }] })
     if (url === '/designer/studies/study-1/forms') return Promise.resolve({ data: FORMS })
     if (url === '/designer/studies/study-1/codelists') return Promise.resolve({ data: [] })
     if (url === '/designer/forms/form-1') return Promise.resolve({ data: FORM_DETAIL })
@@ -48,6 +49,8 @@ function mockBase() {
 describe('FormBuilderPage (dnd)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    window.history.replaceState({}, '', window.location.pathname)
     seedPermissions(['designer.form.read', 'designer.form.configure', 'designer.field.configure'])
   })
 
@@ -107,6 +110,7 @@ describe('FormBuilderPage (dnd)', () => {
       { id: 'form-2', name: 'Labs', form_code: 'LABS', display_order: 2, is_repeating: false },
     ]
     vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: [{ id: 'ver-draft', study_id: 'study-1', version_number: '1', status: 'draft', created_at: 'x' }] })
       if (url === '/designer/studies/study-1/forms') return Promise.resolve({ data: forms })
       if (url === '/designer/studies/study-1/codelists') return Promise.resolve({ data: [] })
       if (url === '/designer/forms/form-1') return Promise.resolve({ data: FORM_DETAIL })
@@ -131,5 +135,129 @@ describe('FormBuilderPage (dnd)', () => {
       '/designer/forms/form-1/dependencies',
       { depends_on_form_definition_id: 'form-2', dependency_type: 'prerequisite', condition_expression: null },
     ))
+  })
+
+  it('opens form settings in a right-side drawer and exposes grid layout controls', async () => {
+    mockBase()
+    renderPage(<FormBuilderPage studyId="study-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /VITALS — Vitals/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Form settings' }))
+
+    expect(screen.getByRole('dialog', { name: 'Form settings' })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Form type'), { target: { value: 'grid' } })
+    expect(screen.getByLabelText('Rows')).toBeInTheDocument()
+    expect(screen.getByLabelText('Columns')).toBeInTheDocument()
+    expect(screen.getByLabelText('Domain')).toBeInTheDocument()
+    expect(screen.getByLabelText('Label')).toBeInTheDocument()
+    const columns = screen.getByLabelText('Columns')
+    columns.focus()
+    fireEvent.change(columns, { target: { value: '4' } })
+    await waitFor(() => expect(columns).toHaveFocus())
+  })
+
+  it('opens field settings in a right-side drawer', async () => {
+    const detail = {
+      ...FORM_DETAIL,
+      show_variable_name: true,
+      sections: [{
+        id: 'sec-1', name: 'General', label: 'General', display_order: 1,
+        fields: [{ id: 'fld-1', label: 'Height', text_align: 'left', variable_name: 'HEIGHT', control_type: 'float', data_type: 'float', is_required: false, display_order: 1 }],
+      }],
+    }
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: [{ id: 'ver-draft', study_id: 'study-1', version_number: '1', status: 'draft', created_at: 'x' }] })
+      if (url === '/designer/studies/study-1/forms') return Promise.resolve({ data: FORMS })
+      if (url === '/designer/studies/study-1/codelists') return Promise.resolve({ data: [] })
+      if (url === '/designer/forms/form-1') return Promise.resolve({ data: detail })
+      if (url === '/designer/forms/form-1/dependencies') return Promise.resolve({ data: [] })
+      return Promise.resolve({ data: [] })
+    })
+    renderPage(<FormBuilderPage studyId="study-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /VITALS — Vitals/ }))
+    fireEvent.click((await screen.findByText('Height')).closest('button')!)
+
+    expect(screen.getByRole('dialog', { name: 'Field settings' })).toBeInTheDocument()
+    expect(screen.getByLabelText('CRF ID')).toBeInTheDocument()
+    expect(screen.getByLabelText('ODM ID')).toBeInTheDocument()
+  })
+
+  it('shows each field type as its corresponding widget in the builder', async () => {
+    const detail = {
+      ...FORM_DETAIL,
+      sections: [{
+        id: 'sec-1', name: 'General', label: 'General', display_order: 1,
+        fields: [
+          { id: 'notes', label: 'Notes', text_align: 'left', variable_name: 'NOTES', control_type: 'textarea', data_type: 'string', is_required: false, display_order: 1 },
+          { id: 'visit-date', label: 'Visit date', text_align: 'left', variable_name: 'VDATE', control_type: 'date', data_type: 'date', is_required: false, display_order: 2 },
+          { id: 'score', label: 'Score', text_align: 'left', variable_name: 'SCORE', control_type: 'slider', data_type: 'float', is_required: false, display_order: 3 },
+          { id: 'location', label: 'Location', text_align: 'left', variable_name: 'LOC', control_type: 'body_image', data_type: 'string', is_required: false, display_order: 4 },
+        ],
+      }],
+    }
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: [{ id: 'ver-draft', study_id: 'study-1', version_number: '1', status: 'draft', created_at: 'x' }] })
+      if (url === '/designer/studies/study-1/forms') return Promise.resolve({ data: FORMS })
+      if (url === '/designer/studies/study-1/codelists') return Promise.resolve({ data: [] })
+      if (url === '/designer/forms/form-1') return Promise.resolve({ data: detail })
+      if (url === '/designer/forms/form-1/dependencies') return Promise.resolve({ data: [] })
+      return Promise.resolve({ data: [] })
+    })
+    renderPage(<FormBuilderPage studyId="study-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /VITALS — Vitals/ }))
+    expect(await screen.findByLabelText('Notes preview')).toBeDisabled()
+    expect(screen.getByLabelText('Visit date preview')).toHaveAttribute('type', 'date')
+    expect(screen.getByLabelText('Score preview')).toHaveAttribute('type', 'range')
+    expect(screen.getByRole('img', { name: 'Body image preview' })).toBeInTheDocument()
+  })
+
+  it('reviews published form and field settings in the normal builder without authoring controls', async () => {
+    localStorage.setItem('designer:selected-version:study-1', 'ver-pub')
+    const detail = {
+      ...FORM_DETAIL,
+      form_type: 'grid',
+      access_type: 'restricted_edit',
+      domain: 'VS',
+      label: 'Vital Signs',
+      grid_rows: 3,
+      grid_columns: 2,
+      sections: [{
+        id: 'sec-1', name: 'General', label: 'General', display_order: 1,
+        fields: [{ id: 'height', label: 'Height', text_align: 'left', variable_name: 'HEIGHT', control_type: 'float', data_type: 'float', is_required: false, display_order: 1 }],
+      }],
+    }
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: [
+        { id: 'ver-draft', study_id: 'study-1', version_number: '2', status: 'draft', created_at: '2024-02-01' },
+        { id: 'ver-pub', study_id: 'study-1', version_number: '1', status: 'published', created_at: '2024-01-01' },
+      ] })
+      if (url === '/designer/studies/study-1/forms') return Promise.resolve({ data: FORMS })
+      if (url === '/designer/studies/study-1/codelists') return Promise.resolve({ data: [] })
+      if (url === '/designer/forms/form-1') return Promise.resolve({ data: detail })
+      if (url === '/designer/forms/form-1/dependencies') return Promise.resolve({ data: [] })
+      return Promise.resolve({ data: [] })
+    })
+
+    renderPage(<FormBuilderPage studyId="study-1" />)
+
+    expect(await screen.findByText('Viewing published version 1. This design is read-only.')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: /VITALS — Vitals/ }))
+    expect(screen.queryByRole('button', { name: 'Add form' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add section' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reorder Height' })).not.toBeInTheDocument()
+
+    fireEvent.click((await screen.findByText('Height')).closest('button')!)
+    expect(screen.getByRole('dialog', { name: 'Field settings' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Variable name')).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Save field' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'View form settings' }))
+    expect(screen.getByRole('dialog', { name: 'Form settings' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Form name')).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Save form settings' })).not.toBeInTheDocument()
+    expect(api.get).toHaveBeenCalledWith('/designer/studies/study-1/forms', { params: { study_version_id: 'ver-pub' } })
   })
 })

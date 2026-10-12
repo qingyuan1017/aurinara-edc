@@ -31,7 +31,11 @@ vi.mock('@tanstack/react-router', () => ({
       : ''
     return <a href={`${to}${query}`} data-preserved-search={JSON.stringify(preservedSearch)} {...props}>{children}</a>
   },
-  useLocation: () => ({ pathname: '/subjects/subject-1', search: { filter: 'active', page: 2 }, hash: '' }),
+  useLocation: () => ({
+    pathname: window.location.pathname === '/' ? '/subjects/subject-1' : window.location.pathname,
+    search: { filter: 'active', page: 2 },
+    hash: '',
+  }),
 }))
 
 function createMemoryThemeStorage(initial: 'light' | 'dark' | 'system' = 'system'): ThemeStorageAdapter {
@@ -50,6 +54,7 @@ function renderWithQuery(ui: React.ReactNode) {
 
 afterEach(() => {
   useStudyContext.getState().clear()
+  localStorage.removeItem('edc-study-context')
   document.documentElement.className = ''
   document.documentElement.removeAttribute('data-theme')
   document.documentElement.removeAttribute('data-theme-mode')
@@ -97,11 +102,25 @@ describe('AppHeader controls', () => {
   })
 
   it('preserves route search values in breadcrumb parent links', () => {
-    render(<Breadcrumbs />)
+    renderWithQuery(<Breadcrumbs />)
 
     const parentLink = screen.getByRole('link', { name: 'Subjects' })
     expect(parentLink).toHaveAttribute('href', '/subjects?filter=active&page=2')
     expect(parentLink).toHaveAttribute('data-preserved-search', JSON.stringify({ filter: 'active', page: 2 }))
+  })
+
+  it('resolves subject and form breadcrumb labels from clinical records', async () => {
+    window.history.replaceState({}, '', '/subjects/subject-1/forms/form-1')
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: { form_name: 'Vital Signs', subject_number: '101-0001' },
+    } as never)
+
+    renderWithQuery(<Breadcrumbs />)
+
+    expect(await screen.findByRole('link', { name: 'Subject 101-0001' })).toHaveAttribute('href', '/subjects/subject-1/casebook?filter=active&page=2')
+    expect(screen.getByText('Form Vital Signs')).toBeInTheDocument()
+    expect(screen.queryByText('Forms')).not.toBeInTheDocument()
+    expect(screen.queryByText(/subject-1|form-1/)).not.toBeInTheDocument()
   })
 
   it('switches theme presentation without changing the route context', async () => {
@@ -175,5 +194,8 @@ describe('study and site selectors', () => {
 
     await user.selectOptions(site, 'site-1')
     expect(useStudyContext.getState()).toMatchObject({ selectedStudyId: 'study-1', selectedSiteId: 'site-1' })
+    useStudyContext.getState().setStudy('study-1')
+    expect(useStudyContext.getState()).toMatchObject({ selectedStudyId: 'study-1', selectedSiteId: 'site-1' })
+    expect(localStorage.getItem('edc-study-context')).toContain('site-1')
   })
 })

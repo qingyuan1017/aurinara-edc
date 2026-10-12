@@ -1,16 +1,9 @@
-﻿import { useQuery } from '@tanstack/react-query'
+import { createElement, type ReactNode, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ErrorState, LoadingState, PageContainer } from '@/components/patterns'
 
-/**
- * A Designer draft version resolved from the operational study-version list.
- *
- * Several designer definition surfaces (subject phases, visits, arms, CRF
- * access, raw-data variables, coding settings, schedule of assessment) are
- * authored against a specific Design_Version and are only mutable while that
- * version is a draft. The frontend resolves the open draft from the version
- * list the operational EDC surface still exposes at
- * `GET /studies/{studyId}/versions`.
- */
 export interface StudyVersionSummary {
   id: string
   study_id: string
@@ -19,80 +12,86 @@ export interface StudyVersionSummary {
   created_at: string
 }
 
-/** Extract a user-facing message from an Axios/API error envelope. */
+export interface DesignVersionSelection {
+  version: StudyVersionSummary
+  isReadOnly: boolean
+}
+
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message
   const response = (error as { response?: { data?: { detail?: string; error?: { message?: string } } } })?.response
   return response?.data?.error?.message ?? response?.data?.detail ?? fallback
 }
 
-/**
- * Resolve the open draft version for a study.
- *
- * Returns the query (for loading/error states) plus the resolved draft id.
- * When no draft exists, `draftVersionId` is `null` and the caller should
- * prompt the user to create an amendment before authoring definitions.
- */
 export function useDraftVersion(studyId: string) {
   const query = useQuery({
     queryKey: ['study-versions', studyId],
     queryFn: async () => (await api.get<StudyVersionSummary[]>(`/studies/${studyId}/versions`)).data,
   })
-
-  const versions = query.data ?? []
+  const versions = Array.isArray(query.data) ? query.data : []
   const draft = versions.find((version) => version.status === 'draft')
-
-  return {
-    query,
-    versions,
-    draftVersionId: draft?.id ?? null,
-    draftVersionNumber: draft?.version_number ?? null,
-  }
+  return { query, versions, draftVersionId: draft?.id ?? null, draftVersionNumber: draft?.version_number ?? null }
 }
 
-import { createElement, type ReactNode } from 'react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ErrorState, LoadingState, PageContainer } from '@/components/patterns'
-
-/**
- * Render guard for version-scoped designer pages.
- *
- * Resolves the open draft version and renders `children(draftVersionId)` only
- * when a draft exists. Loading, error, and "no open draft" states are handled
- * uniformly so each resource page can focus on its own form.
- */
+/** Selects the active Designer version; published selections are read-only. */
 export function DraftGate({
   studyId,
   children,
 }: {
   studyId: string
-  children: (draftVersionId: string) => ReactNode
+  children: (versionId: string, selection: DesignVersionSelection) => ReactNode
 }) {
-  const { query, draftVersionId } = useDraftVersion(studyId)
+  const { query, versions, draftVersionId } = useDraftVersion(studyId)
+  const storageKey = `designer:selected-version:${studyId}`
+  const [selectedId, setSelectedId] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('design_version_id')
+        ?? localStorage.getItem(storageKey)
+        ?? ''
+    } catch { return '' }
+  })
+  const defaultVersion = versions.find((version) => version.id === draftVersionId)
+    ?? [...versions].sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+  const selectedVersion = versions.find((version) => version.id === selectedId) ?? defaultVersion
 
-  if (query.isLoading) return createElement(PageContainer, null, createElement(LoadingState, { label: 'draft version' }))
-  if (query.isError) {
-    return createElement(
-      PageContainer,
-      null,
-      createElement(ErrorState, { message: 'Unable to resolve the study draft version.', onRetry: () => void query.refetch() }),
-    )
+  useEffect(() => {
+    if (selectedVersion) {
+      try { localStorage.setItem(storageKey, selectedVersion.id) } catch { /* optional browser storage */ }
+    }
+  }, [selectedVersion, storageKey])
+
+  if (query.isLoading) return createElement(PageContainer, null, createElement(LoadingState, { label: 'design version' }))
+  if (query.isError) return createElement(PageContainer, null, createElement(ErrorState, { message: 'Unable to resolve the study design versions.', onRetry: () => void query.refetch() }))
+  if (!selectedVersion) return createElement(PageContainer, null, createElement(Alert, null, createElement(AlertDescription, null, 'This study has no design versions. Create an initial draft on the Study versioning page.')))
+
+  const isReadOnly = selectedVersion.status !== 'draft'
+  const changeVersion = (versionId: string) => {
+    setSelectedId(versionId)
+    try { localStorage.setItem(storageKey, versionId) } catch { /* optional browser storage */ }
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.set('design_version_id', versionId)
+      window.history.replaceState(window.history.state, '', url)
+    } catch { /* optional browser history */ }
   }
-  if (!draftVersionId) {
-    return createElement(
-      PageContainer,
-      null,
-      createElement(
-        Alert,
-        null,
-        createElement(
-          AlertDescription,
-          null,
-          'This study has no open draft version. Create an amendment on the Study versioning page before authoring definitions.',
-        ),
+
+  return createElement(
+    'div',
+    null,
+    createElement(
+      'div',
+      { className: 'mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3' },
+      createElement('div', null,
+        createElement('p', { className: 'text-sm font-medium' }, 'Design version'),
+        createElement('p', { className: 'text-xs text-muted-foreground' }, isReadOnly ? 'Published versions are read-only.' : 'Current editable draft.'),
       ),
-    )
-  }
-
-  return createElement('div', null, children(draftVersionId))
+      createElement(
+        'select',
+        { 'aria-label': 'Design version', className: 'h-9 min-w-48 rounded-md border bg-background px-3 text-sm', value: selectedVersion.id, onChange: (event: { target: { value: string } }) => changeVersion(event.target.value) },
+        versions.map((version) => createElement('option', { key: version.id, value: version.id }, `v${version.version_number} · ${version.status}${version.id === draftVersionId ? ' (current)' : ''}`)),
+      ),
+    ),
+    isReadOnly ? createElement(Alert, { className: 'mb-4' }, createElement(AlertDescription, null, `Viewing published version ${selectedVersion.version_number}. This design is read-only.`)) : null,
+    createElement('div', { key: selectedVersion.id }, children(selectedVersion.id, { version: selectedVersion, isReadOnly })),
+  )
 }

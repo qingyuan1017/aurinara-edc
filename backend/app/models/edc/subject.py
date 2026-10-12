@@ -70,6 +70,19 @@ class Subject(Base):
         comment="Binds the subject to a published study version",
     )
 
+    current_phase_definition_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("subject_phase_definitions.id", ondelete="RESTRICT"),
+        nullable=True,
+        comment="Current phase from the subject's published design version",
+    )
+    arm_definition_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("arm_definitions.id", ondelete="RESTRICT"),
+        nullable=True,
+        comment="Arm selected when the subject enters an arm phase",
+    )
+
     # Subject identifier
     subject_number: Mapped[str] = mapped_column(
         String(100), nullable=False, comment="Unique within the study"
@@ -106,6 +119,12 @@ class Subject(Base):
     study_version: Mapped["StudyVersion"] = relationship(  # noqa: F821
         "StudyVersion", lazy="selectin"
     )
+    current_phase_definition: Mapped["SubjectPhaseDefinition | None"] = relationship(  # noqa: F821
+        "SubjectPhaseDefinition", lazy="selectin"
+    )
+    arm_definition: Mapped["ArmDefinition | None"] = relationship(  # noqa: F821
+        "ArmDefinition", lazy="selectin"
+    )
     creator: Mapped["User"] = relationship(  # noqa: F821
         "User", foreign_keys=[created_by], lazy="selectin"
     )
@@ -119,6 +138,8 @@ class Subject(Base):
         Index("ix_subjects_site_id", "site_id"),
         Index("ix_subjects_status", "status"),
         Index("ix_subjects_study_version_id", "study_version_id"),
+        Index("ix_subjects_current_phase_definition_id", "current_phase_definition_id"),
+        Index("ix_subjects_arm_definition_id", "arm_definition_id"),
     )
 
     def __repr__(self) -> str:

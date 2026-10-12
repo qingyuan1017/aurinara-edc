@@ -41,16 +41,15 @@ import { EmptyState, ErrorState, LoadingState, PageContainer, PageHeader, Status
 
 interface Export {
   id: string
-  format: string
+  export_type: string
   status: string
-  filters: Record<string, string>
   created_at: string
   completed_at?: string
   file_size?: number
 }
 
 interface CreateExportPayload {
-  format: string
+  export_type: string
   filters: Record<string, string>
 }
 
@@ -105,9 +104,9 @@ export function ExportCenterPage({ studyId }: { studyId: string }) {
   })
 
   const columns = [
-    columnHelper.accessor('format', {
+    columnHelper.accessor('export_type', {
       header: 'Format',
-      cell: (info) => info.getValue().toUpperCase(),
+      cell: (info) => info.getValue()?.toUpperCase() ?? '—',
     }),
     columnHelper.accessor('status', {
       header: 'Status',
@@ -129,7 +128,7 @@ export function ExportCenterPage({ studyId }: { studyId: string }) {
       header: 'Download',
       cell: (info) => {
         const row = info.row.original
-        if (row.status === 'completed') {
+        if (row.status.toLowerCase() === 'completed') {
           return (
             <Button type="button" variant="link" size="sm" onClick={() => handleDownload(row.id)}>
               Download
@@ -228,7 +227,7 @@ export function ExportCenterPage({ studyId }: { studyId: string }) {
               event.preventDefault()
               const filters: Record<string, string> = {}
               if (siteFilter) filters.site_id = siteFilter
-              createMutation.mutate({ format, filters })
+              createMutation.mutate({ export_type: format, filters })
             }}
             className="space-y-4"
           >
@@ -240,7 +239,7 @@ export function ExportCenterPage({ studyId }: { studyId: string }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="csv">CSV</SelectItem>
-                  <SelectItem value="sas">SAS</SelectItem>
+                  <SelectItem value="sas_xpt">SAS</SelectItem>
                   <SelectItem value="json">JSON</SelectItem>
                   <SelectItem value="odm_xml">ODM XML</SelectItem>
                 </SelectContent>

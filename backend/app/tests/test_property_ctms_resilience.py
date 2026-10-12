@@ -211,7 +211,11 @@ async def _run_edc_workflow(
             created_by=user_id,
             created_at=datetime(2024, 1, 1, tzinfo=UTC),
         )
-        subject_service = SubjectService()
+        design_service = MagicMock()
+        design_service.get_schedule_of_assessment = AsyncMock(
+            return_value=SimpleNamespace(entries=())
+        )
+        subject_service = SubjectService(design_service=design_service)
         for target_status in lifecycle_path:
             await subject_service.transition_status(
                 AsyncMock(), subject, target_status, user_id

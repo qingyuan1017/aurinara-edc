@@ -28,7 +28,7 @@ export function AppShell() {
   const canReadCTMS = usePermission(PERMISSIONS.CTMS_OPERATIONAL_DATA_READ)
   const pvState = usePVCapabilityState()
   const canReadPV = usePermission(PERMISSIONS.PV_SAFETY_CASE_READ)
-  const { selectedStudyId, selectedSiteId } = useStudyContext()
+  const { selectedStudyId, selectedSiteId, clear: clearStudyContext } = useStudyContext()
   const setModule = useModuleStore((s) => s.setModule)
   const pathname = useLocation().pathname
   const navigate = useNavigate()
@@ -53,6 +53,7 @@ export function AppShell() {
 
   const handleLogout = async () => {
     await logout()
+    clearStudyContext()
     navigate({ to: '/login' })
   }
 

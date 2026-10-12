@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FormActions, LoadingState, PageContainer, PageHeader } from '@/components/patterns'
 import { cn } from '@/lib/utils'
 import { DraftGate, getApiErrorMessage } from './shared'
+import { buildVisitHierarchy, flattenSelectableVisits } from './visitHierarchy'
 
 interface FormDefinitionSummary {
   id: string
@@ -45,9 +46,9 @@ function isNotFound(error: unknown): boolean {
   return (error as { response?: { status?: number } })?.response?.status === 404
 }
 
-function ScheduleOfAssessmentEditor({ studyId, versionId }: { studyId: string; versionId: string }) {
+function ScheduleOfAssessmentEditor({ studyId, versionId, readOnly }: { studyId: string; versionId: string; readOnly: boolean }) {
   const client = useQueryClient()
-  const canConfigure = usePermission(PERMISSIONS.DESIGNER_SOA_CONFIGURE, studyId)
+  const canConfigure = usePermission(PERMISSIONS.DESIGNER_SOA_CONFIGURE, studyId) && !readOnly
 
   const [cells, setCells] = useState<CellSet>(new Set())
   const [procedureRows, setProcedureRows] = useState<ProcedureRow[]>([])
@@ -74,14 +75,16 @@ function ScheduleOfAssessmentEditor({ studyId, versionId }: { studyId: string; v
   })
   const formsQuery = useQuery({
     queryKey: ['form-definitions', studyId],
-    queryFn: async () => (await api.get<FormDefinitionSummary[]>(`/designer/studies/${studyId}/forms`)).data,
+    queryFn: async () => (await api.get<FormDefinitionSummary[]>(`/designer/studies/${studyId}/forms`, { params: { study_version_id: versionId } })).data,
   })
 
-  // Columns: visits (incl. cycle-type), ordered deterministically.
-  const visits = useMemo(
-    () => [...(visitsQuery.data ?? [])].sort((a, b) => a.display_order - b.display_order || a.id.localeCompare(b.id)),
+  // Sort each hierarchy level independently. Containers do not become columns,
+  // but their visit descendants occupy the container's position in the matrix.
+  const visitColumns = useMemo(
+    () => flattenSelectableVisits(buildVisitHierarchy(visitsQuery.data ?? [])),
     [visitsQuery.data],
   )
+  const visits = useMemo(() => visitColumns.map((column) => column.visit), [visitColumns])
   // Form rows ordered by form display_order, tie by id.
   const forms = useMemo(
     () => [...(formsQuery.data ?? [])].sort((a, b) => a.display_order - b.display_order || a.id.localeCompare(b.id)),
@@ -228,7 +231,7 @@ function ScheduleOfAssessmentEditor({ studyId, versionId }: { studyId: string; v
     <PageContainer wide>
       <PageHeader
         title="Schedule of assessment"
-        description="Toggle each form or procedure against the visits (and cycles) where it is collected for the current draft version."
+        description="Toggle each form or procedure against standalone visits and cycle-owned child visits. Folder and cycle containers are intentionally excluded."
         actions={canConfigure ? <Button type="button" variant="outline" onClick={addProcedureRow}>Add procedure row</Button> : null}
       />
       {message ? <Alert variant="success" className="mb-4"><AlertDescription>{message}</AlertDescription></Alert> : null}
@@ -251,16 +254,15 @@ function ScheduleOfAssessmentEditor({ studyId, versionId }: { studyId: string; v
                       <th scope="col" className="sticky left-0 top-0 z-30 min-w-[14rem] border-b border-r bg-background p-2 text-left font-medium">
                         Form / procedure
                       </th>
-                      {visits.map((visit) => (
+                      {visitColumns.map(({ visit, parentName }) => (
                         <th
                           key={visit.id}
                           scope="col"
                           className="sticky top-0 z-20 min-w-[6rem] border-b bg-background p-2 text-center font-medium"
                         >
                           <span className="block">{visit.visit_number} · {visit.name}</span>
-                          {visit.visit_type === 'cycle' ? (
-                            <span className="mt-1 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">cycle</span>
-                          ) : null}
+                          {parentName ? <span className="block text-[10px] font-normal text-muted-foreground">{parentName}</span> : null}
+                          {visit.category ? <span className="mt-1 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">{visit.category.replace('_', ' ')}</span> : null}
                         </th>
                       ))}
                     </tr>
@@ -370,7 +372,7 @@ export function ScheduleOfAssessmentPage({ studyId }: { studyId: string }) {
   return (
     <PermissionGuard permission={PERMISSIONS.DESIGNER_SOA_READ} studyId={studyId}>
       <DraftGate studyId={studyId}>
-        {(versionId) => <ScheduleOfAssessmentEditor studyId={studyId} versionId={versionId} />}
+        {(versionId, selection) => <ScheduleOfAssessmentEditor studyId={studyId} versionId={versionId} readOnly={selection.isReadOnly} />}
       </DraftGate>
     </PermissionGuard>
   )

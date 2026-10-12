@@ -37,6 +37,7 @@ from app.core.database import Base
 from app.models.designer.form_metadata import JSONBType
 
 if TYPE_CHECKING:  # avoid a runtime import cycle; the registry resolves by string
+    from app.models.designer.form_metadata import FieldDefinition
     from app.models.designer.study_version import StudyVersion
 
 
@@ -55,6 +56,15 @@ class RawDataVariableSetting(Base):
         nullable=False,
     )
 
+    # Optional field binding. Legacy/free-form variables remain unbound, while
+    # generated form-dataset variables use one configuration row per field.
+    field_definition_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("field_definitions.id", ondelete="CASCADE"),
+        nullable=True,
+        unique=True,
+    )
+
     # Variable identity and type (R4.7)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     data_type: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -67,6 +77,9 @@ class RawDataVariableSetting(Base):
     suffix: Mapped[str | None] = mapped_column(
         String(50), nullable=True, comment="suffix for special variable types"
     )
+    year_suffix: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    month_suffix: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    day_suffix: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Free-form, type-specific attributes (R4.7)
     attributes: Mapped[dict[str, Any]] = mapped_column(JSONBType, nullable=False, default=dict)
@@ -84,11 +97,18 @@ class RawDataVariableSetting(Base):
 
     # Relationship (resolved by string against the shared ORM registry)
     design_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
+    field_definition: Mapped[FieldDefinition | None] = relationship(
+        "FieldDefinition", lazy="selectin"
+    )
 
     __table_args__ = (
         Index(
             "ix_raw_data_variable_settings_design_version_id",
             "design_version_id",
+        ),
+        Index(
+            "ix_raw_data_variable_settings_field_definition_id",
+            "field_definition_id",
         ),
     )
 

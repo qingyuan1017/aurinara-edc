@@ -52,7 +52,13 @@ class FieldDefinitionView(FrozenView):
     id: UUID
     form_section_id: UUID
     label: str
+    question: str | None = None
+    caption: str | None = None
+    text_align: str = "left"
     variable_name: str
+    record_id: str | None = None
+    crf_id: str | None = None
+    odm_id: str | None = None
     control_type: str
     data_type: str
     display_order: int
@@ -81,6 +87,18 @@ class FormDefinitionView(FrozenView):
     form_code: str
     display_order: int
     is_repeating: bool
+    form_type: str = "simple"
+    access_type: str = "open_access"
+    domain: str | None = None
+    label: str | None = None
+    grid_rows: int | None = None
+    grid_columns: int | None = None
+    header_name: str | None = None
+    detail_name: str | None = None
+    detail_type: str | None = None
+    show_variable_name: bool = False
+    show_crf_id: bool = False
+    show_odm_id: bool = False
     fields: tuple[FieldDefinitionView, ...] = Field(default_factory=tuple)
 
 
@@ -102,6 +120,10 @@ class VisitDefinitionView(FrozenView):
     name: str
     visit_number: int
     visit_type: str
+    definition_kind: str = "visit"
+    parent_folder_id: UUID | None = None
+    category: str | None = None
+    subtype: str | None = None
     target_day: int | None = None
     window_before: int | None = None
     window_after: int | None = None
@@ -115,8 +137,8 @@ class VisitDefinitionView(FrozenView):
 class ArmDefinitionView(FrozenView):
     """Immutable view of a published arm/treatment-group definition.
 
-    ``visit_definition_ids`` lists the arm's member visits (plain visits and
-    cycles), expressing which visits occur in the arm.
+    ``visit_definition_ids`` lists the arm's real member visits (standalone and
+    cycle-owned leaves), expressing which visits occur in the arm.
     """
 
     id: UUID
@@ -176,7 +198,9 @@ class SubjectPhaseDefinitionView(FrozenView):
     id: UUID
     design_version_id: UUID
     name: str
+    phase_type: str
     display_order: int
+    visit_definition_ids: tuple[UUID, ...] = Field(default_factory=tuple)
 
 
 class SubjectPhaseTransitionView(FrozenView):
@@ -246,6 +270,10 @@ class RawDataVariableSettingView(FrozenView):
     attributes: dict[str, Any] = Field(default_factory=dict)
     label: str | None = None
     suffix: str | None = None
+    field_definition_id: UUID | None = None
+    year_suffix: str | None = None
+    month_suffix: str | None = None
+    day_suffix: str | None = None
 
 
 class CodingSettingView(FrozenView):

@@ -76,6 +76,20 @@ class VisitDefinition(Base):
         server_default="visit",
         comment="discriminator: visit | cycle (also scheduled/unscheduled/screening)",
     )
+    definition_kind: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="visit",
+        server_default="visit",
+        comment="visit | folder | cycle",
+    )
+    parent_folder_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("visit_definitions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    subtype: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Cycle-only metadata (nullable for all rows; only meaningful when
     # ``visit_type == 'cycle'``). A plain visit never sets these; the service
@@ -114,10 +128,18 @@ class VisitDefinition(Base):
 
     # Relationships
     study_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
+    parent_folder: Mapped[VisitDefinition | None] = relationship(
+        "VisitDefinition",
+        remote_side="VisitDefinition.id",
+        foreign_keys=[parent_folder_id],
+        lazy="selectin",
+    )
 
     __table_args__ = (
         Index("ix_visit_definitions_study_version_id", "study_version_id"),
         Index("ix_visit_definitions_visit_type", "visit_type"),
+        Index("ix_visit_definitions_definition_kind", "definition_kind"),
+        Index("ix_visit_definitions_parent_folder_id", "parent_folder_id"),
     )
 
     def __repr__(self) -> str:

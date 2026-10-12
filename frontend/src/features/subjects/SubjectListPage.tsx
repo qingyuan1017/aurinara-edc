@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { createColumnHelper, type PaginationState } from '@tanstack/react-table'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,8 @@ export interface Subject {
   site_id: string
   site_name?: string
   status: string
+  current_phase_name?: string | null
+  current_phase_type?: string | null
   created_at: string
 }
 
@@ -32,16 +35,17 @@ const columns = [
   columnHelper.accessor('subject_number', {
     header: 'Subject #',
     cell: (info) => (
-      <a href={`/subjects/${info.row.original.id}/casebook`} className="font-medium text-primary hover:underline">
+      <Link to="/subjects/$subjectId/casebook" params={{ subjectId: info.row.original.id }} className="font-medium text-primary hover:underline">
         {info.getValue()}
-      </a>
+      </Link>
     ),
   }),
   columnHelper.accessor('site_name', {
     header: 'Site',
     cell: (info) => info.getValue() ?? info.row.original.site_id,
   }),
-  columnHelper.accessor('status', {
+  columnHelper.accessor((subject) => subject.current_phase_name ?? subject.status, {
+    id: 'status',
     header: 'Status',
     cell: (info) => <StatusBadge status={info.getValue()} label="Subject status" />,
   }),

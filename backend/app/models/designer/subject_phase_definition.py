@@ -24,11 +24,13 @@ Conventions (matching the designer/edc models):
 
 from __future__ import annotations
 
+import enum
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -43,6 +45,46 @@ from app.core.database import Base
 
 if TYPE_CHECKING:  # avoid a runtime import cycle; the registry resolves by string
     from app.models.designer.study_version import StudyVersion
+    from app.models.designer.visit import VisitDefinition
+
+
+class SubjectPhaseType(enum.StrEnum):
+    """Operational behavior of a configured subject phase."""
+
+    registered = "registered"
+    screen_failure = "screen_failure"
+    common = "common"
+    complete = "complete"
+    arm = "arm"
+
+
+class SubjectPhaseVisitDefinition(Base):
+    """Ordered association between a subject phase and a protocol visit."""
+
+    __tablename__ = "subject_phase_visit_definitions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    subject_phase_definition_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("subject_phase_definitions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    visit_definition_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("visit_definitions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "subject_phase_definition_id",
+            "visit_definition_id",
+            name="uq_subject_phase_visit",
+        ),
+        Index("ix_subject_phase_visit_phase_id", "subject_phase_definition_id"),
+        Index("ix_subject_phase_visit_visit_id", "visit_definition_id"),
+    )
 
 
 class SubjectPhaseDefinition(Base):
@@ -69,6 +111,14 @@ class SubjectPhaseDefinition(Base):
     # Phase name — 1-100 characters, unique within the owning design version (R3.1, R3.2)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
 
+    # Controls visit association and operational subject behavior.
+    phase_type: Mapped[SubjectPhaseType] = mapped_column(
+        String(30),
+        nullable=False,
+        default=SubjectPhaseType.common,
+        server_default=SubjectPhaseType.common.value,
+    )
+
     # Presentation order — 1-999 (R3.1)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -76,9 +126,7 @@ class SubjectPhaseDefinition(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Soft-delete
     deleted_at: Mapped[datetime | None] = mapped_column(
@@ -86,11 +134,24 @@ class SubjectPhaseDefinition(Base):
     )
 
     # Relationship (resolved by string against the shared ORM registry)
-    design_version: Mapped[StudyVersion] = relationship(
-        "StudyVersion", lazy="selectin"
+    design_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
+    visits: Mapped[list[VisitDefinition]] = relationship(
+        "VisitDefinition",
+        secondary="subject_phase_visit_definitions",
+        lazy="selectin",
+        order_by="SubjectPhaseVisitDefinition.display_order",
     )
 
+    @property
+    def visit_definition_ids(self) -> list[uuid.UUID]:
+        """Return linked protocol visits in their configured order."""
+        return [visit.id for visit in self.visits]
+
     __table_args__ = (
+        CheckConstraint(
+            "phase_type IN ('registered', 'screen_failure', 'common', 'complete', 'arm')",
+            name="ck_subject_phase_definition_type",
+        ),
         UniqueConstraint(
             "design_version_id",
             "name",
@@ -106,5 +167,5 @@ class SubjectPhaseDefinition(Base):
         return (
             f"<SubjectPhaseDefinition(id={self.id}, "
             f"design_version_id={self.design_version_id}, name={self.name!r}, "
-            f"display_order={self.display_order})>"
+            f"phase_type={self.phase_type!r}, display_order={self.display_order})>"
         )

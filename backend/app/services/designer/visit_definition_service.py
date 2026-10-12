@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit_service
@@ -37,7 +37,12 @@ from app.core.ctms import Module
 from app.core.exceptions import ValidationError
 from app.models.designer.study_version import StudyVersion
 from app.models.designer.visit import VisitDefinition
-from app.schemas.designer.visit import VisitDefinitionCreate
+from app.models.designer.visit_dependency import VisitDefinitionDependency
+from app.schemas.designer.visit import (
+    VisitDefinitionCreate,
+    VisitDefinitionKind,
+    VisitDefinitionUpdate,
+)
 from app.services.edc.study_version_service import study_version_service
 
 logger = logging.getLogger(__name__)
@@ -104,7 +109,7 @@ class VisitDefinitionService:
             ValidationError: If a non-cycle visit sets cycle metadata, or if the
                 repeat bounds are inverted; the error identifies the field.
         """
-        is_cycle = data.visit_type == "cycle"
+        is_cycle = data.definition_kind == VisitDefinitionKind.cycle or data.visit_type == "cycle"
         if not is_cycle and (
             data.repeat_min is not None
             or data.repeat_max is not None
@@ -128,12 +133,42 @@ class VisitDefinitionService:
                 },
             )
 
+    async def _next_container_number(self, session: AsyncSession, version_id: UUID) -> int:
+        result = await session.execute(
+            select(func.coalesce(func.max(VisitDefinition.visit_number), 0)).where(
+                VisitDefinition.study_version_id == version_id
+            )
+        )
+        return int(result.scalar_one()) + 1
+
+    async def _validate_parent_folder(
+        self,
+        session: AsyncSession,
+        *,
+        version_id: UUID,
+        parent_folder_id: UUID | None,
+    ) -> None:
+        if parent_folder_id is None:
+            return
+        parent = await session.get(VisitDefinition, parent_folder_id)
+        if (
+            parent is None
+            or parent.study_version_id != version_id
+            or parent.definition_kind != VisitDefinitionKind.folder
+        ):
+            raise ValidationError(
+                "parent_folder_id must reference a folder in the same design version",
+                details={"field": "parent_folder_id"},
+            )
+
     async def define_visit(
         self,
         session: AsyncSession,
         version: StudyVersion,
         data: VisitDefinitionCreate,
         actor_id: UUID,
+        *,
+        owning_cycle: VisitDefinition | None = None,
     ) -> VisitDefinition:
         """Define a visit on a draft Design_Version (Requirements 4.2, 4.3, 2.4).
 
@@ -153,17 +188,50 @@ class VisitDefinitionService:
         # Block metadata writes on a published version (Req 2.4).
         study_version_service.guard_mutable(version)
 
+        if data.definition_kind == VisitDefinitionKind.cycle_visit:
+            if (
+                owning_cycle is None
+                or owning_cycle.study_version_id != version.id
+                or owning_cycle.definition_kind != VisitDefinitionKind.cycle
+            ):
+                raise ValidationError(
+                    "A cycle visit must be created inside its owning cycle",
+                    details={"field": "definition_kind"},
+                )
+        elif owning_cycle is not None:
+            raise ValidationError(
+                "Only a cycle visit can be created inside a cycle",
+                details={"field": "definition_kind"},
+            )
+
         # Reject an inverted window before persisting anything (Req 4.3).
         self._validate_window(data)
 
         # Cycle-only metadata is accepted only for a cycle visit.
         self._validate_cycle_fields(data)
 
+        await self._validate_parent_folder(
+            session,
+            version_id=version.id,
+            parent_folder_id=data.parent_folder_id,
+        )
+
+        definition_kind = data.definition_kind
+        if data.visit_type == "cycle":
+            definition_kind = VisitDefinitionKind.cycle
+        visit_number = data.visit_number
+        if visit_number is None:
+            visit_number = await self._next_container_number(session, version.id)
+
         definition = VisitDefinition(
             study_version_id=version.id,
             name=data.name,
-            visit_number=data.visit_number,
-            visit_type=data.visit_type,
+            visit_number=visit_number,
+            visit_type=str(data.visit_type),
+            definition_kind=str(definition_kind),
+            parent_folder_id=data.parent_folder_id,
+            category=str(data.category) if data.category is not None else None,
+            subtype=str(data.subtype) if data.subtype is not None else None,
             target_day=data.target_day,
             window_before=data.window_before,
             window_after=data.window_after,
@@ -175,6 +243,16 @@ class VisitDefinitionService:
         )
         session.add(definition)
         await session.flush()  # Assign the id
+
+        if definition_kind == VisitDefinitionKind.cycle_visit:
+            session.add(
+                VisitDefinitionDependency(
+                    visit_definition_id=definition.id,
+                    depends_on_visit_definition_id=owning_cycle.id,
+                    dependency_type="cycle_member",
+                )
+            )
+            await session.flush()
 
         await audit_service.record(
             session,
@@ -195,6 +273,129 @@ class VisitDefinitionService:
             actor_id,
         )
         return definition
+
+    async def define_cycle_visit(
+        self,
+        session: AsyncSession,
+        version: StudyVersion,
+        cycle: VisitDefinition,
+        data: VisitDefinitionCreate,
+        actor_id: UUID,
+    ) -> VisitDefinition:
+        """Create a cycle-owned child visit and its membership edge atomically."""
+        if (
+            cycle.study_version_id != version.id
+            or cycle.definition_kind != VisitDefinitionKind.cycle
+        ):
+            raise ValidationError(
+                "Cycle visits can only be created inside a cycle from the same design version",
+                details={"field": "cycle_id"},
+            )
+        owned_data = VisitDefinitionCreate.model_validate(
+            data.model_dump()
+            | {
+                "definition_kind": VisitDefinitionKind.cycle_visit,
+                "parent_folder_id": None,
+                "member_visit_ids": [],
+            }
+        )
+        return await self.define_visit(
+            session,
+            version,
+            owned_data,
+            actor_id,
+            owning_cycle=cycle,
+        )
+
+    async def get_definition(self, session: AsyncSession, definition_id: UUID) -> VisitDefinition:
+        definition = await session.get(VisitDefinition, definition_id)
+        if definition is None:
+            from app.core.exceptions import NotFoundError
+
+            raise NotFoundError(
+                "Visit definition not found",
+                details={"visit_definition_id": str(definition_id)},
+            )
+        return definition
+
+    async def update_definition(
+        self,
+        session: AsyncSession,
+        version: StudyVersion,
+        definition: VisitDefinition,
+        data: VisitDefinitionUpdate,
+        actor_id: UUID,
+    ) -> VisitDefinition:
+        study_version_service.guard_mutable(version)
+        changes = data.model_dump(exclude_unset=True)
+        member_ids = changes.pop("member_visit_ids", None)
+        for enum_field in ("visit_type", "category", "subtype"):
+            if changes.get(enum_field) is not None:
+                changes[enum_field] = str(changes[enum_field])
+        if "parent_folder_id" in changes:
+            await self._validate_parent_folder(
+                session,
+                version_id=version.id,
+                parent_folder_id=changes["parent_folder_id"],
+            )
+        before = {key: getattr(definition, key) for key in changes}
+        for key, value in changes.items():
+            setattr(definition, key, value)
+
+        if (
+            definition.window_before is not None
+            and definition.window_after is not None
+            and -definition.window_before > definition.window_after
+        ):
+            raise ValidationError("Visit definition window is invalid")
+        if (
+            definition.repeat_min is not None
+            and definition.repeat_max is not None
+            and definition.repeat_min > definition.repeat_max
+        ):
+            raise ValidationError("repeat_min must not exceed repeat_max")
+        if member_ids is not None:
+            raise ValidationError(
+                "Cycle membership is read-only; create visits inside their owning cycle",
+                details={"field": "member_visit_ids"},
+            )
+        await session.flush()
+        await audit_service.record(
+            session,
+            entity_type="visit_definition",
+            entity_id=definition.id,
+            action="update",
+            module=Module.DESIGNER,
+            study_id=version.study_id,
+            actor_id=actor_id,
+            old_value=str(before),
+            new_value=str(
+                changes | ({"member_visit_ids": member_ids} if member_ids is not None else {})
+            ),
+        )
+        return definition
+
+    async def cycle_memberships(
+        self, session: AsyncSession, version_id: UUID
+    ) -> dict[UUID, list[UUID]]:
+        result = await session.execute(
+            select(
+                VisitDefinitionDependency.depends_on_visit_definition_id,
+                VisitDefinitionDependency.visit_definition_id,
+            )
+            .join(
+                VisitDefinition,
+                VisitDefinition.id == VisitDefinitionDependency.depends_on_visit_definition_id,
+            )
+            .where(
+                VisitDefinition.study_version_id == version_id,
+                VisitDefinitionDependency.dependency_type == "cycle_member",
+            )
+        )
+        memberships: dict[UUID, list[UUID]] = {}
+        for cycle_id, visit_id in result.all():
+            memberships.setdefault(cycle_id, []).append(visit_id)
+        return memberships
 
     async def list_definitions(
         self,

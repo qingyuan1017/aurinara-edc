@@ -84,8 +84,28 @@ class FormDefinition(Base):
         String(50), nullable=False, comment='e.g. "AE", "CM", "DM"'
     )
     display_order: Mapped[int] = mapped_column(Integer, nullable=False)
-    is_repeating: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
+    is_repeating: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    form_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="simple", server_default="simple"
+    )
+    access_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="open_access", server_default="open_access"
+    )
+    domain: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    grid_rows: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    grid_columns: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    header_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    detail_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    detail_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    show_variable_name: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    show_crf_id: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    show_odm_id: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
 
     # Timestamp
@@ -94,22 +114,15 @@ class FormDefinition(Base):
     )
 
     # Relationships
-    study_version: Mapped[StudyVersion] = relationship(
-        "StudyVersion", lazy="selectin"
-    )
+    study_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
     sections: Mapped[list[FormSection]] = relationship(
         "FormSection", back_populates="form_definition", lazy="selectin"
     )
 
-    __table_args__ = (
-        Index("ix_form_definitions_study_version_id", "study_version_id"),
-    )
+    __table_args__ = (Index("ix_form_definitions_study_version_id", "study_version_id"),)
 
     def __repr__(self) -> str:
-        return (
-            f"<FormDefinition(id={self.id}, form_code={self.form_code!r}, "
-            f"name={self.name!r})>"
-        )
+        return f"<FormDefinition(id={self.id}, form_code={self.form_code!r}, name={self.name!r})>"
 
 
 class FormSection(Base):
@@ -127,7 +140,18 @@ class FormSection(Base):
 
     # Section metadata
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    label: Mapped[str] = mapped_column(String(500), nullable=False, default="", server_default="")
     display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_label_only: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    output_to_dataset: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    help_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    access_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="open_access", server_default="open_access"
+    )
 
     # Relationships
     form_definition: Mapped[FormDefinition] = relationship(
@@ -137,9 +161,7 @@ class FormSection(Base):
         "FieldDefinition", back_populates="form_section", lazy="selectin"
     )
 
-    __table_args__ = (
-        Index("ix_form_sections_form_definition_id", "form_definition_id"),
-    )
+    __table_args__ = (Index("ix_form_sections_form_definition_id", "form_definition_id"),)
 
     def __repr__(self) -> str:
         return f"<FormSection(id={self.id}, name={self.name!r})>"
@@ -165,7 +187,15 @@ class FieldDefinition(Base):
 
     # Identity / presentation
     label: Mapped[str] = mapped_column(String(500), nullable=False)
+    question: Mapped[str | None] = mapped_column(Text, nullable=True)
+    caption: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    text_align: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="left", server_default="left"
+    )
     variable_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    record_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    crf_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    odm_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     control_type: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
@@ -196,21 +226,15 @@ class FieldDefinition(Base):
 
     # Behaviour flags
     is_read_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    is_calculated: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    is_calculated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     calculation_expression: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Ordering
     display_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Relationships
-    form_section: Mapped[FormSection] = relationship(
-        "FormSection", back_populates="fields"
-    )
-    codelist: Mapped[Codelist | None] = relationship(
-        "Codelist", lazy="selectin"
-    )
+    form_section: Mapped[FormSection] = relationship("FormSection", back_populates="fields")
+    codelist: Mapped[Codelist | None] = relationship("Codelist", lazy="selectin")
 
     __table_args__ = (
         Index("ix_field_definitions_form_section_id", "form_section_id"),

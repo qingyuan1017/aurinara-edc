@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { api } from '@/lib/api'
 import { PERMISSIONS, usePermission } from '@/lib/permissions'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -10,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { DataTableShell, ErrorState, LoadingState, PageContainer, PageHeader, StatusBadge } from '@/components/patterns'
+import { PublishDesignDialog } from './PublishDesignDialog'
 
 interface StudySummary {
   id: string
@@ -51,6 +53,7 @@ function formatDate(value?: string | null): string {
 export function StudyVersioningPage({ studyId }: { studyId: string }) {
   const queryClient = useQueryClient()
   const canCreate = usePermission(PERMISSIONS.DESIGNER_STUDY_VERSION_CREATE, studyId)
+  const canRead = usePermission(PERMISSIONS.DESIGNER_STUDY_VERSION_READ, studyId)
   const canConfigure = usePermission(PERMISSIONS.DESIGNER_STUDY_VERSION_AMEND, studyId)
   const canPublish = usePermission(PERMISSIONS.DESIGNER_VERSION_PUBLISH, studyId)
   const [showAmendmentForm, setShowAmendmentForm] = useState(false)
@@ -111,20 +114,6 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
     },
   })
 
-  const publish = useMutation({
-    mutationFn: (versionId: string) => api.post<StudyVersion>(`/designer/versions/${versionId}/publish`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['study-versions', studyId] })
-      queryClient.invalidateQueries({ queryKey: ['study', studyId] })
-      setMessage('Study version published. Its metadata is now read-only.')
-      setValidationError('')
-    },
-    onError: (error: unknown) => {
-      setValidationError(getApiErrorMessage(error, 'Could not publish the study version.'))
-      setMessage('')
-    },
-  })
-
   if (studyQuery.isLoading || versionsQuery.isLoading) return <PageContainer><LoadingState label="study versions" /></PageContainer>
   if (studyQuery.error || versionsQuery.error || !studyQuery.data) return <PageContainer><ErrorState message="Study versions are unavailable." /></PageContainer>
 
@@ -135,7 +124,7 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
       <PageHeader
         title="Study versioning"
         description={`${study.study_code} · ${study.title}${study.phase ? ` · Phase ${study.phase}` : ''}`}
-        breadcrumbs={<a href={`/studies/${studyId}`} className="text-primary hover:underline">← Back to study</a>}
+        breadcrumbs={<Link to="/studies/$studyId" params={{ studyId }} className="text-primary hover:underline">← Back to study</Link>}
         actions={canConfigure && latestPublished ? (
           <Button
             type="button"
@@ -196,7 +185,22 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
                   <TableCell>{source ? `v${source.version_number}` : version.amended_from_version_id ? 'Previous published version' : '—'}</TableCell>
                   <TableCell className="whitespace-nowrap">{formatDate(version.created_at)}</TableCell>
                   <TableCell className="whitespace-nowrap">{formatDate(version.published_at)}</TableCell>
-                  <TableCell>{canPublish && version.status === 'draft' ? <Button type="button" variant="link" size="sm" pending={publish.isPending} onClick={() => publish.mutate(version.id)}>{publish.isPending ? 'Publishing…' : 'Publish'}</Button> : version.status === 'published' ? <span className="text-sm text-muted-foreground">Read-only</span> : null}</TableCell>
+                  <TableCell>{canPublish && version.status === 'draft' ? (
+                    <PublishDesignDialog
+                      versionId={version.id}
+                      versionNumber={version.version_number}
+                      onPublished={() => {
+                        queryClient.invalidateQueries({ queryKey: ['study-versions', studyId] })
+                        queryClient.invalidateQueries({ queryKey: ['study', studyId] })
+                        setMessage('Study version published. Its metadata is now read-only.')
+                        setValidationError('')
+                      }}
+                    />
+                  ) : version.status === 'published' && canRead ? (
+                    <Button asChild type="button" variant="outline" size="sm">
+                      <Link to="/studies/$studyId/designer/forms" params={{ studyId }} search={{ design_version_id: version.id }}>View in Designer</Link>
+                    </Button>
+                  ) : version.status === 'published' ? <span className="text-sm text-muted-foreground">Read-only</span> : null}</TableCell>
                 </TableRow>
               })}</TableBody>
             </Table>
@@ -208,7 +212,7 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create study amendment</DialogTitle>
-            <DialogDescription>A new draft will be created from {latestPublished ? `published version ${latestPublished.version_number}` : 'the latest published version'}. Prior versions are retained.</DialogDescription>
+            <DialogDescription>A complete editable copy will be created from {latestPublished ? `published version ${latestPublished.version_number}` : 'the latest published version'}. Prior versions are retained.</DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); setValidationError(''); amendment.mutate() }}>
             <div className="space-y-2"><Label htmlFor="amendment-reason">Amendment reason</Label><Textarea id="amendment-reason" required minLength={1} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Describe the protocol or study configuration change." /></div>

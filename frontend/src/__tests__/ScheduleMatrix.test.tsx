@@ -30,8 +30,13 @@ const DRAFT_VERSIONS = [
 ]
 
 const VISITS = [
-  { id: 'visit-1', study_version_id: 'ver-draft', name: 'Baseline', visit_number: 1, visit_type: 'visit', target_day: 0, window_before: null, window_after: null, display_order: 1, is_required: true, created_at: 'x' },
-  { id: 'visit-2', study_version_id: 'ver-draft', name: 'Week 2', visit_number: 2, visit_type: 'visit', target_day: 14, window_before: null, window_after: null, display_order: 2, is_required: true, created_at: 'x' },
+  { id: 'visit-1', study_version_id: 'ver-draft', name: 'Baseline', visit_number: 1, visit_type: 'scheduled', definition_kind: 'visit', target_day: 0, window_before: null, window_after: null, display_order: 1, is_required: true, member_visit_ids: [], created_at: 'x' },
+  { id: 'visit-2', study_version_id: 'ver-draft', name: 'Week 2', visit_number: 2, visit_type: 'scheduled', definition_kind: 'visit', target_day: 14, window_before: null, window_after: null, display_order: 2, is_required: true, member_visit_ids: [], created_at: 'x' },
+  // Deliberately returned before its owner and with a display order that would
+  // otherwise place it after visit #4. Hierarchical sorting must keep it at #3.
+  { id: 'cycle-visit-1', study_version_id: 'ver-draft', name: 'Cycle day 8', visit_number: 8, visit_type: 'scheduled', definition_kind: 'cycle_visit', target_day: 8, window_before: null, window_after: null, display_order: 99, is_required: true, member_visit_ids: [], created_at: 'x' },
+  { id: 'cycle-1', study_version_id: 'ver-draft', name: 'Treatment cycle', visit_number: 3, visit_type: 'cycle', definition_kind: 'cycle', target_day: null, window_before: null, window_after: null, display_order: 3, is_required: false, member_visit_ids: ['cycle-visit-1'], created_at: 'x' },
+  { id: 'visit-4', study_version_id: 'ver-draft', name: 'Week 4', visit_number: 4, visit_type: 'scheduled', definition_kind: 'visit', target_day: 28, window_before: null, window_after: null, display_order: 4, is_required: true, member_visit_ids: [], created_at: 'x' },
 ]
 
 const FORMS = [
@@ -54,6 +59,8 @@ function mockBase(soa: unknown = { status: 404 }) {
 describe('ScheduleOfAssessmentPage (matrix)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    window.history.replaceState({}, '', window.location.pathname)
     seedPermissions(['designer.soa.read', 'designer.soa.configure'])
   })
 
@@ -72,6 +79,24 @@ describe('ScheduleOfAssessmentPage (matrix)', () => {
     ))
     const payload = vi.mocked(api.post).mock.calls[0][1] as { entries: Record<string, unknown>[] }
     expect(payload.entries.every((e) => !('cycle_definition_id' in e))).toBe(true)
+    expect(screen.getByRole('checkbox', { name: 'VITALS at Cycle day 8' })).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: 'VITALS at Treatment cycle' })).not.toBeInTheDocument()
+  })
+
+  it('keeps cycle-owned visits at the cycle hierarchy position between peer visits', async () => {
+    mockBase()
+
+    renderPage(<ScheduleOfAssessmentPage studyId="study-1" />)
+
+    await screen.findByRole('checkbox', { name: 'VITALS at Cycle day 8' })
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent)
+    expect(headers).toEqual([
+      'Form / procedure',
+      '1 · Baseline',
+      '2 · Week 2',
+      '8 · Cycle day 8Treatment cycle',
+      '4 · Week 4',
+    ])
   })
 
   it('a second toggle+save POSTs the full updated set again (replace contract)', async () => {

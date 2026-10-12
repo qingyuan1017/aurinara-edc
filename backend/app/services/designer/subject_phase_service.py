@@ -18,14 +18,20 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.audit import audit_service
 from app.core.ctms import Module
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
-from app.models.designer.subject_phase_definition import SubjectPhaseDefinition
+from app.models.designer.subject_phase_definition import (
+    SubjectPhaseDefinition,
+    SubjectPhaseType,
+    SubjectPhaseVisitDefinition,
+)
 from app.models.designer.subject_phase_transition import SubjectPhaseTransition
+from app.models.designer.visit import VisitDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +39,11 @@ _NAME_MIN_LENGTH = 1
 _NAME_MAX_LENGTH = 100
 _DISPLAY_ORDER_MIN = 1
 _DISPLAY_ORDER_MAX = 999
+_VISIT_PHASE_TYPES = {
+    SubjectPhaseType.registered,
+    SubjectPhaseType.screen_failure,
+    SubjectPhaseType.common,
+}
 
 
 class SubjectPhaseService:
@@ -45,6 +56,8 @@ class SubjectPhaseService:
         design_version_id: UUID,
         name: str,
         display_order: int,
+        phase_type: SubjectPhaseType = SubjectPhaseType.common,
+        visit_definition_ids: list[UUID] | None = None,
         actor_id: UUID | None = None,
     ) -> SubjectPhaseDefinition:
         """Persist a Subject_Phase_Definition within one Design_Version.
@@ -95,13 +108,20 @@ class SubjectPhaseService:
                 },
             )
 
+        phase_type = SubjectPhaseType(phase_type)
+        visit_ids = visit_definition_ids or []
+        self._validate_visit_membership(phase_type, visit_ids)
+
         phase = SubjectPhaseDefinition(
             design_version_id=design_version_id,
             name=normalized_name,
+            phase_type=phase_type,
             display_order=display_order,
         )
         session.add(phase)
         await session.flush()
+
+        await self._replace_visits(session, phase, visit_ids)
 
         await audit_service.record(
             session,
@@ -109,7 +129,11 @@ class SubjectPhaseService:
             entity_id=phase.id,
             action="create",
             module=Module.DESIGNER,
-            new_value=f"name={normalized_name}; display_order={display_order}",
+            new_value=(
+                f"name={normalized_name}; phase_type={phase_type}; "
+                f"display_order={display_order}; "
+                f"visit_definition_ids={[str(value) for value in visit_ids]}"
+            ),
             actor_id=actor_id,
         )
 
@@ -119,7 +143,7 @@ class SubjectPhaseService:
             design_version_id,
             normalized_name,
         )
-        return phase
+        return await self._get_live_phase(session, phase.id)
 
     async def list_phase_definitions(
         self,
@@ -133,6 +157,7 @@ class SubjectPhaseService:
                 SubjectPhaseDefinition.design_version_id == design_version_id,
                 SubjectPhaseDefinition.deleted_at.is_(None),
             )
+            .options(selectinload(SubjectPhaseDefinition.visits))
             .order_by(SubjectPhaseDefinition.display_order, SubjectPhaseDefinition.id)
         )
         return list(result.scalars().all())
@@ -148,10 +173,12 @@ class SubjectPhaseService:
     ) -> SubjectPhaseDefinition:
         """Fetch a live phase by id, raising ``NotFoundError`` if missing."""
         result = await session.execute(
-            select(SubjectPhaseDefinition).where(
+            select(SubjectPhaseDefinition)
+            .where(
                 SubjectPhaseDefinition.id == phase_id,
                 SubjectPhaseDefinition.deleted_at.is_(None),
             )
+            .options(selectinload(SubjectPhaseDefinition.visits))
         )
         phase = result.scalars().first()
         if phase is None:
@@ -167,7 +194,9 @@ class SubjectPhaseService:
         phase_id: UUID,
         *,
         name: str | None = None,
+        phase_type: SubjectPhaseType | None = None,
         display_order: int | None = None,
+        visit_definition_ids: list[UUID] | None = None,
         actor_id: UUID | None = None,
     ) -> SubjectPhaseDefinition:
         """Edit a Subject_Phase_Definition (partial update).
@@ -216,9 +245,35 @@ class SubjectPhaseService:
                 )
             changes["display_order"] = display_order
 
-        old_values = {key: getattr(phase, key) for key in changes}
+        if phase_type is not None:
+            phase_type = SubjectPhaseType(phase_type)
+            changes["phase_type"] = phase_type
+
+        if visit_definition_ids is not None:
+            changes["visit_definition_ids"] = visit_definition_ids
+
+        resulting_type = SubjectPhaseType(phase_type or phase.phase_type)
+        resulting_visit_ids = (
+            visit_definition_ids
+            if visit_definition_ids is not None
+            else list(phase.visit_definition_ids)
+        )
+        self._validate_visit_membership(resulting_type, resulting_visit_ids)
+
+        old_values = {
+            key: (
+                list(phase.visit_definition_ids)
+                if key == "visit_definition_ids"
+                else getattr(phase, key)
+            )
+            for key in changes
+        }
+        visit_changes = changes.pop("visit_definition_ids", None)
         for key, value in changes.items():
             setattr(phase, key, value)
+        if visit_changes is not None:
+            await self._replace_visits(session, phase, visit_changes)
+            changes["visit_definition_ids"] = visit_changes
         phase.updated_at = datetime.now(UTC)
 
         await session.flush()
@@ -239,7 +294,73 @@ class SubjectPhaseService:
             phase.id,
             list(changes),
         )
-        return phase
+        return await self._get_live_phase(session, phase.id)
+
+    @staticmethod
+    def _validate_visit_membership(
+        phase_type: SubjectPhaseType, visit_definition_ids: list[UUID]
+    ) -> None:
+        if phase_type not in _VISIT_PHASE_TYPES and visit_definition_ids:
+            raise ValidationError(
+                "Arm and complete subject phases cannot have associated visits",
+                details={
+                    "field": "visit_definition_ids",
+                    "phase_type": phase_type.value,
+                },
+            )
+
+    async def _replace_visits(
+        self,
+        session: AsyncSession,
+        phase: SubjectPhaseDefinition,
+        visit_definition_ids: list[UUID],
+    ) -> None:
+        """Replace a phase's ordered visit membership after scope validation."""
+        ordered_ids = list(dict.fromkeys(visit_definition_ids))
+        if len(ordered_ids) != len(visit_definition_ids):
+            raise ValidationError(
+                "A subject phase cannot contain the same visit more than once",
+                details={"field": "visit_definition_ids"},
+            )
+
+        visits: list[VisitDefinition] = []
+        if ordered_ids:
+            result = await session.execute(
+                select(VisitDefinition).where(VisitDefinition.id.in_(ordered_ids))
+            )
+            found = {visit.id: visit for visit in result.scalars().all()}
+            invalid_ids = [
+                visit_id
+                for visit_id in ordered_ids
+                if visit_id not in found
+                or found[visit_id].study_version_id != phase.design_version_id
+                or found[visit_id].definition_kind not in {"visit", "cycle_visit"}
+            ]
+            if invalid_ids:
+                raise ValidationError(
+                    "Subject phases may reference only visits or cycle visits from the same design version",
+                    details={
+                        "field": "visit_definition_ids",
+                        "invalid_ids": [str(value) for value in invalid_ids],
+                    },
+                )
+            visits = [found[visit_id] for visit_id in ordered_ids]
+
+        await session.execute(
+            delete(SubjectPhaseVisitDefinition).where(
+                SubjectPhaseVisitDefinition.subject_phase_definition_id == phase.id
+            )
+        )
+        for position, visit in enumerate(visits, start=1):
+            session.add(
+                SubjectPhaseVisitDefinition(
+                    subject_phase_definition_id=phase.id,
+                    visit_definition_id=visit.id,
+                    display_order=position,
+                )
+            )
+        await session.flush()
+        session.expire(phase, ["visits"])
 
     async def delete_phase_definition(
         self,

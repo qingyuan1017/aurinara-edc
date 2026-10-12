@@ -39,6 +39,14 @@ from app.models.designer.study_version import (
 )
 from app.models.edc.study import Study
 from app.repositories.designer.study_version_repository import StudyVersionRepository
+from app.services.designer.design_clone_service import (
+    DesignCloneService,
+    design_clone_service,
+)
+from app.services.designer.design_validation_service import (
+    DesignValidationService,
+    design_validation_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +57,16 @@ AMENDMENT_REASON_MAX_LENGTH = 4000
 class StudyVersionService:
     """Manages the Design_Version lifecycle and immutable version history."""
 
-    def __init__(self, repository: StudyVersionRepository | None = None) -> None:
+    def __init__(
+        self,
+        repository: StudyVersionRepository | None = None,
+        *,
+        validation_service: DesignValidationService | None = None,
+        clone_service: DesignCloneService | None = None,
+    ) -> None:
         self.repository = repository or StudyVersionRepository()
+        self.validation_service = validation_service or design_validation_service
+        self.clone_service = clone_service or design_clone_service
 
     # ------------------------------------------------------------------
     # Amendment creation (Requirements 2.9, 2.10, 2.11)
@@ -82,8 +98,7 @@ class StudyVersionService:
             )
         if len(normalized_reason) > AMENDMENT_REASON_MAX_LENGTH:
             raise ValidationError(
-                "Amendment reason must not exceed "
-                f"{AMENDMENT_REASON_MAX_LENGTH} characters",
+                f"Amendment reason must not exceed {AMENDMENT_REASON_MAX_LENGTH} characters",
                 details={
                     "field": "reason",
                     "max_length": AMENDMENT_REASON_MAX_LENGTH,
@@ -117,6 +132,16 @@ class StudyVersionService:
         )
         await self.repository.add(session, version)
 
+        # An amendment is an editable successor of the published design, not an
+        # empty shell. Clone the complete live definition graph after the target
+        # version has an id. Any failure rolls the version and all children back
+        # with the caller's transaction.
+        clone_counts = await self.clone_service.clone_version(
+            session,
+            source_version_id=source.id,
+            target_version_id=version.id,
+        )
+
         await audit_service.record(
             session,
             entity_type="study_version",
@@ -128,7 +153,8 @@ class StudyVersionService:
             old_value=str(source.id),
             new_value=(
                 f"version={version.version_number}; reason={normalized_reason}; "
-                f"amended_from={source.id}"
+                f"amended_from={source.id}; "
+                f"cloned_definitions={sum(clone_counts.values())}"
             ),
             reason=normalized_reason,
         )
@@ -166,9 +192,9 @@ class StudyVersionService:
     ) -> StudyVersion:
         """Transition a Design_Version from draft to published.
 
-        Records the publication actor and timestamp (R2.2) and writes an
-        Audit_Event. An invalid publish (version not in draft) is rejected and
-        the version is left unchanged (R2.3).
+        Validates the complete design graph before changing state, records the
+        publication actor and timestamp (R2.2), and writes an Audit_Event. An
+        invalid publish is rejected and the version is left unchanged (R2.3).
 
         Args:
             session: The active async session (caller's transaction).
@@ -186,6 +212,8 @@ class StudyVersionService:
                 "Cannot publish a study version that is not in draft status",
                 details={"current_status": version.status, "version_id": str(version.id)},
             )
+
+        await self.validation_service.require_publishable(session, version)
 
         old_status = version.status
         version.status = StudyVersionStatus.published
@@ -313,9 +341,7 @@ class StudyVersionService:
         Raises:
             NotFoundError: If no version with the given ID exists.
         """
-        result = await session.execute(
-            select(StudyVersion).where(StudyVersion.id == version_id)
-        )
+        result = await session.execute(select(StudyVersion).where(StudyVersion.id == version_id))
         version = result.scalars().first()
 
         if version is None:

@@ -10,24 +10,35 @@ interface SiteOption { id: string; site_number: string; name: string }
  * Disabled when no study is selected.
  */
 export function SiteSelector() {
-  const { selectedStudyId, selectedSiteId, setSite } = useStudyContext()
+  const { selectedStudyId, selectedSiteId, selectedSiteName, setSite } = useStudyContext()
   const { data } = useQuery({
     queryKey: ['site-selector', selectedStudyId],
     enabled: !!selectedStudyId,
     queryFn: async () => (await api.get<PaginatedResponse<SiteOption>>(
       `/studies/${selectedStudyId}/sites`, { params: { page: 1, page_size: 100 } },
     )).data,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   })
+
+  const selectedSiteIsLoaded = data?.items.some((site) => site.id === selectedSiteId)
 
   return (
     <select
       aria-label="Select site"
       value={selectedSiteId ?? ''}
-      onChange={(e) => setSite(e.target.value || null)}
+      onChange={(event) => {
+        const siteId = event.target.value || null
+        const site = data?.items.find((item) => item.id === siteId)
+        setSite(siteId, site ? `${site.site_number} — ${site.name}` : null)
+      }}
       disabled={!selectedStudyId}
       className="h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <option value="">All Sites</option>
+      {selectedSiteId && !selectedSiteIsLoaded ? (
+        <option value={selectedSiteId}>{selectedSiteName ?? 'Selected site'}</option>
+      ) : null}
       {data?.items.map((site) => (
         <option key={site.id} value={site.id}>
           {site.site_number} — {site.name}

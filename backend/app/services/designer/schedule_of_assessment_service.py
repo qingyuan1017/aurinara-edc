@@ -27,10 +27,12 @@ from sqlalchemy.orm import selectinload
 from app.core.audit import audit_service
 from app.core.ctms import Module
 from app.core.exceptions import NotFoundError, ValidationError
+from app.models.designer.form_metadata import FormDefinition
 from app.models.designer.schedule_of_assessment import (
     ScheduleOfAssessment,
     ScheduleOfAssessmentEntry,
 )
+from app.models.designer.visit import VisitDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,7 @@ class ScheduleOfAssessmentService:
         """
         for index, entry in enumerate(entries):
             self._validate_entry(entry, index)
+        await self._validate_references(session, design_version_id, entries)
 
         # Idempotent replace (A.12): a design version holds at most one live SoA.
         # Soft-delete every existing live SoA (and each of its live entries)
@@ -117,6 +120,66 @@ class ScheduleOfAssessmentService:
             len(entries),
         )
         return await self._get_with_entries(session, soa.id)
+
+    async def _validate_references(
+        self,
+        session: AsyncSession,
+        design_version_id: UUID,
+        entries: list[ScheduleEntryInput],
+    ) -> None:
+        """Keep the SoA on eligible visit rows in the same design version.
+
+        Standalone visits and cycle-owned child visits are eligible.
+        Folder and cycle rows are organizational containers.
+        """
+        visit_ids = {entry.visit_definition_id for entry in entries if entry.visit_definition_id}
+        form_ids = {entry.form_definition_id for entry in entries if entry.form_definition_id}
+        visits = (
+            list(
+                (
+                    await session.execute(
+                        select(VisitDefinition).where(VisitDefinition.id.in_(visit_ids))
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if visit_ids
+            else []
+        )
+        forms = (
+            list(
+                (
+                    await session.execute(
+                        select(FormDefinition).where(FormDefinition.id.in_(form_ids))
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if form_ids
+            else []
+        )
+        valid_visits = {
+            visit.id
+            for visit in visits
+            if visit.study_version_id == design_version_id
+            and visit.definition_kind in {"visit", "cycle_visit"}
+        }
+        valid_forms = {form.id for form in forms if form.study_version_id == design_version_id}
+        invalid_visits = sorted(str(visit_id) for visit_id in visit_ids - valid_visits)
+        invalid_forms = sorted(str(form_id) for form_id in form_ids - valid_forms)
+        if invalid_visits:
+            raise ValidationError(
+                "Schedule entries may reference only standalone visits or cycle-owned child "
+                "entries (not folders or cycle containers) from the same design version",
+                details={"field": "visit_definition_id", "invalid_ids": invalid_visits},
+            )
+        if invalid_forms:
+            raise ValidationError(
+                "Schedule entries may reference only forms from the same design version",
+                details={"field": "form_definition_id", "invalid_ids": invalid_forms},
+            )
 
     async def _retire_existing(
         self,

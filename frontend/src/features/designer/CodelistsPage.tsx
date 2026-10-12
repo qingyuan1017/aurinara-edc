@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DataTableShell, EmptyState, ErrorState, FormActions, FormField, LoadingState, PageContainer, PageHeader } from '@/components/patterns'
-import { getApiErrorMessage } from './shared'
+import { DraftGate, getApiErrorMessage } from './shared'
+import { DesignerJsonImport } from './DesignerJsonImport'
 
 interface DraftItem extends CodelistItemCreate {
   key: string
@@ -29,9 +30,9 @@ function emptyItem(order: number): DraftItem {
  * Design_Version server-side. Lists and detail reads are available; creation
  * accepts an optional set of initial items (Requirement 6.1).
  */
-export function CodelistsPage({ studyId }: { studyId: string }) {
+function CodelistsContent({ studyId, versionId, readOnly }: { studyId: string; versionId: string; readOnly: boolean }) {
   const client = useQueryClient()
-  const canConfigure = usePermission(PERMISSIONS.DESIGNER_CODELIST_CONFIGURE, studyId)
+  const canConfigure = usePermission(PERMISSIONS.DESIGNER_CODELIST_CONFIGURE, studyId) && !readOnly
   const [showForm, setShowForm] = useState(false)
   const [selectedId, setSelectedId] = useState('')
   const [name, setName] = useState('')
@@ -41,8 +42,8 @@ export function CodelistsPage({ studyId }: { studyId: string }) {
   const [message, setMessage] = useState('')
 
   const listQuery = useQuery({
-    queryKey: ['designer-codelists', studyId],
-    queryFn: async () => (await api.get<CodelistResponse[]>(`/designer/studies/${studyId}/codelists`)).data,
+    queryKey: ['designer-codelists', studyId, versionId],
+    queryFn: async () => (await api.get<CodelistResponse[]>(`/designer/studies/${studyId}/codelists`, { params: { study_version_id: versionId } })).data,
   })
 
   const detailQuery = useQuery({
@@ -77,7 +78,7 @@ export function CodelistsPage({ studyId }: { studyId: string }) {
         code: code.trim(),
         items: cleanedItems.length ? cleanedItems : undefined,
       }
-      return (await api.post<CodelistResponse>(`/designer/studies/${studyId}/codelists`, payload)).data
+      return (await api.post<CodelistResponse>(`/designer/studies/${studyId}/codelists`, payload, { params: { study_version_id: versionId } })).data
     },
     onSuccess: (data) => {
       client.invalidateQueries({ queryKey: ['designer-codelists', studyId] })
@@ -96,15 +97,17 @@ export function CodelistsPage({ studyId }: { studyId: string }) {
   )
 
   return (
-    <PermissionGuard permission={PERMISSIONS.DESIGNER_CODELIST_READ} studyId={studyId}>
       <PageContainer wide>
         <PageHeader
           title="Codelists"
-          description="Controlled vocabularies authored against the current draft version."
+          description={readOnly ? 'Review controlled vocabularies from this published design version.' : 'Controlled vocabularies authored against the current draft version.'}
           actions={canConfigure ? (
-            <Button type="button" onClick={() => { setShowForm((open) => !open); setMessage(''); setError('') }}>
-              {showForm ? 'Close' : 'New codelist'}
-            </Button>
+            <>
+              <DesignerJsonImport studyId={studyId} />
+              <Button type="button" onClick={() => { setShowForm((open) => !open); setMessage(''); setError('') }}>
+                {showForm ? 'Close' : 'New codelist'}
+              </Button>
+            </>
           ) : null}
         />
 
@@ -161,7 +164,7 @@ export function CodelistsPage({ studyId }: { studyId: string }) {
               {listQuery.isLoading ? <LoadingState label="codelists" className="border-0 p-0 shadow-none" /> : null}
               {listQuery.isError ? <ErrorState message="Unable to load codelists." onRetry={() => void listQuery.refetch()} /> : null}
               {!listQuery.isLoading && !listQuery.isError && !listQuery.data?.length ? (
-                <EmptyState title="No codelists yet" description="Create a codelist to define a controlled vocabulary." className="min-h-32 p-4" />
+                <EmptyState title="No codelists yet" description={readOnly ? 'No codelists were retained in this version.' : 'Create a codelist to define a controlled vocabulary.'} className="min-h-32 p-4" />
               ) : null}
               {listQuery.data?.map((codelist) => (
                 <button
@@ -206,6 +209,15 @@ export function CodelistsPage({ studyId }: { studyId: string }) {
           </Card>
         </div>
       </PageContainer>
+  )
+}
+
+export function CodelistsPage({ studyId }: { studyId: string }) {
+  return (
+    <PermissionGuard permission={PERMISSIONS.DESIGNER_CODELIST_READ} studyId={studyId}>
+      <DraftGate studyId={studyId}>
+        {(versionId, selection) => <CodelistsContent studyId={studyId} versionId={versionId} readOnly={selection.isReadOnly} />}
+      </DraftGate>
     </PermissionGuard>
   )
 }

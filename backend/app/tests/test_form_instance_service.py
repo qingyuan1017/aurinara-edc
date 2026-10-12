@@ -1,12 +1,13 @@
 """Unit tests for the FormInstanceService.
 
 Validates Requirements:
-  - 7.4: When a Subject is created, Form_Instances are initialized for each
-          form definition in the bound Study_Version, linked to visit instances.
+  - 7.4: When a Subject is created, Form_Instances are initialized only for
+          form/visit pairs in the bound published schedule of assessment.
 """
 
 import uuid
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,9 +20,16 @@ from app.services.edc.form_instance_service import FormInstanceService, form_ins
 
 
 @pytest.fixture
-def service():
+def design_service():
+    service = MagicMock()
+    service.get_schedule_of_assessment = AsyncMock(return_value=SimpleNamespace(entries=()))
+    return service
+
+
+@pytest.fixture
+def service(design_service):
     """Fresh FormInstanceService instance for each test."""
-    return FormInstanceService()
+    return FormInstanceService(design_service=design_service)
 
 
 @pytest.fixture
@@ -84,127 +92,113 @@ def _make_form_definition(
     )
 
 
+def _schedule(*entries: tuple[uuid.UUID | None, uuid.UUID | None]):
+    return SimpleNamespace(
+        entries=tuple(
+            SimpleNamespace(
+                visit_definition_id=visit_definition_id,
+                form_definition_id=form_definition_id,
+            )
+            for visit_definition_id, form_definition_id in entries
+        )
+    )
+
+
 class TestInitializeInstances:
     """Tests for FormInstanceService.initialize_instances()."""
 
-    async def test_creates_form_instance_per_visit_and_definition(
-        self, service, mock_session, actor_id, study_version_id
+    async def test_creates_only_form_instances_scheduled_for_each_visit(
+        self, service, design_service, mock_session, actor_id, study_version_id
     ):
-        """Each (visit_instance, form_definition) pair gets one FormInstance (Req 7.4)."""
+        """Unchecked SoA cells do not create operational form instances."""
         subject = _make_subject(study_version_id)
         visit1 = _make_visit_instance(subject.id, "Screening")
         visit2 = _make_visit_instance(subject.id, "Baseline")
         form_dm = _make_form_definition(study_version_id, "DM", 0)
         form_ae = _make_form_definition(study_version_id, "AE", 1, is_repeating=True)
-
-        # First execute: form definitions; Second execute: visit instances
-        form_defs_result = MagicMock()
-        form_defs_result.scalars.return_value.all.return_value = [form_dm, form_ae]
+        design_service.get_schedule_of_assessment.return_value = _schedule(
+            (visit1.visit_definition_id, form_dm.id),
+            (visit2.visit_definition_id, form_ae.id),
+        )
 
         visit_result = MagicMock()
         visit_result.scalars.return_value.all.return_value = [visit1, visit2]
+        mock_session.execute = AsyncMock(return_value=visit_result)
 
-        mock_session.execute = AsyncMock(
-            side_effect=[form_defs_result, visit_result]
-        )
-
-        with patch(
-            "app.services.edc.form_instance_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.edc.form_instance_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            instances = await service.initialize_instances(
-                mock_session, subject, actor_id
-            )
+            instances = await service.initialize_instances(mock_session, subject, actor_id)
 
-        # 2 visits x 2 form definitions = 4 form instances
-        assert len(instances) == 4
-        assert mock_session.add.call_count == 4
+        assert len(instances) == 2
+        assert mock_session.add.call_count == 2
 
         # All have status "Not Started"
         for inst in instances:
             assert inst.status == FormInstanceStatus.not_started
             assert inst.subject_id == subject.id
 
-        # Check we have every combination
         pairs = {(inst.visit_instance_id, inst.form_definition_id) for inst in instances}
         expected_pairs = {
             (visit1.id, form_dm.id),
-            (visit1.id, form_ae.id),
-            (visit2.id, form_dm.id),
             (visit2.id, form_ae.id),
         }
         assert pairs == expected_pairs
+        design_service.get_schedule_of_assessment.assert_awaited_once_with(
+            mock_session, study_version_id
+        )
 
-    async def test_no_form_definitions_returns_empty_list(
-        self, service, mock_session, actor_id, study_version_id
+    async def test_no_scheduled_forms_returns_empty_list(
+        self, service, design_service, mock_session, actor_id, study_version_id
     ):
-        """No form definitions means no form instances are created."""
+        """An empty SoA creates no form instances."""
         subject = _make_subject(study_version_id)
+        design_service.get_schedule_of_assessment.return_value = _schedule()
 
-        form_defs_result = MagicMock()
-        form_defs_result.scalars.return_value.all.return_value = []
-
-        mock_session.execute = AsyncMock(return_value=form_defs_result)
-
-        with patch(
-            "app.services.edc.form_instance_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.edc.form_instance_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            instances = await service.initialize_instances(
-                mock_session, subject, actor_id
-            )
+            instances = await service.initialize_instances(mock_session, subject, actor_id)
 
         assert instances == []
         mock_session.add.assert_not_called()
+        mock_session.execute.assert_not_awaited()
 
     async def test_no_visit_instances_returns_empty_list(
-        self, service, mock_session, actor_id, study_version_id
+        self, service, design_service, mock_session, actor_id, study_version_id
     ):
         """No visit instances means no form instances are created."""
         subject = _make_subject(study_version_id)
         form_dm = _make_form_definition(study_version_id, "DM", 0)
-
-        form_defs_result = MagicMock()
-        form_defs_result.scalars.return_value.all.return_value = [form_dm]
+        visit_definition_id = uuid.uuid4()
+        design_service.get_schedule_of_assessment.return_value = _schedule(
+            (visit_definition_id, form_dm.id)
+        )
 
         visit_result = MagicMock()
         visit_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=visit_result)
 
-        mock_session.execute = AsyncMock(
-            side_effect=[form_defs_result, visit_result]
-        )
-
-        with patch(
-            "app.services.edc.form_instance_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.edc.form_instance_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            instances = await service.initialize_instances(
-                mock_session, subject, actor_id
-            )
+            instances = await service.initialize_instances(mock_session, subject, actor_id)
 
         assert instances == []
 
     async def test_writes_audit_events_for_each_instance(
-        self, service, mock_session, actor_id, study_version_id
+        self, service, design_service, mock_session, actor_id, study_version_id
     ):
         """An Audit_Event is recorded for each created FormInstance."""
         subject = _make_subject(study_version_id)
         visit = _make_visit_instance(subject.id, "Visit 1")
         form_dm = _make_form_definition(study_version_id, "DM", 0)
-
-        form_defs_result = MagicMock()
-        form_defs_result.scalars.return_value.all.return_value = [form_dm]
+        design_service.get_schedule_of_assessment.return_value = _schedule(
+            (visit.visit_definition_id, form_dm.id)
+        )
 
         visit_result = MagicMock()
         visit_result.scalars.return_value.all.return_value = [visit]
+        mock_session.execute = AsyncMock(return_value=visit_result)
 
-        mock_session.execute = AsyncMock(
-            side_effect=[form_defs_result, visit_result]
-        )
-
-        with patch(
-            "app.services.edc.form_instance_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.edc.form_instance_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.initialize_instances(mock_session, subject, actor_id)
 
@@ -219,35 +213,62 @@ class TestInitializeInstances:
             assert call_kwargs["subject_id"] == subject.id
 
     async def test_repeating_form_creates_one_instance_per_visit(
-        self, service, mock_session, actor_id, study_version_id
+        self, service, design_service, mock_session, actor_id, study_version_id
     ):
         """Repeating forms get one empty FormInstance per visit (records added later)."""
         subject = _make_subject(study_version_id)
         visit = _make_visit_instance(subject.id, "Visit 1")
         form_ae = _make_form_definition(study_version_id, "AE", 0, is_repeating=True)
-
-        form_defs_result = MagicMock()
-        form_defs_result.scalars.return_value.all.return_value = [form_ae]
+        design_service.get_schedule_of_assessment.return_value = _schedule(
+            (visit.visit_definition_id, form_ae.id)
+        )
 
         visit_result = MagicMock()
         visit_result.scalars.return_value.all.return_value = [visit]
+        mock_session.execute = AsyncMock(return_value=visit_result)
 
-        mock_session.execute = AsyncMock(
-            side_effect=[form_defs_result, visit_result]
-        )
-
-        with patch(
-            "app.services.edc.form_instance_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.edc.form_instance_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            instances = await service.initialize_instances(
-                mock_session, subject, actor_id
-            )
+            instances = await service.initialize_instances(mock_session, subject, actor_id)
 
         assert len(instances) == 1
         assert instances[0].form_definition_id == form_ae.id
         assert instances[0].visit_instance_id == visit.id
         assert instances[0].status == FormInstanceStatus.not_started
+
+    async def test_procedure_only_entries_do_not_create_form_instances(
+        self, service, design_service, mock_session, actor_id, study_version_id
+    ):
+        subject = _make_subject(study_version_id)
+        visit = _make_visit_instance(subject.id, "Visit 1")
+        design_service.get_schedule_of_assessment.return_value = _schedule(
+            (visit.visit_definition_id, None)
+        )
+
+        instances = await service.initialize_instances(mock_session, subject, actor_id)
+
+        assert instances == []
+        mock_session.add.assert_not_called()
+        mock_session.execute.assert_not_awaited()
+
+    async def test_duplicate_schedule_entries_create_one_form_instance(
+        self, service, design_service, mock_session, actor_id, study_version_id
+    ):
+        subject = _make_subject(study_version_id)
+        visit = _make_visit_instance(subject.id, "Visit 1")
+        form = _make_form_definition(study_version_id)
+        pair = (visit.visit_definition_id, form.id)
+        design_service.get_schedule_of_assessment.return_value = _schedule(pair, pair)
+        visit_result = MagicMock()
+        visit_result.scalars.return_value.all.return_value = [visit]
+        mock_session.execute = AsyncMock(return_value=visit_result)
+
+        with patch("app.services.edc.form_instance_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            instances = await service.initialize_instances(mock_session, subject, actor_id)
+
+        assert len(instances) == 1
+        mock_session.add.assert_called_once()
 
 
 class TestFormInstanceServiceSingleton:

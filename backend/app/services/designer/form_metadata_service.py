@@ -92,6 +92,18 @@ class FormMetadataService:
             form_code=data.form_code,
             display_order=data.display_order,
             is_repeating=data.is_repeating,
+            form_type=str(data.form_type),
+            access_type=str(data.access_type),
+            domain=data.domain,
+            label=data.label,
+            grid_rows=data.grid_rows,
+            grid_columns=data.grid_columns,
+            header_name=data.header_name,
+            detail_name=data.detail_name,
+            detail_type=str(data.detail_type) if data.detail_type is not None else None,
+            show_variable_name=data.show_variable_name,
+            show_crf_id=data.show_crf_id,
+            show_odm_id=data.show_odm_id,
         )
         session.add(form)
         await session.flush()
@@ -136,19 +148,46 @@ class FormMetadataService:
     async def _get_section_with_relationships(
         self, session: AsyncSession, section_id: UUID
     ) -> FormSection:
-        """Load a section with its fields eagerly populated.
+        """Load a section with its fields and owning design eagerly populated.
 
         A freshly added/mutated section has an unloaded ``fields`` collection;
         serializing ``FormSectionResponse`` would emit a lazy load that raises
-        ``MissingGreenlet`` on the async engine. Returning a loaded instance
-        keeps response serialization IO-free.
+        ``MissingGreenlet`` on the async engine. Mutation routes also traverse
+        section -> form -> study version, so that ownership chain must be loaded
+        before route code accesses it.
         """
         result = await session.execute(
             select(FormSection)
             .where(FormSection.id == section_id)
-            .options(selectinload(FormSection.fields))
+            .options(
+                selectinload(FormSection.fields),
+                selectinload(FormSection.form_definition).selectinload(
+                    FormDefinition.study_version
+                ),
+            )
         )
         return result.scalars().one()
+
+    async def _get_field_with_ownership(
+        self, session: AsyncSession, field_id: UUID
+    ) -> FieldDefinition:
+        """Load a field and the ownership chain required by mutation routes."""
+        result = await session.execute(
+            select(FieldDefinition)
+            .where(FieldDefinition.id == field_id)
+            .options(
+                selectinload(FieldDefinition.form_section)
+                .selectinload(FormSection.form_definition)
+                .selectinload(FormDefinition.study_version)
+            )
+        )
+        field = result.scalars().first()
+        if field is None:
+            raise NotFoundError(
+                "Field definition not found",
+                details={"field_definition_id": str(field_id)},
+            )
+        return field
 
     async def update_form(
         self,
@@ -162,6 +201,9 @@ class FormMetadataService:
         study_version_service.guard_mutable(version)
 
         changes = data.model_dump(exclude_unset=True)
+        for enum_field in ("form_type", "access_type", "detail_type"):
+            if changes.get(enum_field) is not None:
+                changes[enum_field] = str(changes[enum_field])
         old_values = {key: getattr(form, key) for key in changes}
         for key, value in changes.items():
             setattr(form, key, value)
@@ -287,7 +329,12 @@ class FormMetadataService:
         section = FormSection(
             form_definition_id=form.id,
             name=data.name,
+            label=data.label or data.name,
             display_order=data.display_order,
+            is_label_only=data.is_label_only,
+            output_to_dataset=data.output_to_dataset,
+            help_text=data.help_text,
+            access_type=str(data.access_type),
         )
         session.add(section)
         await session.flush()
@@ -323,6 +370,10 @@ class FormMetadataService:
         study_version_service.guard_mutable(version)
 
         changes = data.model_dump(exclude_unset=True)
+        if changes.get("access_type") is not None:
+            changes["access_type"] = str(changes["access_type"])
+        if "name" in changes and "label" not in changes:
+            changes["label"] = changes["name"]
         old_values = {key: getattr(section, key) for key in changes}
         for key, value in changes.items():
             setattr(section, key, value)
@@ -341,9 +392,7 @@ class FormMetadataService:
             new_value=str(changes),
         )
 
-        logger.info(
-            "Form section updated: id=%s actor=%s", section.id, actor_id
-        )
+        logger.info("Form section updated: id=%s actor=%s", section.id, actor_id)
         return await self._get_section_with_relationships(session, section.id)
 
     async def reorder_sections(
@@ -411,7 +460,13 @@ class FormMetadataService:
         field = FieldDefinition(
             form_section_id=section.id,
             label=data.label,
+            question=data.question,
+            caption=data.caption,
+            text_align=str(data.text_align),
             variable_name=data.variable_name,
+            record_id=data.record_id,
+            crf_id=data.crf_id,
+            odm_id=data.odm_id,
             control_type=str(data.control_type),
             data_type=data.data_type,
             is_required=data.is_required,
@@ -441,10 +496,7 @@ class FormMetadataService:
             module=Module.DESIGNER,
             study_id=version.study_id,
             actor_id=actor_id,
-            new_value=(
-                f"variable_name={field.variable_name}, "
-                f"control_type={field.control_type}"
-            ),
+            new_value=(f"variable_name={field.variable_name}, control_type={field.control_type}"),
         )
 
         logger.info(
@@ -475,6 +527,8 @@ class FormMetadataService:
         changes = data.model_dump(exclude_unset=True)
         if "control_type" in changes and changes["control_type"] is not None:
             changes["control_type"] = str(changes["control_type"])
+        if "text_align" in changes and changes["text_align"] is not None:
+            changes["text_align"] = str(changes["text_align"])
 
         # Cross-section move: validate the target section belongs to the same
         # form as the field's current section, then renumber by appending.
@@ -514,9 +568,7 @@ class FormMetadataService:
             new_value=str(changes),
         )
 
-        logger.info(
-            "Field definition updated: id=%s actor=%s", field.id, actor_id
-        )
+        logger.info("Field definition updated: id=%s actor=%s", field.id, actor_id)
         return field
 
     async def delete_field(
@@ -545,9 +597,7 @@ class FormMetadataService:
             old_value=f"variable_name={variable_name}",
         )
 
-        logger.info(
-            "Field definition deleted: id=%s actor=%s", field_id, actor_id
-        )
+        logger.info("Field definition deleted: id=%s actor=%s", field_id, actor_id)
 
     async def reorder_fields(
         self,
@@ -629,9 +679,7 @@ class FormMetadataService:
         )
 
         for item_data in data.items:
-            await self.add_codelist_item(
-                session, version, codelist, item_data, actor_id
-            )
+            await self.add_codelist_item(session, version, codelist, item_data, actor_id)
 
         logger.info(
             "Codelist created: id=%s version_id=%s code=%s items=%d actor=%s",
@@ -653,9 +701,7 @@ class FormMetadataService:
         a lazy load and raise ``MissingGreenlet`` on the async engine.
         """
         result = await session.execute(
-            select(Codelist)
-            .where(Codelist.id == codelist_id)
-            .options(selectinload(Codelist.items))
+            select(Codelist).where(Codelist.id == codelist_id).options(selectinload(Codelist.items))
         )
         return result.scalars().one()
 
@@ -705,13 +751,9 @@ class FormMetadataService:
     # Getters
     # ==================================================================
 
-    async def get_form(
-        self, session: AsyncSession, form_id: UUID
-    ) -> FormDefinition:
+    async def get_form(self, session: AsyncSession, form_id: UUID) -> FormDefinition:
         """Retrieve a form definition by id, raising NotFoundError if missing."""
-        result = await session.execute(
-            select(FormDefinition).where(FormDefinition.id == form_id)
-        )
+        result = await session.execute(select(FormDefinition).where(FormDefinition.id == form_id))
         form = result.scalars().first()
         if form is None:
             raise NotFoundError(
@@ -731,12 +773,14 @@ class FormMetadataService:
         )
         return list(result.scalars().all())
 
-    async def get_section(
-        self, session: AsyncSession, section_id: UUID
-    ) -> FormSection:
+    async def get_section(self, session: AsyncSession, section_id: UUID) -> FormSection:
         """Retrieve a section by id, raising NotFoundError if missing."""
         result = await session.execute(
-            select(FormSection).where(FormSection.id == section_id)
+            select(FormSection)
+            .where(FormSection.id == section_id)
+            .options(
+                selectinload(FormSection.form_definition).selectinload(FormDefinition.study_version)
+            )
         )
         section = result.scalars().first()
         if section is None:
@@ -757,20 +801,9 @@ class FormMetadataService:
         )
         return list(result.scalars().all())
 
-    async def get_field(
-        self, session: AsyncSession, field_id: UUID
-    ) -> FieldDefinition:
+    async def get_field(self, session: AsyncSession, field_id: UUID) -> FieldDefinition:
         """Retrieve a field by id, raising NotFoundError if missing."""
-        result = await session.execute(
-            select(FieldDefinition).where(FieldDefinition.id == field_id)
-        )
-        field = result.scalars().first()
-        if field is None:
-            raise NotFoundError(
-                "Field definition not found",
-                details={"field_definition_id": str(field_id)},
-            )
-        return field
+        return await self._get_field_with_ownership(session, field_id)
 
     async def list_fields(
         self, session: AsyncSession, form_section_id: UUID
@@ -783,13 +816,9 @@ class FormMetadataService:
         )
         return list(result.scalars().all())
 
-    async def get_codelist(
-        self, session: AsyncSession, codelist_id: UUID
-    ) -> Codelist:
+    async def get_codelist(self, session: AsyncSession, codelist_id: UUID) -> Codelist:
         """Retrieve a code list by id, raising NotFoundError if missing."""
-        result = await session.execute(
-            select(Codelist).where(Codelist.id == codelist_id)
-        )
+        result = await session.execute(select(Codelist).where(Codelist.id == codelist_id))
         codelist = result.scalars().first()
         if codelist is None:
             raise NotFoundError(
@@ -798,9 +827,7 @@ class FormMetadataService:
             )
         return codelist
 
-    async def list_codelists(
-        self, session: AsyncSession, study_version_id: UUID
-    ) -> list[Codelist]:
+    async def list_codelists(self, session: AsyncSession, study_version_id: UUID) -> list[Codelist]:
         """List a version's code lists ordered by code."""
         result = await session.execute(
             select(Codelist)

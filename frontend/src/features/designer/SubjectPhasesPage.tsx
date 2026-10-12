@@ -25,7 +25,9 @@ import type {
   SubjectPhaseDefinitionUpdate,
   SubjectPhaseTransitionCreate,
   SubjectPhaseTransitionResponse,
+  VisitDefinitionResponse,
 } from '@/api/model'
+import { SubjectPhaseType } from '@/api/model'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,6 +42,17 @@ const storageKey = (versionId: string) => `designer:phaseflow:${versionId}`
 const isTmpId = (id: string) => id.startsWith('tmp-')
 let tmpCounter = 0
 const makeTmpId = () => `tmp-${Date.now()}-${tmpCounter++}`
+const phaseTypeOptions = [
+  { value: SubjectPhaseType.registered, label: 'Registered' },
+  { value: SubjectPhaseType.screen_failure, label: 'Screen failure' },
+  { value: SubjectPhaseType.common, label: 'Common' },
+  { value: SubjectPhaseType.complete, label: 'Complete' },
+  { value: SubjectPhaseType.arm, label: 'Arm selection' },
+]
+const supportsVisits = (phaseType: string) =>
+  phaseType === SubjectPhaseType.registered
+  || phaseType === SubjectPhaseType.screen_failure
+  || phaseType === SubjectPhaseType.common
 
 function readPositions(versionId: string): PositionMap {
   try {
@@ -64,9 +77,9 @@ function gridPosition(index: number): { x: number; y: number } {
   return { x: (index % perRow) * 220 + 40, y: Math.floor(index / perRow) * 140 + 40 }
 }
 
-function SubjectPhasesFlow({ versionId, studyId }: { versionId: string; studyId: string }) {
+function SubjectPhasesFlow({ versionId, studyId, readOnly }: { versionId: string; studyId: string; readOnly: boolean }) {
   const client = useQueryClient()
-  const canConfigure = usePermission(PERMISSIONS.DESIGNER_SUBJECT_PHASE_CONFIGURE, studyId)
+  const canConfigure = usePermission(PERMISSIONS.DESIGNER_SUBJECT_PHASE_CONFIGURE, studyId) && !readOnly
 
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -75,8 +88,12 @@ function SubjectPhasesFlow({ versionId, studyId }: { versionId: string; studyId:
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [newPhaseName, setNewPhaseName] = useState('')
+  const [newPhaseType, setNewPhaseType] = useState<SubjectPhaseType>(SubjectPhaseType.common)
+  const [newPhaseVisitIds, setNewPhaseVisitIds] = useState<string[]>([])
   const [selectedPhaseId, setSelectedPhaseId] = useState('')
   const [phaseNameDraft, setPhaseNameDraft] = useState('')
+  const [phaseTypeDraft, setPhaseTypeDraft] = useState<SubjectPhaseType>(SubjectPhaseType.common)
+  const [phaseVisitIdsDraft, setPhaseVisitIdsDraft] = useState<string[]>([])
   const [edgeFrom, setEdgeFrom] = useState('')
   const [edgeTo, setEdgeTo] = useState('')
   // Positions seed the layout and are updated on drag-stop. Initialized lazily
@@ -91,10 +108,23 @@ function SubjectPhasesFlow({ versionId, studyId }: { versionId: string; studyId:
     queryKey: ['designer-subject-phase-transitions', versionId],
     queryFn: async () => (await api.get<SubjectPhaseTransitionResponse[]>(`/designer/versions/${versionId}/subject-phase-transitions`)).data,
   })
+  const visitsQuery = useQuery({
+    queryKey: ['designer-visits', versionId],
+    queryFn: async () => (await api.get<VisitDefinitionResponse[]>(`/designer/versions/${versionId}/visits`)).data,
+  })
 
   const phases = useMemo(
     () => [...(phasesQuery.data ?? [])].sort((a, b) => a.display_order - b.display_order || a.id.localeCompare(b.id)),
     [phasesQuery.data],
+  )
+  const allVisits = useMemo(() => visitsQuery.data ?? [], [visitsQuery.data])
+  const visits = useMemo(
+    () => allVisits.filter((visit) => ['visit', 'cycle_visit'].includes(visit.definition_kind ?? 'visit')),
+    [allVisits],
+  )
+  const visitById = useMemo(
+    () => new Map(allVisits.map((visit) => [visit.id, visit])),
+    [allVisits],
   )
 
   // Sync nodes from the phases query during render (guarded by the last-synced
@@ -106,7 +136,7 @@ function SubjectPhasesFlow({ versionId, studyId }: { versionId: string; studyId:
     setNodes(phases.map((phase, index) => ({
       id: phase.id,
       position: positions[phase.id] ?? gridPosition(index),
-      data: { label: phase.name },
+      data: { label: `${phase.name} (${(phase.phase_type ?? SubjectPhaseType.common).replace('_', ' ')})` },
       type: 'default',
     })))
   }
@@ -157,11 +187,18 @@ function SubjectPhasesFlow({ versionId, studyId }: { versionId: string; studyId:
     mutationFn: async () => {
       const name = newPhaseName.trim()
       if (!name) throw new Error('A phase name is required.')
-      const payload: SubjectPhaseDefinitionCreate = { name, display_order: phases.length + 1 }
+      const payload: SubjectPhaseDefinitionCreate = {
+        name,
+        phase_type: newPhaseType,
+        display_order: phases.length + 1,
+        visit_definition_ids: supportsVisits(newPhaseType) ? newPhaseVisitIds : [],
+      }
       return (await api.post<SubjectPhaseDefinitionResponse>(`/designer/versions/${versionId}/subject-phases`, payload)).data
     },
     onSuccess: (data) => {
       setNewPhaseName('')
+      setNewPhaseType(SubjectPhaseType.common)
+      setNewPhaseVisitIds([])
       setError('')
       setMessage(`Phase "${data.name}" added.`)
       client.invalidateQueries({ queryKey: ['designer-subject-phases', versionId] })
@@ -174,12 +211,16 @@ function SubjectPhasesFlow({ versionId, studyId }: { versionId: string; studyId:
       const name = phaseNameDraft.trim()
       if (!selectedPhaseId) throw new Error('Select a phase first.')
       if (name.length < 1 || name.length > 100) throw new Error('Phase name must be 1–100 characters.')
-      const payload: SubjectPhaseDefinitionUpdate = { name }
+      const payload: SubjectPhaseDefinitionUpdate = {
+        name,
+        phase_type: phaseTypeDraft,
+        visit_definition_ids: supportsVisits(phaseTypeDraft) ? phaseVisitIdsDraft : [],
+      }
       return (await api.patch<SubjectPhaseDefinitionResponse>(`/designer/subject-phases/${selectedPhaseId}`, payload)).data
     },
     onSuccess: (data) => {
       setError('')
-      setMessage(`Phase renamed to "${data.name}".`)
+      setMessage(`Phase "${data.name}" updated.`)
       client.invalidateQueries({ queryKey: ['designer-subject-phases', versionId] })
     },
     onError: (err) => { setError(getApiErrorMessage(err, 'Could not rename the phase.')); setMessage('') },
@@ -246,9 +287,11 @@ function SubjectPhasesFlow({ versionId, studyId }: { versionId: string; studyId:
     setSelectedPhaseId(id)
     const phase = phases.find((p) => p.id === id)
     setPhaseNameDraft(phase?.name ?? '')
+    setPhaseTypeDraft(phase?.phase_type ?? SubjectPhaseType.common)
+    setPhaseVisitIdsDraft(phase?.visit_definition_ids ?? [])
   }
 
-  if (phasesQuery.isLoading || transitionsQuery.isLoading) {
+  if (phasesQuery.isLoading || transitionsQuery.isLoading || visitsQuery.isLoading) {
     return <PageContainer wide><LoadingState label="subject phases" /></PageContainer>
   }
 
@@ -256,7 +299,7 @@ function SubjectPhasesFlow({ versionId, studyId }: { versionId: string; studyId:
     <PageContainer wide>
       <PageHeader
         title="Subject phases"
-        description="Model the phases subjects progress through and the transitions (data flow) between them for the current draft version."
+        description={readOnly ? 'Review subject phases, visits, and transitions retained in this published design version.' : 'Model the phases subjects progress through and the transitions (data flow) between them for the current draft version.'}
       />
       {message ? <Alert variant="success" className="mb-4"><AlertDescription>{message}</AlertDescription></Alert> : null}
       {error ? <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert> : null}
@@ -269,6 +312,13 @@ function SubjectPhasesFlow({ versionId, studyId }: { versionId: string; studyId:
               <CardContent>
                 <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); setError(''); createPhase.mutate() }}>
                   <Input aria-label="New phase name" value={newPhaseName} onChange={(event) => setNewPhaseName(event.target.value)} placeholder="Screening" />
+                  <select aria-label="New phase type" value={newPhaseType} onChange={(event) => { const value = event.target.value as SubjectPhaseType; setNewPhaseType(value); if (!supportsVisits(value)) setNewPhaseVisitIds([]) }} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
+                    {phaseTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  {supportsVisits(newPhaseType) ? <div className="space-y-2 rounded-md border p-3">
+                    <p className="text-xs font-medium">Associated visits</p>
+                    {visits.length ? visits.map((visit) => <label key={visit.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={newPhaseVisitIds.includes(visit.id)} onChange={(event) => setNewPhaseVisitIds((current) => event.target.checked ? [...current, visit.id] : current.filter((id) => id !== visit.id))} />{visit.name}</label>) : <p className="text-xs text-muted-foreground">No visits are available.</p>}
+                  </div> : <p className="text-xs text-muted-foreground">This phase type does not associate visits.</p>}
                   <Button type="submit" className="w-full" pending={createPhase.isPending} loadingText="Adding…">Add phase</Button>
                 </form>
               </CardContent>
@@ -294,7 +344,39 @@ function SubjectPhasesFlow({ versionId, studyId }: { versionId: string; studyId:
             </Card>
           ) : null}
 
-          <Card>
+          {readOnly ? (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Phase visit membership</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {phases.length ? phases.map((phase) => {
+                  const phaseType = phase.phase_type ?? SubjectPhaseType.common
+                  const visitIds = phase.visit_definition_ids ?? []
+                  return (
+                    <section key={phase.id} className="space-y-2 rounded-md border p-3" aria-label={`${phase.name} visit membership`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="text-sm font-medium">{phase.name}</h3>
+                        <span className="text-xs text-muted-foreground">{phaseType.replace('_', ' ')}</span>
+                      </div>
+                      {supportsVisits(phaseType) ? (
+                        visitIds.length ? (
+                          <ol className="list-decimal space-y-1 pl-5 text-sm">
+                            {visitIds.map((visitId) => {
+                              const visit = visitById.get(visitId)
+                              return <li key={visitId}>{visit?.name ?? `Unavailable visit (${visitId})`}</li>
+                            })}
+                          </ol>
+                        ) : <p className="text-xs text-muted-foreground">No visits associated with this phase.</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">{phaseType === SubjectPhaseType.arm ? 'Visits are determined by the subject’s selected arm.' : 'This phase completes the study and has no associated visits.'}</p>
+                      )}
+                    </section>
+                  )
+                }) : <p className="text-sm text-muted-foreground">No phases were retained in this version.</p>}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {!readOnly ? <Card>
             <CardHeader><CardTitle className="text-base">Phase details</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <select aria-label="Select phase" value={selectedPhaseId} onChange={(event) => selectPhase(event.target.value)} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
@@ -305,13 +387,20 @@ function SubjectPhasesFlow({ versionId, studyId }: { versionId: string; studyId:
                 <>
                   <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); setError(''); renamePhase.mutate() }}>
                     <Input aria-label="Phase name" value={phaseNameDraft} onChange={(event) => setPhaseNameDraft(event.target.value)} placeholder="Phase name" />
-                    <Button type="submit" className="w-full" variant="outline" pending={renamePhase.isPending} loadingText="Saving…">Rename phase</Button>
+                    <select aria-label="Phase type" value={phaseTypeDraft} onChange={(event) => { const value = event.target.value as SubjectPhaseType; setPhaseTypeDraft(value); if (!supportsVisits(value)) setPhaseVisitIdsDraft([]) }} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
+                      {phaseTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                    {supportsVisits(phaseTypeDraft) ? <div className="space-y-2 rounded-md border p-3">
+                      <p className="text-xs font-medium">Associated visits</p>
+                      {visits.length ? visits.map((visit) => <label key={visit.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={phaseVisitIdsDraft.includes(visit.id)} onChange={(event) => setPhaseVisitIdsDraft((current) => event.target.checked ? [...current, visit.id] : current.filter((id) => id !== visit.id))} />{visit.name}</label>) : <p className="text-xs text-muted-foreground">No visits are available.</p>}
+                    </div> : <p className="text-xs text-muted-foreground">This phase type does not associate visits.</p>}
+                    <Button type="submit" className="w-full" variant="outline" pending={renamePhase.isPending} loadingText="Saving…">Save phase</Button>
                   </form>
                   <Button type="button" className="w-full" variant="destructive" pending={deletePhase.isPending} loadingText="Deleting…" onClick={() => deletePhase.mutate(selectedPhaseId)}>Delete phase</Button>
                 </>
               ) : null}
             </CardContent>
-          </Card>
+          </Card> : null}
         </div>
 
         <Card>
@@ -353,9 +442,9 @@ export function SubjectPhasesPage({ studyId }: { studyId: string }) {
   return (
     <PermissionGuard permission={PERMISSIONS.DESIGNER_SUBJECT_PHASE_READ} studyId={studyId}>
       <DraftGate studyId={studyId}>
-        {(versionId) => (
+        {(versionId, selection) => (
           <ReactFlowProvider>
-            <SubjectPhasesFlow versionId={versionId} studyId={studyId} />
+            <SubjectPhasesFlow versionId={versionId} studyId={studyId} readOnly={selection.isReadOnly} />
           </ReactFlowProvider>
         )}
       </DraftGate>

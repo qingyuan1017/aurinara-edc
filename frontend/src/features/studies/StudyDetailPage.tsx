@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { api } from '@/lib/api'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
 import {
@@ -14,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PublishDesignDialog } from './PublishDesignDialog'
 
 interface StudyDetail {
   id: string
@@ -74,11 +76,6 @@ export function StudyDetailPage({ studyId }: { studyId: string }) {
     },
   })
 
-  const publishMutation = useMutation({
-    mutationFn: (versionId: string) => api.post(`/designer/versions/${versionId}/publish`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['study-versions', studyId] }),
-  })
-
   if (isLoading) {
     return <PageContainer><LoadingState label="study" /></PageContainer>
   }
@@ -98,9 +95,9 @@ export function StudyDetailPage({ studyId }: { studyId: string }) {
         ownership={<OwnershipBadge owner="EDC" />}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm"><a href={`/studies/${studyId}/dashboard`}>View Dashboard</a></Button>
-            <Button asChild variant="secondary" size="sm"><a href={`/studies/${studyId}/versions`}>Manage Versions</a></Button>
-            <Button asChild variant="outline" size="sm"><a href={`/studies/${studyId}/forms`}>Configure Forms</a></Button>
+            <Button asChild variant="outline" size="sm"><Link to="/studies/$studyId/dashboard" params={{ studyId }}>View Dashboard</Link></Button>
+            <Button asChild variant="secondary" size="sm"><Link to="/studies/$studyId/versions" params={{ studyId }}>Manage Versions</Link></Button>
+            <Button asChild variant="outline" size="sm"><Link to="/studies/$studyId/forms" params={{ studyId }}>Configure Forms</Link></Button>
           </div>
         }
       />
@@ -168,7 +165,11 @@ export function StudyDetailPage({ studyId }: { studyId: string }) {
                     <TableCell>{new Date(version.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
                       {canPublish && version.status === 'draft' ? (
-                        <Button type="button" variant="link" size="sm" pending={publishMutation.isPending} onClick={() => publishMutation.mutate(version.id)}>Publish</Button>
+                        <PublishDesignDialog
+                          versionId={version.id}
+                          versionNumber={version.version_number}
+                          onPublished={() => queryClient.invalidateQueries({ queryKey: ['study-versions', studyId] })}
+                        />
                       ) : null}
                     </TableCell>
                   </TableRow>

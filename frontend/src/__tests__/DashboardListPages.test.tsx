@@ -11,6 +11,16 @@ import { PERMISSIONS } from '@/lib/permissions'
 import { useStudyContext } from '@/lib/study-context'
 import { getRouteContext } from '@/lib/route-context'
 
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ to, params, children, ...props }: { to: string; params?: Record<string, string>; children: React.ReactNode; [key: string]: unknown }) => {
+    const href = Object.entries(params ?? {}).reduce(
+      (path, [key, value]) => path.replace(`$${key}`, value),
+      to,
+    )
+    return <a href={href} {...props}>{children}</a>
+  },
+}))
+
 function renderWithQueryClient(ui: React.ReactNode) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
@@ -146,7 +156,7 @@ describe('dashboard and list page composition', () => {
   it('preserves subject search parameters, selected-site mutation context, and server totals', async () => {
     const get = vi.spyOn(api, 'get').mockResolvedValue({
       data: {
-        items: [{ id: 'subject-1', subject_number: 'SUBJ-001', site_id: 'site-1', site_name: 'North Clinic', status: 'Enrolled', created_at: '2026-01-01T00:00:00Z' }],
+        items: [{ id: 'subject-1', subject_number: 'SUBJ-001', site_id: 'site-1', site_name: 'North Clinic', status: 'Enrolled', current_phase_name: 'Treatment', current_phase_type: 'common', created_at: '2026-01-01T00:00:00Z' }],
         page: 1,
         page_size: 10,
         total: 1,
@@ -155,7 +165,8 @@ describe('dashboard and list page composition', () => {
 
     renderWithQueryClient(<SubjectListPage studyId="study-1" />)
     expect(await screen.findByText('1 total subjects · server ordered')).toBeInTheDocument()
-    expect(screen.getByRole('status', { name: 'Subject status: Enrolled' })).toBeInTheDocument()
+    expect(screen.getByText('North Clinic')).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Subject status: Treatment' })).toBeInTheDocument()
     expect(get).toHaveBeenCalledWith('/studies/study-1/subjects', { params: { page: 1, page_size: 10 } })
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search subjects' }), { target: { value: 'SUBJ' } })

@@ -139,7 +139,9 @@ async def test_amendment_retains_published_history_and_form_ownership(
     original_version_snapshots = [_version_snapshot(version) for version in versions]
     original_form_owners = {form.id: form.study_version_id for form in forms}
     repository = InMemoryAmendmentRepository(versions)
-    service = StudyVersionService(repository)
+    clone_service = AsyncMock()
+    clone_service.clone_version.return_value = {}
+    service = StudyVersionService(repository, clone_service=clone_service)
     session = AsyncMock()
     study = Study(
         id=study_id,

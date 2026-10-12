@@ -16,6 +16,7 @@ from pydantic import Field
 from app.schemas.shared.base import (
     BaseCreateSchema,
     BaseSchema,
+    BaseUpdateSchema,
     UtcDatetime,
 )
 
@@ -29,11 +30,20 @@ class ArmDefinitionCreate(BaseCreateSchema):
     visit_definition_ids: list[UUID] = Field(default_factory=list)
 
 
+class ArmDefinitionUpdate(BaseUpdateSchema):
+    """Request body for editing an Arm_Definition (partial PATCH)."""
+
+    name: str | None = Field(None, min_length=1, max_length=100)
+    display_order: int | None = Field(None, ge=1, le=999)
+    description: str | None = None
+    visit_definition_ids: list[UUID] | None = None
+
+
 class ArmDefinitionResponse(BaseSchema):
     """Response schema for a persisted Arm_Definition.
 
-    ``visit_definition_ids`` lists the arm's member visits (plain visits and
-    cycles). The route constructs this field explicitly from ``arm.visits``;
+    ``visit_definition_ids`` lists the arm's real member visits (standalone and
+    cycle-owned leaves). The route constructs this field explicitly from ``arm.visits``;
     ``model_validate(arm)`` cannot populate it because the ORM relationship is
     named ``visits``.
     """
@@ -51,4 +61,5 @@ class ArmDefinitionResponse(BaseSchema):
 __all__ = [
     "ArmDefinitionCreate",
     "ArmDefinitionResponse",
+    "ArmDefinitionUpdate",
 ]

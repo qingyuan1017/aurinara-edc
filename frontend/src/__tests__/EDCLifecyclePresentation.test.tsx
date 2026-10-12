@@ -15,19 +15,41 @@ function renderWithQueryClient(ui: React.ReactNode) {
 describe('EDC lifecycle presentation migrations', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    localStorage.clear()
+    window.history.replaceState({}, '', window.location.pathname)
     useAuthStore.setState({ user: { id: 'user-1', email: 'dm@example.com', first_name: 'Data', last_name: 'Manager', roles: [], permissions: ['designer.form.read', 'designer.form.configure', 'designer.field.configure', 'query.create', 'form.enter'] }, isAuthenticated: true })
   })
 
   it('keeps form builder creation payload and endpoint while using labeled shared controls', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue({ data: [] } as never)
+    vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({ data: url === '/studies/study-1/versions'
+      ? [{ id: 'ver-draft', study_id: 'study-1', version_number: '1', status: 'draft', created_at: 'x' }]
+      : [] } as never))
     const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {} } as never)
     renderWithQueryClient(<FormBuilderPage studyId="study-1" />)
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Add form' }))
     fireEvent.change(await screen.findByLabelText('Form name'), { target: { value: 'Vitals' } })
     fireEvent.change(screen.getByLabelText('Form code'), { target: { value: 'VITALS' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create form' }))
 
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/designer/studies/study-1/forms', { name: 'Vitals', form_code: 'VITALS', display_order: 0, is_repeating: false }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/designer/studies/study-1/forms', {
+      name: 'Vitals',
+      form_code: 'VITALS',
+      display_order: 0,
+      is_repeating: false,
+      form_type: 'simple',
+      access_type: 'open_access',
+      domain: null,
+      label: null,
+      grid_rows: null,
+      grid_columns: null,
+      header_name: null,
+      detail_name: null,
+      detail_type: null,
+      show_variable_name: false,
+      show_crf_id: false,
+      show_odm_id: false,
+    }, { params: { study_version_id: 'ver-draft' } }))
   })
 
   it('keeps query creation contract and presents the workflow in an accessible dialog', async () => {

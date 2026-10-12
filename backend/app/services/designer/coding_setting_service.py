@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit_service
@@ -95,6 +96,20 @@ class CodingSettingService:
             normalized_reference,
         )
         return setting
+
+    async def list_coding_settings(
+        self, session: AsyncSession, design_version_id: UUID
+    ) -> list[CodingSetting]:
+        """List live coding settings for a draft or published design."""
+        result = await session.execute(
+            select(CodingSetting)
+            .where(
+                CodingSetting.design_version_id == design_version_id,
+                CodingSetting.deleted_at.is_(None),
+            )
+            .order_by(CodingSetting.dictionary_reference, CodingSetting.id)
+        )
+        return list(result.scalars().all())
 
 
 # Module-level singleton for convenience

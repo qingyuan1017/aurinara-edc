@@ -27,7 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import PaginationParams
 from app.api.pagination import paginate
 from app.core.audit import audit_service
-from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
+from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError, ValidationError
+from app.models.designer.subject_phase_definition import SubjectPhaseType
 from app.models.edc.form_data import FormInstance
 from app.models.edc.site import Site
 from app.models.edc.study import StudyVersion, StudyVersionStatus
@@ -35,6 +36,10 @@ from app.models.edc.subject import Subject, SubjectStatus
 from app.models.edc.visit import VisitInstance
 from app.schemas.edc.subject import SubjectCreate
 from app.schemas.shared.base import PaginatedResponse
+from app.services.designer.design_consumption_service import (
+    DesignConsumptionService,
+    design_consumption_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +75,13 @@ _LEGAL_TRANSITIONS: dict[SubjectStatus, set[SubjectStatus]] = {
 
 class SubjectService:
     """Manages subject creation, status transitions, casebook, and soft-delete."""
+
+    def __init__(
+        self,
+        *,
+        design_service: DesignConsumptionService | None = None,
+    ) -> None:
+        self._design = design_service or design_consumption_service
 
     # ------------------------------------------------------------------
     # Create (Req 7.1, 7.2)
@@ -126,9 +138,7 @@ class SubjectService:
         # Generate the subject identifier by the configured rule (Req 7.2)
         subject_number = data.subject_number
         if subject_number is None:
-            subject_number = await self._generate_subject_number(
-                session, study_id, site
-            )
+            subject_number = await self._generate_subject_number(session, study_id, site)
 
         # Enforce subject_number uniqueness within the study (Req 7.2)
         existing = await session.execute(
@@ -144,10 +154,20 @@ class SubjectService:
             )
 
         # Create the Subject bound to the published version (Req 7.1)
+        phase_definitions = await self._design.list_subject_phase_definitions(session, version.id)
+        initial_phase = next(
+            (
+                phase
+                for phase in phase_definitions
+                if phase.phase_type == SubjectPhaseType.registered.value
+            ),
+            None,
+        )
         subject = Subject(
             study_id=study_id,
             site_id=site_id,
             study_version_id=version.id,
+            current_phase_definition_id=(initial_phase.id if initial_phase else None),
             subject_number=subject_number,
             status=SubjectStatus.screening,
             created_by=actor_id,
@@ -191,6 +211,189 @@ class SubjectService:
             actor_id,
         )
         return subject
+
+    # ------------------------------------------------------------------
+    # Study-data phase and arm state
+    # ------------------------------------------------------------------
+
+    async def get_phase_state(self, session: AsyncSession, subject: Subject) -> dict:
+        """Return current state and flow-valid next phases for Study Data."""
+        phases = await self._design.list_subject_phase_definitions(
+            session, subject.study_version_id
+        )
+        transitions = await self._design.list_subject_phase_transitions(
+            session, subject.study_version_id
+        )
+        arms = await self._design.list_arm_definitions(session, subject.study_version_id)
+        current_phase = next(
+            (phase for phase in phases if phase.id == subject.current_phase_definition_id),
+            None,
+        )
+        current_arm = next(
+            (arm for arm in arms if arm.id == subject.arm_definition_id),
+            None,
+        )
+        next_phases = self._available_next_phases(
+            phases, transitions, subject.current_phase_definition_id
+        )
+        phase_options = [
+            {
+                "id": phase.id,
+                "name": phase.name,
+                "phase_type": phase.phase_type,
+                "display_order": phase.display_order,
+                "visit_definition_ids": list(phase.visit_definition_ids),
+            }
+            for phase in phases
+        ]
+        next_phase_ids = {phase.id for phase in next_phases}
+        return {
+            "current_phase_definition_id": subject.current_phase_definition_id,
+            "current_phase_name": current_phase.name if current_phase else None,
+            "current_phase_type": current_phase.phase_type if current_phase else None,
+            "arm_definition_id": subject.arm_definition_id,
+            "arm_name": current_arm.name if current_arm else None,
+            "phases": phase_options,
+            "next_phases": [option for option in phase_options if option["id"] in next_phase_ids],
+            "arms": [
+                {
+                    "id": arm.id,
+                    "name": arm.name,
+                    "display_order": arm.display_order,
+                    "description": arm.description,
+                }
+                for arm in arms
+            ],
+        }
+
+    async def update_phase(
+        self,
+        session: AsyncSession,
+        subject: Subject,
+        *,
+        phase_definition_id: UUID,
+        arm_definition_id: UUID | None,
+        actor_id: UUID,
+    ) -> Subject:
+        """Move a subject to a phase and require an arm for arm phases."""
+        phases = await self._design.list_subject_phase_definitions(
+            session, subject.study_version_id
+        )
+        phase = next((item for item in phases if item.id == phase_definition_id), None)
+        if phase is None:
+            raise ValidationError(
+                "Subject phase does not belong to the subject's published design",
+                details={"phase_definition_id": str(phase_definition_id)},
+            )
+
+        transitions = await self._design.list_subject_phase_transitions(
+            session, subject.study_version_id
+        )
+        available_phases = self._available_next_phases(
+            phases, transitions, subject.current_phase_definition_id
+        )
+        if phase.id not in {item.id for item in available_phases}:
+            raise ValidationError(
+                "Subject phase is not a valid next step in the configured phase flow",
+                details={
+                    "current_phase_definition_id": (
+                        str(subject.current_phase_definition_id)
+                        if subject.current_phase_definition_id
+                        else None
+                    ),
+                    "phase_definition_id": str(phase_definition_id),
+                },
+            )
+
+        selected_arm = None
+        if phase.phase_type == SubjectPhaseType.arm.value:
+            if arm_definition_id is None:
+                raise ValidationError(
+                    "An arm must be selected when entering an arm phase",
+                    details={"field": "arm_definition_id"},
+                )
+            arms = await self._design.list_arm_definitions(session, subject.study_version_id)
+            selected_arm = next((item for item in arms if item.id == arm_definition_id), None)
+            if selected_arm is None:
+                raise ValidationError(
+                    "Arm does not belong to the subject's published design",
+                    details={"arm_definition_id": str(arm_definition_id)},
+                )
+        elif arm_definition_id is not None:
+            raise ValidationError(
+                "An arm can only be selected when entering an arm phase",
+                details={"field": "arm_definition_id"},
+            )
+
+        old_phase_id = subject.current_phase_definition_id
+        old_arm_id = subject.arm_definition_id
+        subject.current_phase_definition_id = phase.id
+        if selected_arm is not None:
+            subject.arm_definition_id = selected_arm.id
+        if phase.phase_type == SubjectPhaseType.complete.value:
+            subject.status = SubjectStatus.completed
+        subject.updated_at = datetime.now(UTC)
+        await session.flush()
+
+        await audit_service.record(
+            session,
+            entity_type="subject",
+            entity_id=subject.id,
+            action="phase_transition",
+            study_id=subject.study_id,
+            site_id=subject.site_id,
+            subject_id=subject.id,
+            actor_id=actor_id,
+            field_name="current_phase_definition_id",
+            old_value=(str(old_phase_id) if old_phase_id else None),
+            new_value=str(phase.id),
+            reason=(
+                f"phase_type={phase.phase_type}; old_arm_id={old_arm_id}; "
+                f"arm_definition_id={subject.arm_definition_id}"
+            ),
+        )
+        return subject
+
+    async def list_visible_visits(
+        self, session: AsyncSession, subject: Subject
+    ) -> list[VisitInstance]:
+        """List Study Data visits allowed by the subject's current phase/arm."""
+        allowed_ids: set[UUID] | None = None
+        if subject.current_phase_definition_id is not None:
+            phases = await self._design.list_subject_phase_definitions(
+                session, subject.study_version_id
+            )
+            phase = next(
+                (item for item in phases if item.id == subject.current_phase_definition_id),
+                None,
+            )
+            if phase is None:
+                allowed_ids = set()
+            elif phase.phase_type == SubjectPhaseType.arm.value:
+                arms = await self._design.list_arm_definitions(session, subject.study_version_id)
+                arm = next(
+                    (item for item in arms if item.id == subject.arm_definition_id),
+                    None,
+                )
+                allowed_ids = set(arm.visit_definition_ids) if arm else set()
+            elif phase.phase_type in {
+                SubjectPhaseType.registered.value,
+                SubjectPhaseType.screen_failure.value,
+                SubjectPhaseType.common.value,
+            }:
+                allowed_ids = set(phase.visit_definition_ids)
+            else:
+                allowed_ids = set()
+
+        result = await session.execute(
+            select(VisitInstance)
+            .where(VisitInstance.subject_id == subject.id)
+            .order_by(VisitInstance.visit_date, VisitInstance.created_at)
+        )
+        instances = list(result.scalars().all())
+        if allowed_ids is None:
+            return instances
+        return [visit for visit in instances if visit.visit_definition_id in allowed_ids]
 
     # ------------------------------------------------------------------
     # Status transition (Req 7.3, 7.6)
@@ -294,12 +497,17 @@ class SubjectService:
         # Load the subject's visit instances (scheduled + unscheduled) ordered
         # by visit date then creation, with their source definition eagerly
         # available (VisitInstance.visit_definition is a selectin relationship).
-        visit_result = await session.execute(
-            select(VisitInstance)
-            .where(VisitInstance.subject_id == subject.id)
-            .order_by(VisitInstance.visit_date, VisitInstance.created_at)
-        )
-        visit_instances = list(visit_result.scalars().all())
+        visit_instances = await self.list_visible_visits(session, subject)
+        visit_definition_by_instance = {
+            visit.id: visit.visit_definition_id for visit in visit_instances
+        }
+
+        schedule = await self._design.get_schedule_of_assessment(session, subject.study_version_id)
+        scheduled_pairs = {
+            (entry.visit_definition_id, entry.form_definition_id)
+            for entry in schedule.entries
+            if entry.visit_definition_id is not None and entry.form_definition_id is not None
+        }
 
         # Load the subject's form instances; group them under their owning visit
         # instance. form_definition is eagerly loaded (selectin) for the name.
@@ -310,6 +518,13 @@ class SubjectService:
         )
         forms_by_visit: dict[UUID | None, list[dict]] = {}
         for form in form_result.scalars().all():
+            visit_definition_id = visit_definition_by_instance.get(form.visit_instance_id)
+            is_scheduled = (
+                visit_definition_id,
+                form.form_definition_id,
+            ) in scheduled_pairs
+            if not is_scheduled:
+                continue
             definition = form.form_definition
             entry = {
                 "form_instance_id": form.id,
@@ -345,11 +560,27 @@ class SubjectService:
                 }
             )
 
+        phase_state = (
+            await self.get_phase_state(session, subject)
+            if subject.current_phase_definition_id is not None
+            else {
+                "current_phase_definition_id": None,
+                "current_phase_name": None,
+                "current_phase_type": None,
+                "arm_definition_id": subject.arm_definition_id,
+                "arm_name": None,
+            }
+        )
         return {
             "subject_id": subject.id,
             "subject_number": subject.subject_number,
             "status": subject.status,
             "study_version_id": subject.study_version_id,
+            "current_phase_definition_id": phase_state["current_phase_definition_id"],
+            "current_phase_name": phase_state["current_phase_name"],
+            "current_phase_type": phase_state["current_phase_type"],
+            "arm_definition_id": phase_state["arm_definition_id"],
+            "arm_name": phase_state["arm_name"],
             "visits": visits,
         }
 
@@ -428,9 +659,7 @@ class SubjectService:
             NotFoundError: If no subject exists with the given ID or it is soft-deleted.
         """
         result = await session.execute(
-            select(Subject).where(
-                Subject.id == subject_id, Subject.deleted_at.is_(None)
-            )
+            select(Subject).where(Subject.id == subject_id, Subject.deleted_at.is_(None))
         )
         subject = result.scalars().first()
         if subject is None:
@@ -464,9 +693,7 @@ class SubjectService:
         Returns:
             PaginatedResponse containing Subject instances.
         """
-        query = select(Subject).where(
-            Subject.study_id == study_id, Subject.deleted_at.is_(None)
-        )
+        query = select(Subject).where(Subject.study_id == study_id, Subject.deleted_at.is_(None))
         if site_id is not None:
             query = query.where(Subject.site_id == site_id)
         if status is not None:
@@ -478,6 +705,22 @@ class SubjectService:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _available_next_phases(phases, transitions, current_phase_id: UUID | None):
+        """Resolve ordered phase choices from the published transition graph."""
+        if current_phase_id is not None:
+            target_ids = {
+                transition.to_phase_id
+                for transition in transitions
+                if transition.from_phase_id == current_phase_id
+            }
+        else:
+            # Legacy subjects without a phase can enter only a graph root.
+            target_ids = {phase.id for phase in phases} - {
+                transition.to_phase_id for transition in transitions
+            }
+        return [phase for phase in phases if phase.id in target_ids]
 
     async def _get_published_version(
         self, session: AsyncSession, study_id: UUID

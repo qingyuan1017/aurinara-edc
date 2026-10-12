@@ -13,6 +13,7 @@ Satisfies Requirements:
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from pydantic import Field
@@ -51,7 +52,43 @@ class StudyVersionResponse(BaseSchema):
     created_at: UtcDatetime
 
 
+class DesignValidationCounts(BaseSchema):
+    """Definition totals included in the publication-readiness response."""
+
+    forms: int = 0
+    sections: int = 0
+    fields: int = 0
+    visits: int = 0
+    scheduled_form_mappings: int = 0
+    codelists: int = 0
+    codelist_items: int = 0
+    edit_checks: int = 0
+    subject_phases: int = 0
+
+
+class DesignValidationIssue(BaseSchema):
+    """One sanitized, actionable publication-readiness finding."""
+
+    code: str
+    severity: Literal["error", "warning"]
+    message: str
+    entity_type: str | None = None
+    entity_id: UUID | None = None
+
+
+class DesignValidationResponse(BaseSchema):
+    """Aggregate validation result for one Design_Version."""
+
+    version_id: UUID
+    valid: bool
+    counts: DesignValidationCounts
+    issues: list[DesignValidationIssue]
+
+
 __all__ = [
+    "DesignValidationCounts",
+    "DesignValidationIssue",
+    "DesignValidationResponse",
     "StudyAmendmentCreate",
     "StudyVersionCreate",
     "StudyVersionResponse",

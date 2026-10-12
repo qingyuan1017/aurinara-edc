@@ -1,9 +1,8 @@
-"""Form_Instance_Service — form instance initialization from definitions.
+"""Form_Instance_Service — form instance initialization from the published SoA.
 
 Satisfies Requirements:
-  - 7.4: When a Subject is created, initialize Form_Instances for each form
-          definition in the bound Study_Version, linked to their respective
-          Visit_Instances.
+  - 7.4: When a Subject is created, initialize Form_Instances for the forms
+          scheduled at each visit by the bound published Study_Version.
 
 All mutations write an Audit_Event within the caller's transaction (data + audit
 commit atomically).
@@ -19,15 +18,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit_service
 from app.models.edc.form_data import FormInstance, FormInstanceStatus
-from app.models.edc.form_metadata import FormDefinition
 from app.models.edc.subject import Subject
 from app.models.edc.visit import VisitInstance
+from app.services.designer.design_consumption_service import (
+    DesignConsumptionService,
+    design_consumption_service,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class FormInstanceService:
-    """Manages form instance initialization from study version form definitions."""
+    """Initializes operational forms from a published schedule of assessment."""
+
+    def __init__(
+        self,
+        *,
+        design_service: DesignConsumptionService | None = None,
+    ) -> None:
+        self._design = design_service or design_consumption_service
 
     async def initialize_instances(
         self,
@@ -35,13 +44,12 @@ class FormInstanceService:
         subject: Subject,
         actor_id: UUID | None = None,
     ) -> list[FormInstance]:
-        """Create Form_Instances from the subject's bound Study_Version (Req 7.4).
+        """Create scheduled Form_Instances from the subject's bound design.
 
-        For each visit_instance belonging to the subject, a FormInstance is
-        created for every form_definition in the bound study version. For
-        non-repeating forms this creates one FormInstance per visit per form.
-        For repeating forms, one empty FormInstance is created per visit per
-        form (records are added later via the Repeating_Record_Service).
+        The published schedule of assessment is authoritative for which form is
+        collected at which visit.  Procedure-only SoA entries do not create
+        Form_Instances.  Repeating forms receive one empty FormInstance for the
+        scheduled visit; records are added later by Repeating_Record_Service.
 
         Args:
             session: Active async database session.
@@ -51,17 +59,21 @@ class FormInstanceService:
         Returns:
             The list of created FormInstance objects.
         """
-        # Fetch all form definitions for the subject's bound study version
-        form_defs_result = await session.execute(
-            select(FormDefinition)
-            .where(FormDefinition.study_version_id == subject.study_version_id)
-            .order_by(FormDefinition.display_order)
+        schedule = await self._design.get_schedule_of_assessment(
+            session, subject.study_version_id
         )
-        form_definitions = list(form_defs_result.scalars().all())
+        scheduled_pairs = list(
+            dict.fromkeys(
+                (entry.visit_definition_id, entry.form_definition_id)
+                for entry in schedule.entries
+                if entry.visit_definition_id is not None
+                and entry.form_definition_id is not None
+            )
+        )
 
-        if not form_definitions:
+        if not scheduled_pairs:
             logger.info(
-                "No form definitions for study_version_id=%s; "
+                "No scheduled forms for study_version_id=%s; "
                 "skipping form instance initialization for subject_id=%s",
                 subject.study_version_id,
                 subject.id,
@@ -73,21 +85,34 @@ class FormInstanceService:
             select(VisitInstance).where(VisitInstance.subject_id == subject.id)
         )
         visit_instances = list(visit_result.scalars().all())
+        visits_by_definition = {
+            visit.visit_definition_id: visit
+            for visit in visit_instances
+            if visit.visit_definition_id is not None
+        }
 
         instances: list[FormInstance] = []
 
-        # Create a FormInstance for each (visit_instance, form_definition) pair
-        for visit_instance in visit_instances:
-            for form_def in form_definitions:
-                form_instance = FormInstance(
-                    subject_id=subject.id,
-                    visit_instance_id=visit_instance.id,
-                    form_definition_id=form_def.id,
-                    status=FormInstanceStatus.not_started,
-                    design_version_id=subject.study_version_id,
+        for visit_definition_id, form_definition_id in scheduled_pairs:
+            visit_instance = visits_by_definition.get(visit_definition_id)
+            if visit_instance is None:
+                logger.warning(
+                    "Skipping scheduled form without a subject visit instance: "
+                    "subject_id=%s visit_definition_id=%s form_definition_id=%s",
+                    subject.id,
+                    visit_definition_id,
+                    form_definition_id,
                 )
-                session.add(form_instance)
-                instances.append(form_instance)
+                continue
+            form_instance = FormInstance(
+                subject_id=subject.id,
+                visit_instance_id=visit_instance.id,
+                form_definition_id=form_definition_id,
+                status=FormInstanceStatus.not_started,
+                design_version_id=subject.study_version_id,
+            )
+            session.add(form_instance)
+            instances.append(form_instance)
 
         await session.flush()  # Assign ids
 

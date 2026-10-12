@@ -136,6 +136,18 @@ class DesignConsumptionService:
             form_code=form.form_code,
             display_order=form.display_order,
             is_repeating=form.is_repeating,
+            form_type=form.form_type,
+            access_type=form.access_type,
+            domain=form.domain,
+            label=form.label,
+            grid_rows=form.grid_rows,
+            grid_columns=form.grid_columns,
+            header_name=form.header_name,
+            detail_name=form.detail_name,
+            detail_type=form.detail_type,
+            show_variable_name=form.show_variable_name,
+            show_crf_id=form.show_crf_id,
+            show_odm_id=form.show_odm_id,
             fields=tuple(fields),
         )
 
@@ -147,6 +159,10 @@ class DesignConsumptionService:
             name=visit.name,
             visit_number=visit.visit_number,
             visit_type=visit.visit_type,
+            definition_kind=visit.definition_kind,
+            parent_folder_id=visit.parent_folder_id,
+            category=visit.category,
+            subtype=visit.subtype,
             target_day=visit.target_day,
             window_before=visit.window_before,
             window_after=visit.window_after,
@@ -494,6 +510,7 @@ class DesignConsumptionService:
                 SubjectPhaseDefinition.design_version_id == design_version_id,
                 SubjectPhaseDefinition.deleted_at.is_(None),
             )
+            .options(selectinload(SubjectPhaseDefinition.visits))
             .order_by(SubjectPhaseDefinition.display_order, SubjectPhaseDefinition.id)
         )
         return [SubjectPhaseDefinitionView.model_validate(p) for p in result.scalars().all()]

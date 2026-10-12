@@ -39,6 +39,8 @@ function setUser(permissions: string[] = []) {
 describe('task 4.3 public page composition', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    localStorage.clear()
+    window.history.replaceState({}, '', window.location.pathname)
     mockNavigate.mockReset()
     mockSearch.mockReturnValue({})
     useAuthStore.setState({ user: null, isAuthenticated: false })
@@ -117,6 +119,8 @@ describe('task 4.3 public page composition', () => {
 describe('task 4.3 export and edit-check composition', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    localStorage.clear()
+    window.history.replaceState({}, '', window.location.pathname)
     mockNavigate.mockReset()
     setUser([PERMISSIONS.DATA_EXPORT, PERMISSIONS.DESIGNER_EDITCHECK_CONFIGURE])
   })
@@ -124,7 +128,7 @@ describe('task 4.3 export and edit-check composition', () => {
   it('preserves export status labels, completed downloads, and create payloads', async () => {
     const get = vi.spyOn(api, 'get').mockResolvedValue({
       data: {
-        items: [{ id: 'export-1', format: 'csv', status: 'completed', filters: {}, created_at: '2026-01-01T10:00:00Z', completed_at: '2026-01-01T10:01:00Z' }],
+        items: [{ id: 'export-1', export_type: 'csv', status: 'Completed', created_at: '2026-01-01T10:00:00Z', completed_at: '2026-01-01T10:01:00Z' }],
         page: 1,
         page_size: 20,
         total: 1,
@@ -134,7 +138,8 @@ describe('task 4.3 export and edit-check composition', () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null)
     renderWithQueryClient(<ExportCenterPage studyId="study-1" />)
 
-    expect(await screen.findByRole('status', { name: 'Export status: completed' })).toBeInTheDocument()
+    expect(await screen.findByRole('status', { name: 'Export status: Completed' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'CSV' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Download' }))
     await waitFor(() => expect(get).toHaveBeenCalledWith('/exports/export-1/download'))
     expect(open).toHaveBeenCalled()
@@ -142,11 +147,11 @@ describe('task 4.3 export and edit-check composition', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create Export' }))
     fireEvent.change(screen.getByLabelText('Site Filter (optional)'), { target: { value: 'site-1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Start Export' }))
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/studies/study-1/exports', { format: 'csv', filters: { site_id: 'site-1' } }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/studies/study-1/exports', { export_type: 'csv', filters: { site_id: 'site-1' } }))
   })
 
   it('preserves edit-check JSON validation and clinical validation payloads', async () => {
-    const get = vi.spyOn(api, 'get').mockResolvedValue({ data: [] } as never)
+    const get = vi.spyOn(api, 'get').mockImplementation((url: string) => Promise.resolve({ data: url === '/studies/study-1/versions' ? [{ id: 'ver-draft', study_id: 'study-1', version_number: '1', status: 'draft', created_at: 'x' }] : [] } as never))
     const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {
       id: 'check-1', name: 'Required weight', description: null, rule_json: { field: 'weight', operator: 'not_null' }, severity: 'warning', is_active: true, created_at: '2026-01-01T10:00:00Z',
     } } as never)
@@ -163,7 +168,7 @@ describe('task 4.3 export and edit-check composition', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save check' }))
     await waitFor(() => expect(post).toHaveBeenCalledWith('/designer/studies/study-1/edit-checks', {
       name: 'Required weight', description: null, severity: 'warning', rule_json: { field: 'weight', operator: 'not_null' }, is_active: true,
-    }))
-    expect(get).toHaveBeenCalledWith('/designer/studies/study-1/edit-checks')
+    }, { params: { study_version_id: 'ver-draft' } }))
+    expect(get).toHaveBeenCalledWith('/designer/studies/study-1/edit-checks', { params: { study_version_id: 'ver-draft' } })
   })
 })

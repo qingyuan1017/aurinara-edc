@@ -1,0 +1,187 @@
+{
+  "codelists": [
+    {
+      "name": "Sex at Birth",
+      "code": "SEX",
+      "items": [
+        { "code": "M", "label": "Male", "display_order": 1 },
+        { "code": "F", "label": "Female", "display_order": 2 },
+        { "code": "U", "label": "Unknown", "display_order": 3 }
+      ]
+    },
+    {
+      "name": "Yes or No",
+      "code": "YES_NO",
+      "items": [
+        { "code": "Y", "label": "Yes", "display_order": 1 },
+        { "code": "N", "label": "No", "display_order": 2 }
+      ]
+    },
+    {
+      "name": "Adverse Event Severity",
+      "code": "AE_SEVERITY",
+      "items": [
+        { "code": "1", "label": "Mild", "display_order": 1 },
+        { "code": "2", "label": "Moderate", "display_order": 2 },
+        { "code": "3", "label": "Severe", "display_order": 3 }
+      ]
+    }
+  ],
+  "forms": [
+    {
+      "name": "Demographics",
+      "form_code": "DM",
+      "display_order": 1,
+      "is_repeating": false,
+      "sections": [
+        {
+          "name": "Subject Details",
+          "display_order": 1,
+          "fields": [
+            {
+              "label": "Subject Initials",
+              "variable_name": "SUBJINIT",
+              "control_type": "text",
+              "data_type": "string",
+              "display_order": 1,
+              "is_required": true,
+              "max_length": 4,
+              "help_text": "Enter initials only; do not enter the subject's full name."
+            },
+            {
+              "label": "Date of Birth",
+              "variable_name": "BRTHDAT",
+              "control_type": "date",
+              "data_type": "date",
+              "display_order": 2,
+              "is_required": true
+            },
+            {
+              "label": "Sex at Birth",
+              "variable_name": "SEX",
+              "control_type": "dropdown",
+              "data_type": "string",
+              "display_order": 3,
+              "is_required": true,
+              "codelist_code": "SEX"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Adverse Events",
+      "form_code": "AE",
+      "display_order": 2,
+      "is_repeating": true,
+      "sections": [
+        {
+          "name": "Event Details",
+          "display_order": 1,
+          "fields": [
+            {
+              "label": "Adverse Event Term",
+              "variable_name": "AETERM",
+              "control_type": "text",
+              "data_type": "string",
+              "display_order": 1,
+              "is_required": true,
+              "max_length": 255
+            },
+            {
+              "label": "Start Date",
+              "variable_name": "AESTDAT",
+              "control_type": "date",
+              "data_type": "date",
+              "display_order": 2,
+              "is_required": true
+            },
+            {
+              "label": "End Date",
+              "variable_name": "AEENDAT",
+              "control_type": "date",
+              "data_type": "date",
+              "display_order": 3
+            },
+            {
+              "label": "Serious Event",
+              "variable_name": "AESER",
+              "control_type": "radio",
+              "data_type": "string",
+              "display_order": 4,
+              "is_required": true,
+              "codelist_code": "YES_NO"
+            },
+            {
+              "label": "Severity",
+              "variable_name": "AESEV",
+              "control_type": "dropdown",
+              "data_type": "string",
+              "display_order": 5,
+              "is_required": true,
+              "codelist_code": "AE_SEVERITY"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "edit_checks": [
+    {
+      "name": "AE start date after end date",
+      "description": "Raises an error when the adverse-event start date is later than its end date.",
+      "rule_json": {
+        "field": "AESTDAT",
+        "operator": "after",
+        "value_field": "AEENDAT"
+      },
+      "severity": "error",
+      "is_active": true
+    },
+    {
+      "name": "Subject initials missing",
+      "description": "Raises a query when subject initials are not provided.",
+      "rule_json": {
+        "field": "SUBJINIT",
+        "operator": "is_null"
+      },
+      "severity": "query",
+      "is_active": true
+    }
+  ],
+  "visits": [
+    {
+      "name": "Screening",
+      "visit_number": 1,
+      "visit_type": "screening",
+      "target_day": 0,
+      "window_before": 14,
+      "window_after": 0,
+      "display_order": 1,
+      "is_required": true
+    },
+    {
+      "name": "Baseline",
+      "visit_number": 2,
+      "visit_type": "scheduled",
+      "target_day": 1,
+      "window_before": 0,
+      "window_after": 2,
+      "display_order": 2,
+      "is_required": true
+    },
+    {
+      "name": "Treatment Cycle",
+      "visit_number": 3,
+      "visit_type": "cycle",
+      "target_day": 28,
+      "window_before": 3,
+      "window_after": 3,
+      "display_order": 3,
+      "is_required": true,
+      "repeat_min": 1,
+      "repeat_max": 6,
+      "cycle_length": 28
+    }
+  ]
+}

@@ -20,6 +20,7 @@ Satisfies Requirements:
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import UTC, datetime
@@ -40,20 +41,26 @@ from app.services.shared.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
 
+_JSON_VALUE_PREFIX = "__edc_json__:"
+
 # Statuses that count as "post-submission" — changes require Reason_For_Change.
-_POST_SUBMISSION_STATUSES = frozenset({
-    FormInstanceStatus.submitted,
-    FormInstanceStatus.reviewed,
-    FormInstanceStatus.frozen,
-    FormInstanceStatus.locked,
-    FormInstanceStatus.signed,
-})
+_POST_SUBMISSION_STATUSES = frozenset(
+    {
+        FormInstanceStatus.submitted,
+        FormInstanceStatus.reviewed,
+        FormInstanceStatus.frozen,
+        FormInstanceStatus.locked,
+        FormInstanceStatus.signed,
+    }
+)
 
 # Statuses that block any modification (Req 10.7).
-_LOCKED_STATUSES = frozenset({
-    FormInstanceStatus.frozen,
-    FormInstanceStatus.locked,
-})
+_LOCKED_STATUSES = frozenset(
+    {
+        FormInstanceStatus.frozen,
+        FormInstanceStatus.locked,
+    }
+)
 
 
 class DataCaptureService:
@@ -126,9 +133,7 @@ class DataCaptureService:
         # block writes even when the form itself remains editable.
         for field_id_str, new_value in values.items():
             field_id = UUID(field_id_str)
-            await self._guard_modification(
-                session, form_instance, field_id=field_id
-            )
+            await self._guard_modification(session, form_instance, field_id=field_id)
             await self._upsert_field_value(
                 session,
                 form_instance=form_instance,
@@ -144,9 +149,7 @@ class DataCaptureService:
 
         # Sync data_jsonb from field_values (Req 23.3)
         await self._sync_data_jsonb(session, form_instance)
-        await self._invalidate_signed_form(
-            session, form_instance, actor_id=actor_id
-        )
+        await self._invalidate_signed_form(session, form_instance, actor_id=actor_id)
 
         form_instance.updated_at = datetime.now(UTC)
         await session.flush()
@@ -206,9 +209,7 @@ class DataCaptureService:
         field_value_map = await self._get_field_value_map(session, form_instance)
 
         # Validate
-        errors = await self._validate_submission(
-            session, field_definitions, field_value_map
-        )
+        errors = await self._validate_submission(session, field_definitions, field_value_map)
 
         if errors:
             # Req 10.4: preserve values and return errors
@@ -294,9 +295,7 @@ class DataCaptureService:
                 details={"field_id": str(field_id)},
             )
 
-        await self._guard_modification(
-            session, form_instance, field_id=field_id
-        )
+        await self._guard_modification(session, form_instance, field_id=field_id)
 
         await self._upsert_field_value(
             session,
@@ -309,9 +308,7 @@ class DataCaptureService:
 
         # Sync data_jsonb
         await self._sync_data_jsonb(session, form_instance)
-        await self._invalidate_signed_form(
-            session, form_instance, actor_id=actor_id, reason=reason
-        )
+        await self._invalidate_signed_form(session, form_instance, actor_id=actor_id, reason=reason)
         form_instance.updated_at = datetime.now(UTC)
         await session.flush()
 
@@ -349,14 +346,10 @@ class DataCaptureService:
         Raises:
             BusinessRuleError: If Frozen/Locked.
         """
-        await self._guard_modification(
-            session, form_instance, field_id=field_id
-        )
+        await self._guard_modification(session, form_instance, field_id=field_id)
 
         # Find or create the FieldValue row
-        field_value = await self._get_or_create_field_value(
-            session, form_instance, field_id
-        )
+        field_value = await self._get_or_create_field_value(session, form_instance, field_id)
 
         old_na = field_value.is_not_applicable
         field_value.is_not_applicable = True
@@ -460,9 +453,7 @@ class DataCaptureService:
             object_id = field_id
 
         if field_id is None:
-            blocked = await lock_service.is_modification_blocked(
-                session, target
-            )
+            blocked = await lock_service.is_modification_blocked(session, target)
         else:
             blocked = await lock_service.is_modification_blocked(
                 session,
@@ -587,17 +578,13 @@ class DataCaptureService:
     # Internal: sync data_jsonb (Req 23.3)
     # ------------------------------------------------------------------
 
-    async def _sync_data_jsonb(
-        self, session: AsyncSession, form_instance: FormInstance
-    ) -> None:
+    async def _sync_data_jsonb(self, session: AsyncSession, form_instance: FormInstance) -> None:
         """Rebuild data_jsonb from the current field_values rows.
 
         Ensures hybrid storage consistency (Req 22.3, 23.3).
         """
         result = await session.execute(
-            select(FieldValue).where(
-                FieldValue.form_instance_id == form_instance.id
-            )
+            select(FieldValue).where(FieldValue.form_instance_id == form_instance.id)
         )
         field_values = result.scalars().all()
 
@@ -607,7 +594,7 @@ class DataCaptureService:
             if fv.is_not_applicable:
                 data[key] = {"value": fv.value, "is_not_applicable": True}
             else:
-                data[key] = fv.value
+                data[key] = self._deserialize_value(fv.value)
 
         form_instance.data_jsonb = data
 
@@ -638,9 +625,7 @@ class DataCaptureService:
 
         # Get field definitions across all sections
         fields_result = await session.execute(
-            select(FieldDefinition).where(
-                FieldDefinition.form_section_id.in_(section_ids)
-            )
+            select(FieldDefinition).where(FieldDefinition.form_section_id.in_(section_ids))
         )
         return list(fields_result.scalars().all())
 
@@ -653,9 +638,7 @@ class DataCaptureService:
     ) -> dict[UUID, FieldValue]:
         """Return a dict mapping field_definition_id -> FieldValue."""
         result = await session.execute(
-            select(FieldValue).where(
-                FieldValue.form_instance_id == form_instance.id
-            )
+            select(FieldValue).where(FieldValue.form_instance_id == form_instance.id)
         )
         return {fv.field_definition_id: fv for fv in result.scalars().all()}
 
@@ -688,71 +671,88 @@ class DataCaptureService:
                 continue
 
             fv = field_value_map.get(field_def.id)
-            value = fv.value if fv else None
+            value = self._deserialize_value(fv.value) if fv else None
             is_na = fv.is_not_applicable if fv else False
 
             # --- Required check ---
             if (
                 field_def.is_required
                 and not is_na
-                and (value is None or (isinstance(value, str) and not value.strip()))
+                and (
+                    value is None
+                    or (isinstance(value, str) and not value.strip())
+                    or (isinstance(value, (list, dict)) and not value)
+                )
             ):
-                errors.append({
-                    "field_id": str(field_def.id),
-                    "variable_name": field_def.variable_name,
-                    "error": "required",
-                    "message": f"Field '{field_def.label}' is required",
-                })
+                errors.append(
+                    {
+                        "field_id": str(field_def.id),
+                        "variable_name": field_def.variable_name,
+                        "error": "required",
+                        "message": f"Field '{field_def.label}' is required",
+                    }
+                )
                 continue  # No further checks if missing
 
             # Skip further validation if no value or NA
-            if is_na or value is None or (isinstance(value, str) and not value.strip()):
+            if (
+                is_na
+                or value is None
+                or (isinstance(value, str) and not value.strip())
+                or (isinstance(value, (list, dict)) and not value)
+            ):
                 continue
 
             # --- Data type check ---
             type_error = self._validate_data_type(field_def, value)
             if type_error:
-                errors.append({
-                    "field_id": str(field_def.id),
-                    "variable_name": field_def.variable_name,
-                    "error": "data_type",
-                    "message": type_error,
-                })
+                errors.append(
+                    {
+                        "field_id": str(field_def.id),
+                        "variable_name": field_def.variable_name,
+                        "error": "data_type",
+                        "message": type_error,
+                    }
+                )
                 continue
 
             # --- Range check (min/max) ---
             range_error = self._validate_range(field_def, value)
             if range_error:
-                errors.append({
-                    "field_id": str(field_def.id),
-                    "variable_name": field_def.variable_name,
-                    "error": "range",
-                    "message": range_error,
-                })
+                errors.append(
+                    {
+                        "field_id": str(field_def.id),
+                        "variable_name": field_def.variable_name,
+                        "error": "range",
+                        "message": range_error,
+                    }
+                )
 
             # --- Codelist membership check ---
             if field_def.codelist_id is not None:
-                codelist_error = await self._validate_codelist(
-                    session, field_def, value
-                )
+                codelist_error = await self._validate_codelist(session, field_def, value)
                 if codelist_error:
-                    errors.append({
-                        "field_id": str(field_def.id),
-                        "variable_name": field_def.variable_name,
-                        "error": "codelist",
-                        "message": codelist_error,
-                    })
+                    errors.append(
+                        {
+                            "field_id": str(field_def.id),
+                            "variable_name": field_def.variable_name,
+                            "error": "codelist",
+                            "message": codelist_error,
+                        }
+                    )
 
             # --- Regex validation ---
-            if field_def.regex_validation:
+            if field_def.regex_validation and isinstance(value, str):
                 regex_error = self._validate_regex(field_def, value)
                 if regex_error:
-                    errors.append({
-                        "field_id": str(field_def.id),
-                        "variable_name": field_def.variable_name,
-                        "error": "format",
-                        "message": regex_error,
-                    })
+                    errors.append(
+                        {
+                            "field_id": str(field_def.id),
+                            "variable_name": field_def.variable_name,
+                            "error": "format",
+                            "message": regex_error,
+                        }
+                    )
 
         return errors
 
@@ -760,7 +760,7 @@ class DataCaptureService:
     # Internal: type validation
     # ------------------------------------------------------------------
 
-    def _validate_data_type(self, field_def: FieldDefinition, value: str) -> str | None:
+    def _validate_data_type(self, field_def: FieldDefinition, value: Any) -> str | None:
         """Validate the value matches the expected data type.
 
         Returns an error message string or None if valid.
@@ -788,10 +788,18 @@ class DataCaptureService:
             if not self._is_valid_datetime(value):
                 return f"Expected datetime (ISO 8601) for '{field_def.label}'"
 
-        elif data_type == "boolean" and value.lower() not in (
-            "true", "false", "1", "0", "yes", "no"
-        ):
-            return f"Expected boolean value for '{field_def.label}'"
+        elif data_type == "boolean":
+            if isinstance(value, bool):
+                return None
+            if not isinstance(value, str) or value.lower() not in (
+                "true",
+                "false",
+                "1",
+                "0",
+                "yes",
+                "no",
+            ):
+                return f"Expected boolean value for '{field_def.label}'"
 
         # string and text types always pass
         return None
@@ -800,7 +808,7 @@ class DataCaptureService:
     # Internal: range validation
     # ------------------------------------------------------------------
 
-    def _validate_range(self, field_def: FieldDefinition, value: str) -> str | None:
+    def _validate_range(self, field_def: FieldDefinition, value: Any) -> str | None:
         """Validate numeric range constraints (min_value / max_value).
 
         Returns an error message string or None if valid.
@@ -815,16 +823,10 @@ class DataCaptureService:
             return None  # Type validation handles this case
 
         if field_def.min_value is not None and numeric_value < field_def.min_value:
-            return (
-                f"Value {value} is below minimum {field_def.min_value} "
-                f"for '{field_def.label}'"
-            )
+            return f"Value {value} is below minimum {field_def.min_value} for '{field_def.label}'"
 
         if field_def.max_value is not None and numeric_value > field_def.max_value:
-            return (
-                f"Value {value} is above maximum {field_def.max_value} "
-                f"for '{field_def.label}'"
-            )
+            return f"Value {value} is above maximum {field_def.max_value} for '{field_def.label}'"
 
         return None
 
@@ -833,23 +835,21 @@ class DataCaptureService:
     # ------------------------------------------------------------------
 
     async def _validate_codelist(
-        self, session: AsyncSession, field_def: FieldDefinition, value: str
+        self, session: AsyncSession, field_def: FieldDefinition, value: Any
     ) -> str | None:
         """Validate codelist membership.
 
         Returns an error message string or None if the value is a valid code.
         """
         result = await session.execute(
-            select(CodelistItem.code).where(
-                CodelistItem.codelist_id == field_def.codelist_id
-            )
+            select(CodelistItem.code).where(CodelistItem.codelist_id == field_def.codelist_id)
         )
         valid_codes = {row[0] for row in result.all()}
 
-        if value not in valid_codes:
-            return (
-                f"Value '{value}' is not a valid code for '{field_def.label}'"
-            )
+        values = value if isinstance(value, list) else [value]
+        invalid_values = [item for item in values if item not in valid_codes]
+        if invalid_values:
+            return f"Value '{invalid_values[0]}' is not a valid code for '{field_def.label}'"
         return None
 
     # ------------------------------------------------------------------
@@ -863,10 +863,7 @@ class DataCaptureService:
         """
         try:
             if not re.fullmatch(field_def.regex_validation, value):  # type: ignore[arg-type]
-                return (
-                    f"Value '{value}' does not match the required format "
-                    f"for '{field_def.label}'"
-                )
+                return f"Value '{value}' does not match the required format for '{field_def.label}'"
         except re.error:
             # Invalid regex pattern in the definition — skip validation
             logger.warning(
@@ -938,7 +935,23 @@ class DataCaptureService:
         """Serialize a value to string for storage in the field_values row."""
         if value is None:
             return None
+        if isinstance(value, (list, dict, bool)):
+            return _JSON_VALUE_PREFIX + json.dumps(value, separators=(",", ":"))
         return str(value)
+
+    @staticmethod
+    def _deserialize_value(value: str | None) -> Any:
+        """Restore structured/boolean values serialized into FieldValue.value."""
+        if value is None:
+            return None
+        if not value.startswith(_JSON_VALUE_PREFIX):
+            return value
+        encoded_value = value.removeprefix(_JSON_VALUE_PREFIX)
+        try:
+            decoded = json.loads(encoded_value)
+        except (json.JSONDecodeError, TypeError):
+            return value
+        return decoded if isinstance(decoded, (list, dict, bool)) else value
 
 
 # Module-level singleton for convenience

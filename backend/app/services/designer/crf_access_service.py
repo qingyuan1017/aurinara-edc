@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit_service
@@ -118,6 +119,20 @@ class CrfAccessService:
             normalized_role,
         )
         return access
+
+    async def list_access_definitions(
+        self, session: AsyncSession, design_version_id: UUID
+    ) -> list[CrfAccessDefinition]:
+        """List live CRF access definitions for a draft or published design."""
+        result = await session.execute(
+            select(CrfAccessDefinition)
+            .where(
+                CrfAccessDefinition.design_version_id == design_version_id,
+                CrfAccessDefinition.deleted_at.is_(None),
+            )
+            .order_by(CrfAccessDefinition.role, CrfAccessDefinition.id)
+        )
+        return list(result.scalars().all())
 
 
 # Module-level singleton for convenience

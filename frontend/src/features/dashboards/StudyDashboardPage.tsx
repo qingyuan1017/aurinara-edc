@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
   DataTableShell,
@@ -123,7 +124,7 @@ export function StudyDashboardPage({ studyId, dataCleaning = false }: { studyId:
         description="Operational quality metrics scoped to your study permissions."
         actions={(
           <Button asChild variant="link" size="sm">
-            <a href={`/studies/${studyId}`}>← Back to study</a>
+            <Link to="/studies/$studyId" params={{ studyId }}>← Back to study</Link>
           </Button>
         )}
       />

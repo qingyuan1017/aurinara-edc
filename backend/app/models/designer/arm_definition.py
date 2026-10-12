@@ -41,8 +41,9 @@ if TYPE_CHECKING:  # avoid a runtime import cycle; the registry resolves by stri
     from app.models.designer.study_version import StudyVersion
 
 # Association table for the Arm_Definition <-> Visit_Definition membership: which
-# visits (plain visits and cycles, since a cycle is now a visit) occur in each
-# arm. Columns reference tables by name so the shared ORM registry resolves
+# real visit leaves (standalone or cycle-owned) occur in each arm. Folder and
+# cycle selections are expanded by the UI before persistence. Columns reference
+# tables by name so the shared ORM registry resolves
 # ``visit_definitions`` independent of which module owns the model at import
 # time; both FKs cascade on delete so removing an arm or a visit prunes the edge.
 arm_definition_visits = Table(
@@ -110,8 +111,8 @@ class ArmDefinition(Base):
 
     # Relationship (resolved by string against the shared ORM registry)
     study_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
-    # Many-to-many membership to Visit_Definitions (which visits occur in this
-    # arm). Resolved by class name so the registry links regardless of the
+    # Many-to-many membership to real Visit_Definition leaves (which standalone
+    # or cycle-owned visits occur in this arm). Resolved by class name so the registry links regardless of the
     # owning module of VisitDefinition.
     visits = relationship(
         "VisitDefinition",

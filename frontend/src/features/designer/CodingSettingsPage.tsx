@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { PermissionGuard } from '@/components/guards/PermissionGuard'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -12,13 +12,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DataTableShell, FormActions, FormField, PageContainer, PageHeader } from '@/components/patterns'
 import { DraftGate, getApiErrorMessage } from './shared'
 
-function CodingSettingsEditor({ versionId }: { versionId: string }) {
+function CodingSettingsEditor({ versionId, readOnly }: { versionId: string; readOnly: boolean }) {
+  const queryClient = useQueryClient()
   const [dictionary, setDictionary] = useState('')
   const [codingRule, setCodingRule] = useState('')
   const [fieldId, setFieldId] = useState('')
-  const [created, setCreated] = useState<CodingSettingResponse[]>([])
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const listQuery = useQuery({ queryKey: ['designer-coding-settings', versionId], queryFn: async () => (await api.get<CodingSettingResponse[]>(`/designer/versions/${versionId}/coding-settings`)).data })
 
   const create = useMutation({
     mutationFn: async () => {
@@ -31,7 +32,7 @@ function CodingSettingsEditor({ versionId }: { versionId: string }) {
       return (await api.post<CodingSettingResponse>(`/designer/versions/${versionId}/coding-settings`, payload)).data
     },
     onSuccess: (data) => {
-      setCreated((prev) => [...prev, data])
+      queryClient.invalidateQueries({ queryKey: ['designer-coding-settings', versionId] })
       setDictionary(''); setCodingRule(''); setFieldId('')
       setError(''); setMessage(`Coding setting for "${data.dictionary_reference}" added.`)
     },
@@ -40,12 +41,12 @@ function CodingSettingsEditor({ versionId }: { versionId: string }) {
 
   return (
     <PageContainer wide>
-      <PageHeader title="Coding settings" description="Configure medical-dictionary coding for the current draft version." />
+      <PageHeader title="Coding settings" description={readOnly ? 'Review medical-dictionary coding retained in this published design version.' : 'Configure medical-dictionary coding for the current draft version.'} />
       {message ? <Alert variant="success" className="mb-4"><AlertDescription>{message}</AlertDescription></Alert> : null}
       {error ? <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert> : null}
 
       <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
-        <Card>
+        {!readOnly ? <Card>
           <CardHeader><CardTitle className="text-base">New coding setting</CardTitle></CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); setError(''); create.mutate() }}>
@@ -61,19 +62,19 @@ function CodingSettingsEditor({ versionId }: { versionId: string }) {
               <FormActions pending={create.isPending} submitLabel="Add setting" pendingLabel="Adding…" />
             </form>
           </CardContent>
-        </Card>
+        </Card> : null}
 
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Added this session</CardTitle>
-            <span className="text-xs text-muted-foreground">{created.length}</span>
+            <CardTitle className="text-base">Coding settings</CardTitle>
+            <span className="text-xs text-muted-foreground">{listQuery.data?.length ?? 0}</span>
           </CardHeader>
           <CardContent>
-            <DataTableShell label="Coding settings" empty={!created.length} emptyTitle="No settings added yet" emptyDescription="Settings you create appear here.">
+            <DataTableShell label="Coding settings" empty={!listQuery.data?.length} emptyTitle="No coding settings" emptyDescription="Settings for the selected version appear here.">
               <Table>
-                <caption className="sr-only">Coding settings added this session</caption>
+                <caption className="sr-only">Coding settings for the selected design version</caption>
                 <TableHeader><TableRow>{['Dictionary', 'Rule', 'Field'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
-                <TableBody>{created.map((row) => (
+                <TableBody>{(listQuery.data ?? []).map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-medium">{row.dictionary_reference}</TableCell>
                     <TableCell>{row.coding_rule || '—'}</TableCell>
@@ -93,7 +94,7 @@ export function CodingSettingsPage({ studyId }: { studyId: string }) {
   return (
     <PermissionGuard permission={PERMISSIONS.DESIGNER_CODING_SETTING_CONFIGURE} studyId={studyId}>
       <DraftGate studyId={studyId}>
-        {(versionId) => <CodingSettingsEditor versionId={versionId} />}
+        {(versionId, selection) => <CodingSettingsEditor versionId={versionId} readOnly={selection.isReadOnly} />}
       </DraftGate>
     </PermissionGuard>
   )

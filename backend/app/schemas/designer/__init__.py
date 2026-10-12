@@ -22,6 +22,7 @@ from app.schemas.designer.subject_phase_definition import (
     SubjectPhaseDefinitionCreate,
     SubjectPhaseDefinitionResponse,
     SubjectPhaseDefinitionUpdate,
+    SubjectPhaseType,
 )
 from app.schemas.designer.subject_phase_transition import (
     SubjectPhaseTransitionCreate,
@@ -87,6 +88,7 @@ __all__ = [
     "SubjectPhaseTransitionCreate",
     "SubjectPhaseTransitionResponse",
     "SubjectPhaseTransitionView",
+    "SubjectPhaseType",
     "VisitDefinitionView",
     "VisitDependencyView",
 ]

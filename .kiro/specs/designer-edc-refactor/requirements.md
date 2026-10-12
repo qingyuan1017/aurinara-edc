@@ -84,6 +84,7 @@ Designs flow one direction only. The Designer_Module publishes a Design_Version;
 9. WHEN an authorized Designer_Role user amends a Published_Design with an amendment reason of 1 to 4,000 characters inclusive, THE Designer_Module SHALL create one new Draft_Design.
 10. IF an authorized Designer_Role user amends a Published_Design with an amendment reason that is empty or exceeds 4,000 characters, THEN THE Designer_Module SHALL reject the amendment and SHALL NOT create a new Draft_Design.
 11. THE Designer_Module SHALL retain all prior Published_Design versions for traceability.
+12. WHEN an authorized Designer_Role user selects a prior Published_Design from version history or the Designer version selector, THE Designer_Module SHALL display its complete retained design through the standard Designer modules, SHALL preserve that selection while navigating between modules, and SHALL expose no authoring action for that version.
 
 ### Requirement 3: Designer — Subject Phase Design
 
@@ -94,6 +95,16 @@ Designs flow one direction only. The Designer_Module publishes a Design_Version;
 1. WHEN an authorized Designer_Role user creates a Subject_Phase_Definition within a Draft_Design with a phase name of 1 to 100 characters that is unique within the Draft_Design and a display order of 1 to 999, THE Designer_Module SHALL persist the Subject_Phase_Definition in that Draft_Design.
 2. IF a requested Subject_Phase_Definition name is not unique within the Draft_Design, THEN THE Designer_Module SHALL reject the request, SHALL NOT persist the Subject_Phase_Definition, and SHALL return an error indication identifying the duplicate name.
 3. THE Designer_Module SHALL associate each Subject_Phase_Definition with exactly one Design_Version.
+4. WHEN a registered, screen-failure, or common subject phase is authored, THE Designer_Module SHALL allow it to reference an ordered set of standalone or cycle-owned Visit_Definitions from the same Design_Version and SHALL reject missing, cross-version, folder, or cycle-container references.
+5. THE Designer_Module SHALL support registered, screen-failure, common, complete, and arm subject phase types; complete and arm phases SHALL NOT carry direct visit associations.
+6. WHEN study conduct starts for a Subject, THE EDC_Module SHALL initialize the subject to the first configured registered phase when one exists and SHALL expose authorized phase updates in Study Data.
+7. WHILE a Subject has a current registered, screen-failure, or common phase, THE EDC_Module SHALL show only visits associated with that phase in Study Data; while the current phase is arm, it SHALL show visits associated with the selected arm.
+8. WHEN an authorized user enters an arm phase, THE EDC_Module SHALL require the user to choose an Arm_Definition from the Subject's bound Published_Design and SHALL persist that arm assignment.
+9. WHEN an authorized user enters a complete phase, THE EDC_Module SHALL mark the Subject completed and SHALL show no remaining protocol visits for data entry.
+10. WHEN Study Data presents or accepts a subject phase change, THE EDC_Module SHALL allow only phases connected by an outgoing transition from the Subject's current phase in the bound Published_Design and SHALL reject attempts to skip outside that flow.
+11. WHEN the Subjects list is displayed, THE EDC_Module SHALL show the Site name and SHALL use the Subject's current phase name as the displayed status when a current phase is assigned.
+12. WHEN an authorized user views a Subject or Form route, THE EDC_Module SHALL display the subject number and form name in breadcrumbs and SHALL NOT expose their internal identifiers as breadcrumb labels.
+13. WHEN an authorized user navigates among breadcrumbs, Studies, Subjects, Forms, or related Study Data routes, THE EDC_Module SHALL retain the selected study and site until the user explicitly changes context or signs out.
 
 ### Requirement 4: Designer — CRF Design
 
@@ -110,6 +121,20 @@ Designs flow one direction only. The Designer_Module publishes a Design_Version;
 7. WHEN an authorized Designer_Role user defines a Raw_Data_Variable_Setting for a captured item within a Draft_Design, THE Designer_Module SHALL persist the raw-data variable name, type, and attributes.
 8. WHEN an authorized Designer_Role user defines a Coding_Setting for a coded item within a Draft_Design, THE Designer_Module SHALL persist the coding dictionary reference and coding rule.
 9. IF any CRF Designer_Definition fails design validation, THEN THE Designer_Module SHALL reject the publication of the containing Design_Version and SHALL return an error indication identifying the failing definition.
+10. WHEN a form is authored, THE Designer_Module SHALL persist its form type (simple, log, grid, or header-details), access type (open access, restricted edit, or general blind), and optional domain and label.
+11. WHEN a form section is authored, THE Designer_Module SHALL persist its label, label-only behavior, dataset-output behavior, help text, and access type.
+12. WHEN a form item is authored, THE Designer_Module SHALL support label, text, text area, listbox, radio, checkbox, time, date, integer, float, slider, body-image, and unit controls and SHALL persist question, caption, text alignment, help text, data type, length, variable, label, and optional record identifier metadata.
+13. WHEN visit organization is authored, THE Designer_Module SHALL distinguish standalone visits and cycle-owned visits from folder and cycle containers; SHALL allow only a standalone visit to reference a parent folder; and SHALL persist visit type (scheduled, unscheduled, or common), optional category (screening, pretreatment, treatment, or follow-up), and optional subtype (eCOA or eDiary).
+14. WHEN a cycle is authored, THE Designer_Module SHALL behave as a special folder whose child cycle visits are configured within that cycle; each cycle visit SHALL belong to exactly one cycle, and standalone visits or another cycle's visits SHALL NOT be selectable as members.
+15. WHEN a Schedule_Of_Assessment is authored, THE Designer_Module SHALL allow standalone Visit_Definitions and cycle-owned visit definitions as schedule columns; folder and cycle containers SHALL NOT appear.
+16. WHEN a grid form is authored, THE Designer_Module SHALL persist its row and column configuration.
+17. WHEN a header-details form is authored, THE Designer_Module SHALL persist its header name, detail name, and detail type (log or grid).
+18. WHEN form presentation is configured, THE Designer_Module SHALL persist whether variable name, CRF ID, and ODM ID are shown, and SHALL persist optional CRF and ODM identifiers on form items.
+19. THE Form Builder SHALL present form and field settings in right-side drawers.
+20. WHEN a form item is displayed in the Form Builder or operational data entry, THE Unified_Clinical_Platform SHALL render the input widget corresponding to its configured control type; multi-value controls SHALL preserve structured values across save and reload.
+21. WHEN a form-owned raw dataset schema is generated, THE Designer_Module SHALL include PROTOCOL, SITE, SUBJINIT, VISIT, FORM, PROCEDUR, VISITINS, FORMINS, GROUPINS, LRMODDTS, ERMODDDTS, and LRMODBY; SHALL generate a configurable-suffix companion variable for every codelist and numeric field; and SHALL generate configurable year, month, and day component variables for every date field.
+22. WHEN Schedule_Of_Assessment visit columns are displayed, THE Designer_Module SHALL sort each hierarchy level by display order with visit number as a deterministic tie-breaker; a cycle's child visits SHALL appear together at the cycle's position among its top-level peers, before the next top-level visit.
+23. WHEN an Arm_Definition's member visits are selected or edited, THE Designer_Module SHALL present the visit hierarchy; selecting a folder or cycle SHALL select its real descendant visits, individual descendants SHALL remain independently selectable, legacy container membership SHALL be expanded to real descendant visits when opened for editing, and only standalone or cycle-owned visit identifiers SHALL be persisted as arm membership.
 
 ### Requirement 5: Designer — Rule Design
 
@@ -122,6 +147,7 @@ Designs flow one direction only. The Designer_Module publishes a Design_Version;
 3. WHEN an authorized Designer_Role user tests an Edit_Check_Rule against a provided test case within a Draft_Design, THE Designer_Module SHALL return the pass or fail evaluation result without creating any Operational_Record.
 4. THE Designer_Module SHALL associate each Edit_Check_Rule with exactly one Design_Version.
 5. THE Designer_Module SHALL store Edit_Check_Rules as declarative definitions that the EDC_Module evaluates without executing user-provided code.
+6. WHEN an authorized Designer_Role user deletes an Edit_Check_Rule from a Draft_Design, THE Designer_Module SHALL remove the unused rule and record an audit event; IF the rule belongs to a Published_Design or has persisted validation results, THEN deletion SHALL be rejected.
 
 ### Requirement 6: Designer — Codelist Design
 

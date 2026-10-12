@@ -9,6 +9,7 @@ Satisfies Requirements:
          within a design version.
 
 Endpoints:
+  - GET  /versions/{version_id}/coding-settings   list coding settings
   - POST /versions/{version_id}/coding-settings   create a coding setting
 """
 
@@ -37,6 +38,23 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 router = APIRouter(prefix="/versions", tags=["designer-coding-settings"])
 
 
+@router.get(
+    "/{version_id}/coding-settings",
+    response_model=list[CodingSettingResponse],
+)
+async def list_coding_settings(
+    version_id: UUID,
+    session: DbSession,
+    current_user: Annotated[User, Depends(require_permission("designer.coding_setting.configure"))],
+) -> list[CodingSettingResponse]:
+    """List coding settings for a draft or published Design_Version."""
+    await study_version_service.get_version(session, version_id)
+    return [
+        CodingSettingResponse.model_validate(item)
+        for item in await coding_setting_service.list_coding_settings(session, version_id)
+    ]
+
+
 @router.post(
     "/{version_id}/coding-settings",
     response_model=CodingSettingResponse,
@@ -46,9 +64,7 @@ async def create_coding_setting(
     version_id: UUID,
     body: CodingSettingCreate,
     session: DbSession,
-    current_user: Annotated[
-        User, Depends(require_permission("designer.coding_setting.configure"))
-    ],
+    current_user: Annotated[User, Depends(require_permission("designer.coding_setting.configure"))],
 ) -> CodingSettingResponse:
     """Create a Coding_Setting within a draft Design_Version.
 

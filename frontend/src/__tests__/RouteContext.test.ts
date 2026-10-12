@@ -107,4 +107,18 @@ describe('route context adapter', () => {
       'Site activation',
     ])
   })
+
+  it('never exposes subject or form identifiers while resource labels load', () => {
+    const breadcrumbs = getRouteBreadcrumbs({
+      pathname: '/subjects/subject-id/forms/form-id',
+      search: {},
+    })
+
+    expect(breadcrumbs.map((item) => item.label)).toEqual([
+      'Subjects',
+      'Subject',
+      'Forms',
+      'Form',
+    ])
+  })
 })

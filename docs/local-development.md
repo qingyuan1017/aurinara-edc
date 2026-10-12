@@ -55,6 +55,23 @@ Start FastAPI and leave this terminal running:
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+Start the EDC clinical export worker in another terminal. It processes queued
+exports and stores generated files under `backend/exports/`:
+
+```bash
+cd backend
+python -m app.workers.export_queue_worker --watch
+```
+
+To process only one bounded batch and exit, omit `--watch`. The default batch
+size is 10; it can be changed with `--batch-size`. When using Docker Compose,
+start the equivalent service from the repository root:
+
+```bash
+docker compose up -d edc-export-worker
+docker compose logs -f edc-export-worker
+```
+
 When the shared control plane is enabled, keep the canonical projection worker running
 as well:
 
@@ -125,11 +142,11 @@ npm run build
 
 ## Stop and restart
 
-Stop the API and frontend with `Ctrl+C` in their respective terminals. From the repository root, stop PostgreSQL without removing its data:
+Stop the API, frontend, and any host-run export worker with `Ctrl+C` in their respective terminals. From the repository root, stop PostgreSQL and the Compose export worker without removing database data:
 
 ```bash
 cd /Users/jason/Aurinara/edc
-docker compose stop postgres
+docker compose stop edc-export-worker postgres
 ```
 
 Start it again later:

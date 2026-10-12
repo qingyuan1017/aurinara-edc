@@ -38,8 +38,8 @@ const DRAFT_VERSIONS = [
 ]
 
 const PHASES = [
-  { id: 'ph-1', design_version_id: 'ver-draft', name: 'Screening', display_order: 1, created_at: 'x' },
-  { id: 'ph-2', design_version_id: 'ver-draft', name: 'Treatment', display_order: 2, created_at: 'x' },
+  { id: 'ph-1', design_version_id: 'ver-draft', name: 'Screening', phase_type: 'registered', display_order: 1, visit_definition_ids: ['visit-1'], created_at: 'x' },
+  { id: 'ph-2', design_version_id: 'ver-draft', name: 'Treatment', phase_type: 'common', display_order: 2, visit_definition_ids: [], created_at: 'x' },
 ]
 
 function mockBase(transitions: unknown[] = []) {
@@ -47,6 +47,11 @@ function mockBase(transitions: unknown[] = []) {
     if (url === '/studies/study-1/versions') return Promise.resolve({ data: DRAFT_VERSIONS })
     if (url === '/designer/versions/ver-draft/subject-phases') return Promise.resolve({ data: PHASES })
     if (url === '/designer/versions/ver-draft/subject-phase-transitions') return Promise.resolve({ data: transitions })
+    if (url === '/designer/versions/ver-draft/visits') return Promise.resolve({ data: [
+      { id: 'visit-1', name: 'Screening visit', definition_kind: 'visit' },
+      { id: 'cycle-visit-1', name: 'Cycle day 1', definition_kind: 'cycle_visit' },
+      { id: 'folder-1', name: 'Screening folder', definition_kind: 'folder' },
+    ] })
     return Promise.resolve({ data: [] })
   })
 }
@@ -54,6 +59,8 @@ function mockBase(transitions: unknown[] = []) {
 describe('SubjectPhasesPage (flow)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    window.history.replaceState({}, '', window.location.pathname)
     seedPermissions(['designer.subject_phase.read', 'designer.subject_phase.configure'])
   })
 
@@ -67,6 +74,35 @@ describe('SubjectPhasesPage (flow)', () => {
     expect(screen.getAllByText('Treatment').length).toBeGreaterThan(0)
     // The React Flow graph container is present and labelled.
     expect(screen.getByLabelText('Subject phase flow graph')).toBeInTheDocument()
+  })
+
+  it('shows visit membership for every phase in a selected published version', async () => {
+    localStorage.setItem('designer:selected-version:study-1', 'ver-pub')
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: [
+        ...DRAFT_VERSIONS,
+        { id: 'ver-pub', study_id: 'study-1', version_number: '1', status: 'published', created_at: '2024-01-01T00:00:00Z' },
+      ] })
+      if (url === '/designer/versions/ver-pub/subject-phases') return Promise.resolve({ data: [
+        { id: 'old-ph-1', design_version_id: 'ver-pub', name: 'Published treatment', phase_type: 'common', display_order: 1, visit_definition_ids: ['old-visit-1', 'old-cycle-visit-1'], created_at: 'x' },
+        { id: 'old-ph-2', design_version_id: 'ver-pub', name: 'Published complete', phase_type: 'complete', display_order: 2, visit_definition_ids: [], created_at: 'x' },
+      ] })
+      if (url === '/designer/versions/ver-pub/subject-phase-transitions') return Promise.resolve({ data: [] })
+      if (url === '/designer/versions/ver-pub/visits') return Promise.resolve({ data: [
+        { id: 'old-visit-1', name: 'Published baseline', definition_kind: 'visit' },
+        { id: 'old-cycle-visit-1', name: 'Published cycle day 1', definition_kind: 'cycle_visit' },
+      ] })
+      return Promise.resolve({ data: [] })
+    })
+
+    renderPage(<SubjectPhasesPage studyId="study-1" />)
+
+    expect(await screen.findByRole('heading', { name: 'Phase visit membership' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Published treatment visit membership' })).toHaveTextContent('Published baseline')
+    expect(screen.getByRole('region', { name: 'Published treatment visit membership' })).toHaveTextContent('Published cycle day 1')
+    expect(screen.getByRole('region', { name: 'Published complete visit membership' })).toHaveTextContent('This phase completes the study and has no associated visits.')
+    expect(screen.queryByRole('button', { name: 'Save phase' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete phase' })).not.toBeInTheDocument()
   })
 
   it('does NOT POST a transition when source equals target (self-guard)', async () => {
@@ -114,5 +150,29 @@ describe('SubjectPhasesPage (flow)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete phase' }))
 
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/designer/subject-phases/ph-1'))
+  })
+
+  it('updates a phase with its associated real visits', async () => {
+    mockBase()
+    vi.mocked(api.patch).mockResolvedValue({ data: PHASES[0] } as never)
+    renderPage(<SubjectPhasesPage studyId="study-1" />)
+
+    fireEvent.change(await screen.findByLabelText('Select phase'), { target: { value: 'ph-1' } })
+    expect(screen.getAllByText('Screening visit').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Screening folder')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save phase' }))
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+      '/designer/subject-phases/ph-1',
+      { name: 'Screening', phase_type: 'registered', visit_definition_ids: ['visit-1'] },
+    ))
+  })
+
+  it('does not offer visit membership for arm and complete phases', async () => {
+    mockBase()
+    renderPage(<SubjectPhasesPage studyId="study-1" />)
+
+    fireEvent.change(await screen.findByLabelText('New phase type'), { target: { value: 'arm' } })
+    expect(screen.getByText('This phase type does not associate visits.')).toBeInTheDocument()
   })
 })

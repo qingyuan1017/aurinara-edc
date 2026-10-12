@@ -74,6 +74,8 @@ class SubjectResponse(BaseSchema):
     study_id: UUID
     site_id: UUID
     study_version_id: UUID
+    current_phase_definition_id: UUID | None = None
+    arm_definition_id: UUID | None = None
     subject_number: str
     status: SubjectStatus
     created_by: UUID
@@ -82,6 +84,14 @@ class SubjectResponse(BaseSchema):
     deleted_at: UtcDatetime | None = None
     deleted_by: UUID | None = None
     deletion_reason: str | None = None
+
+
+class SubjectListResponse(SubjectResponse):
+    """Subject row enriched with human-readable site and phase details."""
+
+    site_name: str | None = None
+    current_phase_name: str | None = None
+    current_phase_type: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -115,4 +125,48 @@ class CasebookResponse(BaseSchema):
     subject_number: str
     status: SubjectStatus
     study_version_id: UUID
+    current_phase_definition_id: UUID | None = None
+    current_phase_name: str | None = None
+    current_phase_type: str | None = None
+    arm_definition_id: UUID | None = None
+    arm_name: str | None = None
     visits: list[CasebookVisitEntry] = Field(default_factory=list)
+
+
+class SubjectPhaseOption(BaseSchema):
+    """One configured phase available for the subject's published design."""
+
+    id: UUID
+    name: str
+    phase_type: str
+    display_order: int
+    visit_definition_ids: list[UUID] = Field(default_factory=list)
+
+
+class SubjectArmOption(BaseSchema):
+    """One configured arm available for assignment."""
+
+    id: UUID
+    name: str
+    display_order: int
+    description: str | None = None
+
+
+class SubjectPhaseStateResponse(BaseSchema):
+    """Current phase/arm state plus choices from the published design."""
+
+    current_phase_definition_id: UUID | None = None
+    current_phase_name: str | None = None
+    current_phase_type: str | None = None
+    arm_definition_id: UUID | None = None
+    arm_name: str | None = None
+    phases: list[SubjectPhaseOption] = Field(default_factory=list)
+    next_phases: list[SubjectPhaseOption] = Field(default_factory=list)
+    arms: list[SubjectArmOption] = Field(default_factory=list)
+
+
+class SubjectPhaseUpdate(BaseCreateSchema):
+    """Move a subject to a configured phase, selecting an arm when required."""
+
+    phase_definition_id: UUID
+    arm_definition_id: UUID | None = None

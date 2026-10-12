@@ -17,11 +17,12 @@ Satisfies Requirements:
 
 from __future__ import annotations
 
+from enum import StrEnum
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
-from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
+from app.schemas.shared.base import BaseCreateSchema, BaseSchema, BaseUpdateSchema, UtcDatetime
 
 # Shared field bounds (Requirement 4.2).
 NAME_MIN_LENGTH = 1
@@ -32,6 +33,35 @@ TARGET_DAY_MIN = 0
 TARGET_DAY_MAX = 99999
 WINDOW_BOUND_MIN = 0
 WINDOW_BOUND_MAX = 99999
+
+
+class VisitDefinitionKind(StrEnum):
+    visit = "visit"
+    cycle_visit = "cycle_visit"
+    folder = "folder"
+    cycle = "cycle"
+
+
+class VisitType(StrEnum):
+    scheduled = "scheduled"
+    unscheduled = "unscheduled"
+    common = "common"
+    # Historical values remain valid for existing studies/imports.
+    screening = "screening"
+    visit = "visit"
+    cycle = "cycle"
+
+
+class VisitCategory(StrEnum):
+    screening = "screening"
+    pretreatment = "pretreatment"
+    treatment = "treatment"
+    follow_up = "follow_up"
+
+
+class VisitSubtype(StrEnum):
+    ecoa = "ecoa"
+    ediary = "ediary"
 
 
 class VisitDefinitionCreate(BaseCreateSchema):
@@ -45,18 +75,17 @@ class VisitDefinitionCreate(BaseCreateSchema):
     """
 
     name: str = Field(..., min_length=NAME_MIN_LENGTH, max_length=NAME_MAX_LENGTH)
-    visit_number: int = Field(
-        ...,
+    definition_kind: VisitDefinitionKind = VisitDefinitionKind.visit
+    visit_number: int | None = Field(
+        None,
         ge=VISIT_NUMBER_MIN,
         le=VISIT_NUMBER_MAX,
         description="Ordinal number of the visit (1-9999)",
     )
-    visit_type: str = Field(
-        ...,
-        min_length=1,
-        max_length=50,
-        description="e.g. scheduled, unscheduled, screening",
-    )
+    visit_type: VisitType = VisitType.scheduled
+    parent_folder_id: UUID | None = None
+    category: VisitCategory | None = None
+    subtype: VisitSubtype | None = None
     target_day: int | None = Field(
         None,
         ge=TARGET_DAY_MIN,
@@ -82,6 +111,46 @@ class VisitDefinitionCreate(BaseCreateSchema):
     cycle_length: int | None = Field(
         None, ge=0, description="Cycle-only: nominal length in days of one iteration"
     )
+    member_visit_ids: list[UUID] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_kind(self) -> VisitDefinitionCreate:
+        kind = self.definition_kind
+        if self.visit_type == VisitType.cycle:
+            kind = VisitDefinitionKind.cycle
+            self.definition_kind = kind
+        if (
+            kind in {VisitDefinitionKind.visit, VisitDefinitionKind.cycle_visit}
+            and self.visit_number is None
+        ):
+            raise ValueError("visit_number is required for a visit or cycle visit")
+        if kind != VisitDefinitionKind.visit and self.parent_folder_id is not None:
+            raise ValueError("Only a visit can have a parent folder")
+        if self.member_visit_ids:
+            raise ValueError("Cycle visits must be created inside their owning cycle")
+        return self
+
+
+class VisitDefinitionUpdate(BaseUpdateSchema):
+    name: str | None = Field(None, min_length=NAME_MIN_LENGTH, max_length=NAME_MAX_LENGTH)
+    visit_number: int | None = Field(None, ge=VISIT_NUMBER_MIN, le=VISIT_NUMBER_MAX)
+    visit_type: VisitType | None = None
+    parent_folder_id: UUID | None = None
+    category: VisitCategory | None = None
+    subtype: VisitSubtype | None = None
+    target_day: int | None = Field(None, ge=TARGET_DAY_MIN, le=TARGET_DAY_MAX)
+    window_before: int | None = Field(None, ge=WINDOW_BOUND_MIN, le=WINDOW_BOUND_MAX)
+    window_after: int | None = Field(None, ge=WINDOW_BOUND_MIN, le=WINDOW_BOUND_MAX)
+    display_order: int | None = None
+    is_required: bool | None = None
+    repeat_min: int | None = Field(None, ge=0)
+    repeat_max: int | None = Field(None, ge=0)
+    cycle_length: int | None = Field(None, ge=0)
+    member_visit_ids: list[UUID] | None = Field(
+        None,
+        deprecated=True,
+        description="Read-only membership; create child visits through the owning cycle",
+    )
 
 
 class VisitDefinitionResponse(BaseSchema):
@@ -92,6 +161,10 @@ class VisitDefinitionResponse(BaseSchema):
     name: str
     visit_number: int
     visit_type: str
+    definition_kind: str
+    parent_folder_id: UUID | None = None
+    category: str | None = None
+    subtype: str | None = None
     target_day: int | None = None
     window_before: int | None = None
     window_after: int | None = None
@@ -100,4 +173,16 @@ class VisitDefinitionResponse(BaseSchema):
     repeat_min: int | None = None
     repeat_max: int | None = None
     cycle_length: int | None = None
+    member_visit_ids: list[UUID] = Field(default_factory=list)
     created_at: UtcDatetime
+
+
+__all__ = [
+    "VisitCategory",
+    "VisitDefinitionCreate",
+    "VisitDefinitionKind",
+    "VisitDefinitionResponse",
+    "VisitDefinitionUpdate",
+    "VisitSubtype",
+    "VisitType",
+]

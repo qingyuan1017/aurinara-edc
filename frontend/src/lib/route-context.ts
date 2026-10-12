@@ -190,10 +190,10 @@ function segmentLabel(segments: readonly string[], index: number): string {
 
   if (parent === 'studies') return `Study ${decoded}`
   if (parent === 'sites') return `Site ${decoded}`
-  if (parent === 'subjects') return `Subject ${decoded}`
+  if (parent === 'subjects') return 'Subject'
   if (parent === 'queries') return `Query ${decoded}`
   if (grandparent === 'reports' || parent === 'reports') return `Report ${decoded}`
-  if (parent === 'forms') return `Form ${decoded}`
+  if (parent === 'forms') return 'Form'
   if (STATIC_LABELS[decoded]) return STATIC_LABELS[decoded]
   return humanizeSegment(decoded)
 }

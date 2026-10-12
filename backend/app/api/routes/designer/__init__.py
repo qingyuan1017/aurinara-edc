@@ -12,6 +12,7 @@ module ownership stays explicit.
 from fastapi import APIRouter
 
 from app.api.routes.designer.arms import router as arms_router
+from app.api.routes.designer.bulk_import import router as bulk_import_router
 from app.api.routes.designer.codelists import (
     router as codelists_router,
 )
@@ -87,6 +88,7 @@ for resource_router in (
     crf_access_router,
     raw_data_variables_router,
     coding_settings_router,
+    bulk_import_router,
 ):
     router.include_router(resource_router)
 

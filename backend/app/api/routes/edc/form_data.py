@@ -56,6 +56,9 @@ def _instance_payload(form_instance: Any) -> dict[str, Any]:
                 {
                     "id": field.id,
                     "label": field.label,
+                    "question": field.question,
+                    "caption": field.caption,
+                    "text_align": field.text_align,
                     "variable_name": field.variable_name,
                     "control_type": field.control_type,
                     "data_type": field.data_type,
@@ -63,6 +66,12 @@ def _instance_payload(form_instance: Any) -> dict[str, Any]:
                     "default_value": field.default_value,
                     "help_text": field.help_text,
                     "unit": field.unit,
+                    "min_value": field.min_value,
+                    "max_value": field.max_value,
+                    "max_length": field.max_length,
+                    "decimal_precision": field.decimal_precision,
+                    "is_read_only": field.is_read_only,
+                    "is_calculated": field.is_calculated,
                     # Choice controls (dropdown/radio/checkbox/...) render their
                     # options from the linked codelist's items. Project them as
                     # {value: code, label} ordered by display order so the
@@ -83,8 +92,7 @@ def _instance_payload(form_instance: Any) -> dict[str, Any]:
         for section in definition.sections
     ]
     values = form_instance.data_jsonb or {
-        str(value.field_definition_id): value.value
-        for value in form_instance.field_values
+        str(value.field_definition_id): value.value for value in form_instance.field_values
     }
     return {
         "id": form_instance.id,
@@ -191,9 +199,7 @@ async def submit_form(
     return FormInstanceResponse.model_validate(_instance_payload(updated))
 
 
-@router.post(
-    "/{form_instance_id}/change-value", response_model=FormInstanceResponse
-)
+@router.post("/{form_instance_id}/change-value", response_model=FormInstanceResponse)
 async def change_field_value(
     form_instance_id: UUID,
     body: ChangeValueRequest,
@@ -242,9 +248,7 @@ async def get_form_instance_audit(
         entity_type="form_instance",
         entity_id=form_instance_id,
     )
-    result = await audit_service.search(
-        session, filters=filters, pagination=pagination
-    )
+    result = await audit_service.search(session, filters=filters, pagination=pagination)
 
     # For a complete audit trail, we search both form_instance and field_value
     # events. The primary search covers form-level events (submit, status changes).

@@ -33,6 +33,9 @@ from app.models.shared.identity import User
 from app.schemas.edc.subject import (
     CasebookResponse,
     SubjectCreate,
+    SubjectListResponse,
+    SubjectPhaseStateResponse,
+    SubjectPhaseUpdate,
     SubjectResponse,
     SubjectUpdate,
 )
@@ -53,7 +56,7 @@ study_subjects_router = APIRouter(prefix="/studies", tags=["subjects"])
 
 
 @study_subjects_router.get(
-    "/{study_id}/subjects", response_model=PaginatedResponse[SubjectResponse]
+    "/{study_id}/subjects", response_model=PaginatedResponse[SubjectListResponse]
 )
 async def list_subjects(
     study_id: UUID,
@@ -62,7 +65,7 @@ async def list_subjects(
     pagination: Annotated[PaginationParams, Depends()],
     site_id: UUID | None = None,
     status: SubjectStatus | None = None,
-) -> PaginatedResponse[SubjectResponse]:
+) -> PaginatedResponse[SubjectListResponse]:
     """List subjects for a study (paginated, optional site_id/status filters).
 
     Permission: subject.read
@@ -71,17 +74,31 @@ async def list_subjects(
     result = await subject_service.list_subjects(
         session, study_id, pagination, site_id=site_id, status=status
     )
-    return PaginatedResponse[SubjectResponse](
-        items=[SubjectResponse.model_validate(s) for s in result.items],
+    return PaginatedResponse[SubjectListResponse](
+        items=[
+            SubjectListResponse(
+                **SubjectResponse.model_validate(subject).model_dump(),
+                site_name=subject.site.name if subject.site else None,
+                current_phase_name=(
+                    subject.current_phase_definition.name
+                    if subject.current_phase_definition
+                    else None
+                ),
+                current_phase_type=(
+                    subject.current_phase_definition.phase_type
+                    if subject.current_phase_definition
+                    else None
+                ),
+            )
+            for subject in result.items
+        ],
         page=result.page,
         page_size=result.page_size,
         total=result.total,
     )
 
 
-@study_subjects_router.post(
-    "/{study_id}/subjects", response_model=SubjectResponse, status_code=201
-)
+@study_subjects_router.post("/{study_id}/subjects", response_model=SubjectResponse, status_code=201)
 async def create_subject(
     study_id: UUID,
     body: SubjectCreate,
@@ -162,6 +179,40 @@ async def update_subject(
 
     logger.info("Subject updated: id=%s actor=%s", subject.id, current_user.id)
     return SubjectResponse.model_validate(subject)
+
+
+@router.get("/{subject_id}/phase", response_model=SubjectPhaseStateResponse)
+async def get_subject_phase(
+    subject_id: UUID,
+    session: DbSession,
+    current_user: Annotated[User, Depends(require_permission("subject.read"))],
+) -> SubjectPhaseStateResponse:
+    """Return the subject's phase/arm state and published configuration."""
+    subject = await subject_service.get_subject(session, subject_id)
+    return SubjectPhaseStateResponse.model_validate(
+        await subject_service.get_phase_state(session, subject)
+    )
+
+
+@router.patch("/{subject_id}/phase", response_model=SubjectPhaseStateResponse)
+async def update_subject_phase(
+    subject_id: UUID,
+    body: SubjectPhaseUpdate,
+    session: DbSession,
+    current_user: Annotated[User, Depends(require_permission("subject.update"))],
+) -> SubjectPhaseStateResponse:
+    """Update the current phase, requiring an arm choice for arm phases."""
+    subject = await subject_service.get_subject(session, subject_id)
+    await subject_service.update_phase(
+        session,
+        subject,
+        phase_definition_id=body.phase_definition_id,
+        arm_definition_id=body.arm_definition_id,
+        actor_id=current_user.id,
+    )
+    return SubjectPhaseStateResponse.model_validate(
+        await subject_service.get_phase_state(session, subject)
+    )
 
 
 # ---------------------------------------------------------------------------

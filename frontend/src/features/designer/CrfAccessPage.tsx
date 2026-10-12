@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { PermissionGuard } from '@/components/guards/PermissionGuard'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -12,7 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DataTableShell, FormActions, FormField, PageContainer, PageHeader } from '@/components/patterns'
 import { DraftGate, getApiErrorMessage } from './shared'
 
-function CrfAccessEditor({ versionId }: { versionId: string }) {
+function CrfAccessEditor({ versionId, readOnly }: { versionId: string; readOnly: boolean }) {
+  const queryClient = useQueryClient()
   const [role, setRole] = useState('')
   const [canRead, setCanRead] = useState(true)
   const [canWrite, setCanWrite] = useState(false)
@@ -20,9 +21,9 @@ function CrfAccessEditor({ versionId }: { versionId: string }) {
   const [fieldId, setFieldId] = useState('')
   const [blinded, setBlinded] = useState(false)
   const [unblindRole, setUnblindRole] = useState('')
-  const [created, setCreated] = useState<CrfAccessDefinitionResponse[]>([])
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const listQuery = useQuery({ queryKey: ['designer-crf-access', versionId], queryFn: async () => (await api.get<CrfAccessDefinitionResponse[]>(`/designer/versions/${versionId}/crf-access`)).data })
 
   // The backend requires blinded===true when unblind_role is set; mirror the
   // rule in the UI by clearing/disabling unblind_role whenever blinded is off.
@@ -46,7 +47,7 @@ function CrfAccessEditor({ versionId }: { versionId: string }) {
       return (await api.post<CrfAccessDefinitionResponse>(`/designer/versions/${versionId}/crf-access`, payload)).data
     },
     onSuccess: (data) => {
-      setCreated((prev) => [...prev, data])
+      queryClient.invalidateQueries({ queryKey: ['designer-crf-access', versionId] })
       setRole(''); setFormId(''); setFieldId(''); setCanRead(true); setCanWrite(false)
       setBlinded(false); setUnblindRole('')
       setError(''); setMessage(`CRF access rule for "${data.role}" added.`)
@@ -56,12 +57,12 @@ function CrfAccessEditor({ versionId }: { versionId: string }) {
 
   return (
     <PageContainer wide>
-      <PageHeader title="CRF access" description="Grant role-based read/write access to forms and fields for the current draft version." />
+      <PageHeader title="CRF access" description={readOnly ? 'Review role-based form and field access retained in this published design version.' : 'Grant role-based read/write access to forms and fields for the current draft version.'} />
       {message ? <Alert variant="success" className="mb-4"><AlertDescription>{message}</AlertDescription></Alert> : null}
       {error ? <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert> : null}
 
       <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
-        <Card>
+        {!readOnly ? <Card>
           <CardHeader><CardTitle className="text-base">New access rule</CardTitle></CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); setError(''); create.mutate() }}>
@@ -90,19 +91,19 @@ function CrfAccessEditor({ versionId }: { versionId: string }) {
               <FormActions pending={create.isPending} submitLabel="Add rule" pendingLabel="Adding…" />
             </form>
           </CardContent>
-        </Card>
+        </Card> : null}
 
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Added this session</CardTitle>
-            <span className="text-xs text-muted-foreground">{created.length}</span>
+            <CardTitle className="text-base">Access rules</CardTitle>
+            <span className="text-xs text-muted-foreground">{listQuery.data?.length ?? 0}</span>
           </CardHeader>
           <CardContent>
-            <DataTableShell label="CRF access rules" empty={!created.length} emptyTitle="No rules added yet" emptyDescription="Rules you create appear here.">
+            <DataTableShell label="CRF access rules" empty={!listQuery.data?.length} emptyTitle="No access rules" emptyDescription="Rules for the selected version appear here.">
               <Table>
-                <caption className="sr-only">CRF access rules added this session</caption>
+                <caption className="sr-only">CRF access rules for the selected design version</caption>
                 <TableHeader><TableRow>{['Role', 'Read', 'Write', 'Blinded', 'Unblind role', 'Form', 'Field'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
-                <TableBody>{created.map((row) => (
+                <TableBody>{(listQuery.data ?? []).map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-medium">{row.role}</TableCell>
                     <TableCell>{row.can_read ? 'Yes' : 'No'}</TableCell>
@@ -126,7 +127,7 @@ export function CrfAccessPage({ studyId }: { studyId: string }) {
   return (
     <PermissionGuard permission={PERMISSIONS.DESIGNER_CRF_ACCESS_CONFIGURE} studyId={studyId}>
       <DraftGate studyId={studyId}>
-        {(versionId) => <CrfAccessEditor versionId={versionId} />}
+        {(versionId, selection) => <CrfAccessEditor versionId={versionId} readOnly={selection.isReadOnly} />}
       </DraftGate>
     </PermissionGuard>
   )

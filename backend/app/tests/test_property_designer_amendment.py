@@ -70,9 +70,7 @@ class InMemoryVersionRepository:
         self.versions = versions
         self.added: list[StudyVersion] = []
 
-    async def latest_published(
-        self, _session: object, study_id: uuid.UUID
-    ) -> StudyVersion | None:
+    async def latest_published(self, _session: object, study_id: uuid.UUID) -> StudyVersion | None:
         candidates = [
             v
             for v in self.versions
@@ -85,9 +83,7 @@ class InMemoryVersionRepository:
             key=lambda v: int(v.version_number.split(".", 1)[0]),
         )
 
-    async def draft_for_study(
-        self, _session: object, study_id: uuid.UUID
-    ) -> StudyVersion | None:
+    async def draft_for_study(self, _session: object, study_id: uuid.UUID) -> StudyVersion | None:
         return next(
             (
                 v
@@ -105,9 +101,7 @@ class InMemoryVersionRepository:
         return version
 
 
-def _make_published_history(
-    study_id: uuid.UUID, major_versions: list[int]
-) -> list[StudyVersion]:
+def _make_published_history(study_id: uuid.UUID, major_versions: list[int]) -> list[StudyVersion]:
     """Build a published-only version history for a study."""
     versions: list[StudyVersion] = []
     published_at = datetime(2024, 1, 1, tzinfo=UTC)
@@ -160,7 +154,9 @@ async def test_amendment_creates_one_draft_and_retains_history(
     original_published_ids = {v.id for v in versions}
 
     repository = InMemoryVersionRepository(versions)
-    service = StudyVersionService(repository)
+    clone_service = AsyncMock()
+    clone_service.clone_version.return_value = {}
+    service = StudyVersionService(repository, clone_service=clone_service)
     session = AsyncMock()
     study = Study(
         id=study_id,
@@ -169,9 +165,7 @@ async def test_amendment_creates_one_draft_and_retains_history(
         created_by=actor_id,
     )
 
-    with patch(
-        "app.services.designer.study_version_service.audit_service"
-    ) as mock_audit:
+    with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
         mock_audit.record = AsyncMock()
         amendment = await service.create_amendment(session, study, reason, actor_id)
 

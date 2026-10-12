@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   createColumnHelper,
   flexRender,
@@ -26,7 +27,7 @@ const columnHelper = createColumnHelper<StudyResponse>()
 const columns = [
   columnHelper.accessor('study_code', {
     header: 'Code',
-    cell: (info) => <a href={`/studies/${info.row.original.id}`} className="font-medium text-primary hover:underline">{info.getValue()}</a>,
+    cell: (info) => <Link to="/studies/$studyId" params={{ studyId: info.row.original.id }} className="font-medium text-primary hover:underline">{info.getValue()}</Link>,
   }),
   columnHelper.accessor('title', { header: 'Title' }),
   columnHelper.accessor('phase', {
