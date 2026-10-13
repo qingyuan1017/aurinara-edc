@@ -20,7 +20,7 @@ services:
   migrate:
     build:
       context: ./backend
-    command: ["alembic", "upgrade", "head"]
+    command: ["sh", "-c", "alembic upgrade head && python -m scripts.seed_builtin_roles"]
     environment: &backend-environment
       ENVIRONMENT: development
       DATABASE_URL: postgresql+asyncpg://edetek:edetekpassword@postgres:5432/edc

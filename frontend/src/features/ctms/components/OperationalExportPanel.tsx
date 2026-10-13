@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
   ctmsApi,
@@ -236,6 +237,7 @@ export function OperationalExportPanel({ studyId, siteId, context, jobs, isLoadi
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string>()
   const [createdJob, setCreatedJob] = useState<CTMSExport>()
+  const [showCreate, setShowCreate] = useState(false)
   const retry = useCTMSMutation<CTMSExport, unknown, CTMSExport>({
     method: 'POST',
     mutationFn: (job) => ctmsApi.createExport(studyId, {
@@ -251,7 +253,8 @@ export function OperationalExportPanel({ studyId, siteId, context, jobs, isLoadi
   const selectedJob = useMemo(() => createdJob ?? jobs.find((job) => job.id === selectedId), [createdJob, jobs, selectedId])
   const startRetry = (job: CTMSExport) => retry.mutate(job)
   return <div className="space-y-4">
-    <ExportRequestForm studyId={studyId} siteId={siteId} canManage={canManage} onCreated={(job) => { setCreatedJob(job); setSelectedId(job.id); onRefresh() }} />
+    {canManage ? <div className="flex justify-end"><Button type="button" onClick={() => setShowCreate(true)}>Request operational export</Button></div> : null}
+    <Sheet open={showCreate} onOpenChange={setShowCreate}><SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl"><SheetHeader className="pr-8"><SheetTitle>Request operational export</SheetTitle><SheetDescription>Create a new CTMS operational export. Existing export jobs remain visible in the main panel.</SheetDescription></SheetHeader><div className="mt-2 pt-4"><ExportRequestForm studyId={studyId} siteId={siteId} canManage={canManage} onCreated={(job) => { setCreatedJob(job); setSelectedId(job.id); setShowCreate(false); onRefresh() }} /></div></SheetContent></Sheet>
     <CTMSMutationFeedback status={retry.status} action="Operational export retry" data={retry.data} error={retry.error} />
     {selectedJob && <ExportDetail job={selectedJob} context={context} canManage={canManage} canRead={canRead} onRetry={startRetry} />}
     <section className="space-y-3" aria-label="Operational export jobs"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold text-foreground">Operational export jobs</h3><p className="text-sm text-muted-foreground">Statuses and actions are server-authoritative; no clinical export content is rendered.</p></div><Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>Refresh exports</Button></div>{isLoading ? <p role="status" className="rounded border bg-card p-4 text-sm text-muted-foreground">Loading operational export jobs…</p> : jobs.length ? <div className="rounded-lg border"><Table><TableCaption className="sr-only">CTMS operational export jobs</TableCaption><TableHeader className="bg-muted/30"><TableRow><TableHead scope="col">Export</TableHead><TableHead scope="col">Format</TableHead><TableHead scope="col">Filters</TableHead><TableHead scope="col">Status</TableHead><TableHead scope="col">Created</TableHead><TableHead scope="col">Actions</TableHead></TableRow></TableHeader><TableBody>{jobs.map((job) => { const expired = isExpired(job); const status = expired ? 'expired' : job.status; return <TableRow key={job.id}><TableCell><span className="font-mono text-xs">{job.id}</span><span className="ml-2"><ModuleBadge module="CTMS" state="authoritative" /></span></TableCell><TableCell className="uppercase">{safeExportType(job.export_type)}</TableCell><TableCell className="max-w-xs break-words font-mono text-xs">{safeFilterSummary(job.filters)}</TableCell><TableCell>{formatStatus(status)}</TableCell><TableCell>{new Date(job.created_at).toLocaleString()}</TableCell><TableCell><Button type="button" variant="outline" size="sm" onClick={() => { setCreatedJob(undefined); setSelectedId(job.id) }}>View status</Button></TableCell></TableRow> })}</TableBody></Table></div> : <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground" role="status">No CTMS operational export jobs have been requested for this study.</div>}</section>

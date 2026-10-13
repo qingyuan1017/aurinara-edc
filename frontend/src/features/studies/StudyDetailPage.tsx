@@ -21,7 +21,8 @@ interface StudyDetail {
   id: string
   study_code: string
   title: string
-  phase: string
+  sponsor?: string | null
+  platform_managed: boolean
   status: string
   description?: string
   created_at: string
@@ -90,14 +91,17 @@ export function StudyDetailPage({ studyId }: { studyId: string }) {
     <PageContainer>
       <PageHeader
         title={study.title}
-        description={`${study.study_code} · Phase ${study.phase ?? '—'}`}
+        description={`${study.study_code} · Sponsor: ${study.sponsor ?? 'Not supplied'}`}
         status={<StatusBadge status={study.status} label="Study status" />}
-        ownership={<OwnershipBadge owner="EDC" />}
+        ownership={study.platform_managed
+          ? <OwnershipBadge owner="Aurinara Platform" state="projected" />
+          : <OwnershipBadge owner="EDC" />}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline" size="sm"><Link to="/studies/$studyId/dashboard" params={{ studyId }}>View Dashboard</Link></Button>
-            <Button asChild variant="secondary" size="sm"><Link to="/studies/$studyId/versions" params={{ studyId }}>Manage Versions</Link></Button>
-            <Button asChild variant="outline" size="sm"><Link to="/studies/$studyId/forms" params={{ studyId }}>Configure Forms</Link></Button>
+            <Button asChild variant="outline" size="sm"><Link to="/studies/$studyId/ctms/profile" params={{ studyId }}>Configure in CTMS</Link></Button>
+            <Button asChild variant="secondary" size="sm"><Link to="/studies/$studyId/designer/versions" params={{ studyId }}>Manage Design Versions</Link></Button>
+            <Button asChild variant="outline" size="sm"><Link to="/studies/$studyId/designer/forms" params={{ studyId }}>Open Form Designer</Link></Button>
           </div>
         }
       />
@@ -129,8 +133,10 @@ export function StudyDetailPage({ studyId }: { studyId: string }) {
         </TabsList>
 
         <TabsContent value="overview">
-          <DetailCard title="Study information" description="Study metadata supplied by the EDC study service.">
+          <DetailCard title="Study information" description="Canonical name and sponsor are synchronized from Aurinara Platform and are read-only here.">
             <dl className="grid gap-4 sm:grid-cols-2">
+              <div><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sponsor</dt><dd className="mt-1 text-sm text-foreground">{study.sponsor ?? 'Not supplied'}</dd></div>
+              <div><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Source</dt><dd className="mt-1 text-sm text-foreground">{study.platform_managed ? 'Aurinara Platform' : 'Legacy local record'}</dd></div>
               <div><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Created</dt><dd className="mt-1 text-sm text-foreground">{new Date(study.created_at).toLocaleString()}</dd></div>
               <div><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Last updated</dt><dd className="mt-1 text-sm text-foreground">{new Date(study.updated_at).toLocaleString()}</dd></div>
               {study.description ? <div className="sm:col-span-2"><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Description</dt><dd className="mt-1 text-sm text-foreground">{study.description}</dd></div> : null}

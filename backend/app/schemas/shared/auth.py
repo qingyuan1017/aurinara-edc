@@ -9,6 +9,7 @@ Satisfies Requirements:
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -95,6 +96,7 @@ class CurrentUserResponse(BaseModel):
     status: str
     mfa_enabled: bool
     roles: list[RoleAssignment] = []
+    authorization_source: Literal["local", "platform"] = "local"
 
 
 class PasswordResetRequest(BaseModel):

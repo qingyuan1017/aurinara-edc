@@ -325,6 +325,7 @@ async def test_operational_study_lifecycle_preserves_canonical_edc_state(
     state, actor_id = _build_state()
     session = state
     service = OperationalStudyService()
+    state.study.sponsor = str(case["sponsor"])
     clinical_before = state.snapshot_clinical()
 
     if not case["canonical_reference_is_uuid"]:
@@ -333,7 +334,7 @@ async def test_operational_study_lifecycle_preserves_canonical_edc_state(
                 session,
                 study_id="EDC-STUDY-DISPLAY-NAME",
                 actor_id=actor_id,
-                payload={"sponsor": "Operations"},
+                payload={"phase": "Phase II"},
             )
         assert session.added == []
         assert state.snapshot_bookkeeping() == (0, 0, 0)
@@ -347,7 +348,6 @@ async def test_operational_study_lifecycle_preserves_canonical_edc_state(
         actor_id=actor_id,
         payload={
             "status": start_status,
-            "sponsor": case["sponsor"],
             "phase": "Phase II",
             "therapeutic_area": "Oncology",
             "indication": "Operational indication",

@@ -90,7 +90,7 @@ describe('StudyVersioningPage shared composition', () => {
 
     renderPage()
 
-    expect(await screen.findByText('A user with study-version creation permission must create the initial EDC draft.')).toBeInTheDocument()
+    expect(await screen.findByText('A user with study-version creation permission must create the initial Designer draft.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Create initial draft' })).not.toBeInTheDocument()
   })
 

@@ -12,6 +12,19 @@ function renderForm(ui: React.ReactNode) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
 }
 
+function completeRequiredStudyFields() {
+  fireEvent.change(screen.getByRole('textbox', { name: 'Study phase' }), { target: { value: 'Phase 2' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Study type' }), { target: { value: 'Interventional' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Main purpose' }), { target: { value: 'Treatment' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Blind method' }), { target: { value: 'Open label' } })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Randomized' }), { target: { value: 'false' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Language' }), { target: { value: 'English' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Construction period' }), { target: { value: '12 months' } })
+  fireEvent.change(screen.getByLabelText(/Planned start date/), { target: { value: '2027-01-01' } })
+  fireEvent.change(screen.getByLabelText(/Planned end date/), { target: { value: '2027-12-31' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Study currency' }), { target: { value: 'USD' } })
+}
+
 beforeEach(() => {
   vi.restoreAllMocks()
   useAuthStore.setState({ user: null, isAuthenticated: false })
@@ -22,34 +35,35 @@ describe('CTMS operational forms', () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { id: 'profile-1', study_id: 'study-1' } } as never)
     renderForm(<OperationalStudyForm studyId="study-1" statusOptions={statusOptions} />)
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Operational sponsor' }), { target: { value: 'Operations sponsor' } })
+    completeRequiredStudyFields()
     fireEvent.click(screen.getByRole('button', { name: 'Create profile' }))
 
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/ctms/studies/study-1/operational-profile', expect.objectContaining({ sponsor: 'Operations sponsor' })))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/ctms/studies/study-1/operational-profile', expect.objectContaining({ phase: 'Phase 2' })))
     expect(post.mock.calls[0]?.[1]).not.toHaveProperty('study_id')
+    expect(post.mock.calls[0]?.[1]).not.toHaveProperty('sponsor')
     expect(post.mock.calls[0]?.[1]).not.toHaveProperty('subject_id')
   })
 
   it('preserves entered values and maps a safe server validation error', async () => {
-    vi.spyOn(api, 'post').mockRejectedValue({ response: { status: 422, data: { error: { code: 'VALIDATION_ERROR', message: 'Review fields.', details: { fields: { sponsor: ['Sponsor is not allowed'] } } }, request_id: 'req-form-1' } } })
+    vi.spyOn(api, 'post').mockRejectedValue({ response: { status: 422, data: { error: { code: 'VALIDATION_ERROR', message: 'Review fields.', details: { fields: { phase: ['Phase is not allowed'] } } }, request_id: 'req-form-1' } } })
     renderForm(<OperationalStudyForm studyId="study-1" />)
 
-    const sponsor = screen.getByRole('textbox', { name: 'Operational sponsor' })
-    fireEvent.change(sponsor, { target: { value: 'Entered sponsor' } })
+    completeRequiredStudyFields()
+    const phase = screen.getByRole('textbox', { name: 'Study phase' })
     fireEvent.click(screen.getByRole('button', { name: 'Create profile' }))
 
-    await waitFor(() => expect(screen.getAllByRole('alert').some((alert) => alert.textContent?.includes('Sponsor is not allowed'))).toBe(true))
-    expect(sponsor).toHaveValue('Entered sponsor')
+    await waitFor(() => expect(screen.getAllByRole('alert').some((alert) => alert.textContent?.includes('Phase is not allowed'))).toBe(true))
+    expect(phase).toHaveValue('Phase 2')
     expect(screen.getAllByRole('alert').some((alert) => alert.textContent?.includes('req-form-1'))).toBe(true)
   })
 
   it('keeps plan payloads operational and updates by CTMS plan ID', async () => {
     const patch = vi.spyOn(api, 'patch').mockResolvedValue({ data: { id: 'plan-1', study_id: 'study-1' } } as never)
-    renderForm(<StudyPlanForm studyId="study-1" initialValue={{ id: 'plan-1', study_id: 'study-1', title: 'Initial plan', status: 'Draft', created_at: '', updated_at: '' }} statusOptions={statusOptions} />)
-    fireEvent.change(screen.getByRole('textbox', { name: 'Plan title' }), { target: { value: 'Updated plan' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Update plan' }))
+    renderForm(<StudyPlanForm studyId="study-1" initialValue={{ id: 'plan-1', study_id: 'study-1', title: 'Initial plan', scope_level: 'study', status: 'Draft', created_at: '', updated_at: '' }} statusOptions={statusOptions} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Updated plan' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Update activity' }))
 
-    await waitFor(() => expect(patch).toHaveBeenCalledWith('/ctms/study-plans/plan-1', expect.objectContaining({ title: 'Updated plan' })))
+    await waitFor(() => expect(patch).toHaveBeenCalledWith('/ctms/study-plans/plan-1', expect.objectContaining({ title: 'Updated plan', scope_level: 'study', reason: expect.any(String) })))
     expect(patch.mock.calls[0]?.[1]).not.toHaveProperty('clinical_data')
   })
 

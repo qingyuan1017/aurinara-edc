@@ -44,7 +44,9 @@ async def consume_once(settings: Settings | None = None, *, max_messages: int = 
                 extra={"message_id": message.get("MessageId")},
             )
             continue
-        if event.type == "platform.membership.changed.v1":
+        if event.type == "platform.assignment.changed.v1":
+            get_platform_authorization().invalidate()
+        elif event.type == "platform.membership.changed.v1":
             get_platform_authorization().invalidate(study_id=event.aggregate_id)
         elif event.type.startswith("platform.user."):
             get_platform_authorization().invalidate()

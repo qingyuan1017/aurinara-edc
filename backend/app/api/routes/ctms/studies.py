@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PaginationParams, get_db, require_ctms_permission
@@ -16,23 +17,28 @@ from app.models.ctms.operational_study import (
     StudyOperationalMilestone,
     StudyPlan,
 )
-from app.models.shared.identity import User
+from app.models.edc.site import Site
+from app.models.shared.identity import Role, User, UserRole, UserStatus
 from app.schemas.ctms.dashboard import DashboardQueryCreate, DashboardQueryResponse
 from app.schemas.ctms.report import ReportQueryCreate, ReportQueryResponse
 from app.schemas.ctms.study import (
     EnrollmentPlanCreate,
     EnrollmentPlanResponse,
     OperationalMilestoneCreate,
+    OperationalMilestoneUpdate,
     OperationalStudyArchive,
     OperationalStudyCreate,
     OperationalStudyResponse,
     OperationalStudyStatusChange,
     OperationalStudyUpdate,
+    ProjectManagementOptionsResponse,
+    ProjectOption,
     ReadinessCriterionCreate,
     ReadinessCriterionResponse,
     StudyOperationalMilestoneResponse,
     StudyPlanCreate,
     StudyPlanResponse,
+    StudyPlanUpdate,
 )
 from app.schemas.shared.base import PaginatedResponse
 from app.services.ctms.operational_study_service import operational_study_service
@@ -142,8 +148,26 @@ async def list_study_plans(
     session: DbSession,
     current_user: ReadGuard,
     pagination: Annotated[PaginationParams, Depends()],
+    status: Annotated[str | None, Query()] = None,
+    site_id: Annotated[UUID | None, Query()] = None,
+    owner_id: Annotated[UUID | None, Query()] = None,
+    date_from: Annotated[date | None, Query()] = None,
+    date_to: Annotated[date | None, Query()] = None,
 ):
-    result = await _page(session, StudyPlan, [StudyPlan.study_id == study_id], pagination)
+    clauses = [StudyPlan.study_id == study_id]
+    if status:
+        clauses.append(
+            StudyPlan.status.in_([item.strip() for item in status.split(",") if item.strip()])
+        )
+    if site_id:
+        clauses.append(StudyPlan.site_id == site_id)
+    if owner_id:
+        clauses.append(or_(StudyPlan.owner_id == owner_id, StudyPlan.assignee_user_id == owner_id))
+    if date_from:
+        clauses.append(func.date(StudyPlan.due_at) >= date_from)
+    if date_to:
+        clauses.append(func.date(StudyPlan.due_at) <= date_to)
+    result = await _page(session, StudyPlan, clauses, pagination)
     return PaginatedResponse(
         items=[StudyPlanResponse.model_validate(x) for x in result.items],
         page=result.page,
@@ -164,6 +188,63 @@ async def create_study_plan(
             actor=current_user,
             correlation_id=get_correlation_id(),
         )
+    )
+
+
+@router.get(
+    "/{study_id}/project-management/options", response_model=ProjectManagementOptionsResponse
+)
+async def get_project_management_options(
+    study_id: UUID, session: DbSession, current_user: ReadGuard
+):
+    role_rows = (
+        await session.execute(
+            select(UserRole, User, Role)
+            .join(User, User.id == UserRole.user_id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                or_(UserRole.study_id == study_id, UserRole.study_id.is_(None)),
+                User.status == UserStatus.active,
+            )
+        )
+    ).all()
+    users: dict[UUID, ProjectOption] = {}
+    for _assignment, user, _role in role_rows:
+        users[user.id] = ProjectOption(
+            id=user.id,
+            label=f"{user.first_name} {user.last_name}".strip(),
+            secondary_label=user.email,
+        )
+    role_records = list(await session.scalars(select(Role).order_by(Role.name)))
+    site_rows = list(
+        await session.scalars(
+            select(Site)
+            .where(
+                Site.study_id == study_id,
+                Site.deleted_at.is_(None),
+            )
+            .order_by(Site.name)
+        )
+    )
+    return ProjectManagementOptionsResponse(
+        users=list(users.values()),
+        roles=[
+            ProjectOption(
+                id=role.id,
+                label=role.name,
+                secondary_label=str(role.scope_level),
+            )
+            for role in role_records
+        ],
+        sites=[
+            ProjectOption(
+                id=site.id,
+                label=site.name,
+                secondary_label=site.site_number,
+                country_code=site.country,
+            )
+            for site in site_rows
+        ],
     )
 
 
@@ -225,11 +306,31 @@ async def list_study_milestones(
     session: DbSession,
     current_user: ReadGuard,
     pagination: Annotated[PaginationParams, Depends()],
+    status: Annotated[str | None, Query()] = None,
+    site_id: Annotated[UUID | None, Query()] = None,
+    owner_id: Annotated[UUID | None, Query()] = None,
+    date_from: Annotated[date | None, Query()] = None,
+    date_to: Annotated[date | None, Query()] = None,
 ):
+    clauses = [StudyOperationalMilestone.study_id == study_id]
+    if status:
+        clauses.append(
+            StudyOperationalMilestone.status.in_(
+                [item.strip() for item in status.split(",") if item.strip()]
+            )
+        )
+    if site_id:
+        clauses.append(StudyOperationalMilestone.site_id == site_id)
+    if owner_id:
+        clauses.append(StudyOperationalMilestone.owner_id == owner_id)
+    if date_from:
+        clauses.append(func.date(StudyOperationalMilestone.planned_at) >= date_from)
+    if date_to:
+        clauses.append(func.date(StudyOperationalMilestone.planned_at) <= date_to)
     result = await _page(
         session,
         StudyOperationalMilestone,
-        [StudyOperationalMilestone.study_id == study_id],
+        clauses,
         pagination,
     )
     return PaginatedResponse(
@@ -289,7 +390,7 @@ async def create_report_query(
     )
 
 
-__all__ = ["router"]
+__all__ = ["operational_studies_router", "project_management_router", "router"]
 
 
 # Root-level aliases match the public CTMS contract while the study collection
@@ -301,6 +402,45 @@ operational_studies_router.add_api_route(
     methods=["PATCH"],
     response_model=OperationalStudyResponse,
 )
+
+project_management_router = APIRouter(tags=["ctms-project-management"])
+
+
+@project_management_router.patch("/study-plans/{plan_id}", response_model=StudyPlanResponse)
+async def update_study_plan(
+    plan_id: UUID, body: StudyPlanUpdate, session: DbSession, current_user: WriteGuard
+):
+    return StudyPlanResponse.model_validate(
+        await operational_study_service.update_study_plan(
+            session,
+            plan_id,
+            body,
+            actor=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
+@project_management_router.patch(
+    "/study-milestones/{milestone_id}", response_model=StudyOperationalMilestoneResponse
+)
+async def update_study_milestone(
+    milestone_id: UUID,
+    body: OperationalMilestoneUpdate,
+    session: DbSession,
+    current_user: WriteGuard,
+):
+    return StudyOperationalMilestoneResponse.model_validate(
+        await operational_study_service.update_operational_milestone(
+            session,
+            milestone_id,
+            body,
+            actor=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
 operational_studies_router.add_api_route(
     "/{profile_id}/transition",
     transition_operational_profile,

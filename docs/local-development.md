@@ -46,8 +46,14 @@ cd backend
 pip install -e ".[dev]"
 
 alembic upgrade head
+python -m scripts.seed_builtin_roles
 python -m scripts.seed_dev_user
 ```
+
+`seed_builtin_roles` is idempotent. When Platform service credentials are configured, it
+registers the complete EDC role catalog while preserving EDC role UUIDs, and synchronizes
+existing Sites for Platform-managed Studies. In enforced authorization mode, missing
+synchronization credentials fail startup setup instead of leaving Platform incomplete.
 
 Start FastAPI and leave this terminal running:
 
@@ -79,7 +85,8 @@ as well:
 docker compose up -d platform-projection-worker
 ```
 
-The worker applies canonical user, study, and mapped-membership events. The Studies page
+The worker applies canonical user, study, and membership events. Membership role UUIDs are
+the EDC role UUIDs registered with Platform, so no role mapping is required. The Studies page
 refreshes its list every 30 seconds while active. Running FastAPI alone does not consume
 the platform SQS subscription.
 

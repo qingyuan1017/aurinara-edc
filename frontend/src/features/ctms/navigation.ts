@@ -4,16 +4,18 @@ import {
   type CTMSActionRouteId,
   type CTMSCapabilityState,
 } from './capabilities'
+import { CTMS_REPORT_DEFINITIONS } from './reportCatalog'
 import { PERMISSIONS } from '@/lib/permissions'
 
 export interface CTMSNavigationItem {
-  readonly id: CTMSActionRouteId
+  readonly id: string
   readonly label: string
   readonly to: string
+  readonly group?: string
 }
 
 export interface CTMSNavigationSection {
-  readonly id: 'study-operations' | 'site-operations' | 'reporting-exports' | 'coordination-health'
+  readonly id: 'entity-management' | 'study-operations' | 'project-management' | 'financial-management' | 'rbm' | 'monitoring' | 'study-records' | 'site-operations' | 'reports' | 'reporting-exports' | 'coordination-health'
   readonly label: string
   readonly items: readonly CTMSNavigationItem[]
 }
@@ -24,10 +26,12 @@ interface CTMSNavigationScope {
 }
 
 type NavigationDefinition = {
-  readonly id: CTMSActionRouteId
+  readonly id: string
   readonly label: string
-  readonly scope: 'study' | 'site'
+  readonly scope: 'global' | 'study' | 'site'
   readonly path?: string
+  readonly group?: string
+  readonly actionId?: CTMSActionRouteId
 }
 
 type NavigationSectionDefinition = Omit<CTMSNavigationSection, 'items'> & {
@@ -36,19 +40,57 @@ type NavigationSectionDefinition = Omit<CTMSNavigationSection, 'items'> & {
 
 const SECTION_DEFINITIONS: readonly NavigationSectionDefinition[] = [
   {
+    id: 'entity-management',
+    label: 'Configuration',
+    items: [
+      { id: 'referenceData', label: 'Reference data', scope: 'global', path: '/ctms/references' },
+      { id: 'entityManagement', label: 'Entity management', scope: 'global', path: '/ctms/entities' },
+    ],
+  },
+  {
     id: 'study-operations',
-    label: 'Study operations',
+    label: 'Study Operations',
     items: [
       { id: 'studyWorkspace', label: 'Overview', scope: 'study', path: '' },
-      { id: 'studyProfile', label: 'Operational profile', scope: 'study', path: '/profile' },
-      { id: 'studyPlans', label: 'Plans', scope: 'study', path: '/plans' },
-      { id: 'enrollment', label: 'Enrollment', scope: 'study', path: '/enrollment' },
-      { id: 'milestones', label: 'Milestones', scope: 'study', path: '/milestones' },
-      { id: 'monitoringPlans', label: 'Monitoring plans', scope: 'study', path: '/monitoring-plans' },
-      { id: 'monitoringActivities', label: 'Monitoring activities', scope: 'study', path: '/monitoring-activities' },
-      { id: 'tasks', label: 'Tasks', scope: 'study', path: '/tasks' },
-      { id: 'contacts', label: 'Contacts', scope: 'study', path: '/contacts' },
-      { id: 'projections', label: 'Projections', scope: 'study', path: '/projections' },
+      { id: 'studyProfile', label: 'Study Details', scope: 'study', path: '/details' },
+    ],
+  },
+  {
+    id: 'project-management',
+    label: '',
+    items: [
+      { id: 'projectManagement', label: 'Project Management', scope: 'study', path: '/project-management', actionId: 'studyPlans' },
+    ],
+  },
+  {
+    id: 'financial-management',
+    label: 'Financial Management',
+    items: [
+      { id: 'financialOverview', label: 'Study Financials', scope: 'study', path: '/financial-management', actionId: 'contracts' },
+    ],
+  },
+  {
+    id: 'rbm',
+    label: 'RBM',
+    items: [
+      { id: 'ract', label: 'RACT', scope: 'study', path: '/rbm/ract' },
+      { id: 'kri', label: 'KRI', scope: 'study', path: '/rbm/kri' },
+    ],
+  },
+  {
+    id: 'monitoring',
+    label: 'Monitoring',
+    items: [
+      { id: 'monitoringOverview', label: 'Monitoring', scope: 'study', path: '/monitoring', actionId: 'monitoringPlans' },
+    ],
+  },
+  {
+    id: 'study-records',
+    label: '',
+    items: [
+      { id: 'protocolDeviations', label: 'Protocol Deviation', scope: 'study', path: '/protocol-deviations' },
+      { id: 'icf', label: 'ICF', scope: 'study', path: '/icf' },
+      { id: 'trackLogs', label: 'Track Logs', scope: 'study', path: '/track-logs' },
     ],
   },
   {
@@ -59,12 +101,21 @@ const SECTION_DEFINITIONS: readonly NavigationSectionDefinition[] = [
     ],
   },
   {
+    id: 'reports',
+    label: 'Report',
+    items: CTMS_REPORT_DEFINITIONS.map((report) => ({
+      id: report.id,
+      label: report.label,
+      group: report.group,
+      scope: 'study' as const,
+      path: `/reports/${report.category}/${report.slug}`,
+      actionId: 'reports' as const,
+    })),
+  },
+  {
     id: 'reporting-exports',
-    label: 'Reporting & exports',
-    items: [
-      { id: 'reports', label: 'Reports & dashboards', scope: 'study', path: '/reports/dashboard' },
-      { id: 'exports', label: 'Exports', scope: 'study', path: '/exports' },
-    ],
+    label: 'Exports',
+    items: [{ id: 'exports', label: 'Exports', scope: 'study', path: '/exports' }],
   },
   {
     id: 'coordination-health',
@@ -78,6 +129,7 @@ const SECTION_DEFINITIONS: readonly NavigationSectionDefinition[] = [
 ]
 
 function scopedPath(definition: NavigationDefinition, scope: CTMSNavigationScope): string | null {
+  if (definition.scope === 'global') return definition.path ?? null
   if (definition.scope === 'site') {
     return scope.siteId ? `/sites/${encodeURIComponent(scope.siteId)}/ctms/activation` : null
   }
@@ -104,8 +156,9 @@ export function resolveCTMSNavigation(
     ...section,
     items: section.items.flatMap((definition) => {
       const path = scopedPath(definition, scope)
-      if (!path || !isCTMSActionAvailable(state, CTMS_ACTION_ROUTE_MAP[definition.id], permissions)) return []
-      return [{ id: definition.id, label: definition.label, to: path }]
+      const actionId = definition.actionId ?? definition.id as CTMSActionRouteId
+      if (!path || !isCTMSActionAvailable(state, CTMS_ACTION_ROUTE_MAP[actionId], permissions)) return []
+      return [{ id: definition.id, label: definition.label, to: path, ...(definition.group ? { group: definition.group } : {}) }]
     }),
   })).filter((section) => section.items.length > 0)
 }

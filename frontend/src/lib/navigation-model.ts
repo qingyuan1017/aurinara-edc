@@ -1,6 +1,8 @@
-import { Bell, BookOpen, Building2, CalendarClock, CalendarRange, CheckCircle2, CircleHelp, FileText, KeyRound, LayoutDashboard, ListChecks, Database, ScrollText, Search, Settings, Sparkles, Stethoscope, Tags, Upload, Users, Workflow, type LucideIcon } from 'lucide-react'
+import { Bell, BookOpen, Building2, CheckCircle2, CircleHelp, LayoutDashboard, ScrollText, Search, Settings, Sparkles, Stethoscope, Upload, Users, type LucideIcon } from 'lucide-react'
 import type { CTMSCapabilityState, CTMSNavigationSection, CTMSNavigationItem } from '@/features/ctms'
 import { resolveCTMSNavigation } from '@/features/ctms'
+import type { DesignerNavigationSection, DesignerNavigationItem } from '@/features/designer/navigation'
+import { resolveDesignerNavigation } from '@/features/designer/navigation'
 import type { PVCapabilityState, PVNavigationSection, PVNavigationItem } from '@/features/pv'
 import { resolvePVNavigation } from '@/features/pv'
 
@@ -29,8 +31,19 @@ export interface NavigationSection {
 export interface CTMSNavigationViewItem extends CTMSNavigationItem {
   /** CTMS links intentionally retain the current route search state. */
   readonly search: SearchPreserver
-  /** CTMS destinations match descendants of their registered route. */
+  /** Overview matches only its parent route; other destinations may match descendants. */
+  readonly activeOptions: { readonly exact: boolean }
+}
+
+export interface DesignerNavigationViewItem extends DesignerNavigationItem {
+  /** Designer links intentionally retain the selected design version search state. */
+  readonly search: SearchPreserver
+  /** Designer destinations match descendants of their registered route. */
   readonly activeOptions: { readonly exact: false }
+}
+
+export interface DesignerNavigationViewSection extends Omit<DesignerNavigationSection, 'items'> {
+  readonly items: readonly DesignerNavigationViewItem[]
 }
 
 export interface CTMSNavigationViewSection extends Omit<CTMSNavigationSection, 'items'> {
@@ -50,6 +63,7 @@ export interface PVNavigationViewSection extends Omit<PVNavigationSection, 'item
 
 export interface NavigationModel {
   readonly edcSections: readonly NavigationSection[]
+  readonly designerSections: readonly DesignerNavigationViewSection[]
   readonly ctmsSections: readonly CTMSNavigationViewSection[]
   readonly pvSections: readonly PVNavigationViewSection[]
 }
@@ -67,16 +81,6 @@ export const EDC_NAV_ITEMS: readonly EDCNavigationItem[] = [
   { id: 'ai', label: 'AI Assistant', to: '/ai', icon: Sparkles, section: 'operations', search: preserveCurrentSearch },
   { id: 'notifications', label: 'Notifications', to: '/notifications', icon: Bell, section: 'operations', search: preserveCurrentSearch },
   { id: 'exports', label: 'Exports', to: '/exports', icon: Upload, section: 'operations', search: preserveCurrentSearch },
-  { id: 'forms', label: 'Form Builder', to: '/designer/forms', icon: FileText, section: 'designer', search: preserveCurrentSearch },
-  { id: 'edit-checks', label: 'Edit Checks', to: '/designer/edit-checks', icon: CheckCircle2, section: 'designer', search: preserveCurrentSearch },
-  { id: 'designer-codelists', label: 'Codelists', to: '/designer/codelists', icon: Tags, section: 'designer', search: preserveCurrentSearch },
-  { id: 'designer-subject-phases', label: 'Subject Phases', to: '/designer/subject-phases', icon: Workflow, section: 'designer', search: preserveCurrentSearch },
-  { id: 'designer-visits', label: 'Visits', to: '/designer/visits', icon: CalendarClock, section: 'designer', search: preserveCurrentSearch },
-  { id: 'designer-soa', label: 'Schedule of Assessment', to: '/designer/schedule-of-assessment', icon: CalendarRange, section: 'designer', search: preserveCurrentSearch },
-  { id: 'designer-arms', label: 'Arms', to: '/designer/arms', icon: ListChecks, section: 'designer', search: preserveCurrentSearch },
-  { id: 'designer-crf-access', label: 'CRF Access', to: '/designer/crf-access', icon: KeyRound, section: 'designer', search: preserveCurrentSearch },
-  { id: 'designer-raw-data-variables', label: 'Raw-Data Variables', to: '/designer/raw-data-variables', icon: Database, section: 'designer', search: preserveCurrentSearch },
-  { id: 'designer-coding-settings', label: 'Coding Settings', to: '/designer/coding-settings', icon: FileText, section: 'designer', search: preserveCurrentSearch },
   { id: 'admin', label: 'Admin', to: '/admin', icon: Settings, section: 'administration', search: preserveCurrentSearch },
   { id: 'audit', label: 'Audit Trail', to: '/audit', icon: ScrollText, section: 'administration', search: preserveCurrentSearch },
 ] as const
@@ -89,7 +93,6 @@ const EDC_SECTION_LABELS: Readonly<Record<string, string>> = {
   'study-data': 'Study data',
   'data-quality': 'Data quality',
   operations: 'Operations',
-  designer: 'Designer',
   administration: 'Administration',
 }
 
@@ -119,6 +122,15 @@ export function resolveNavigationModel(
     items: section.items.map((item) => ({
       ...item,
       search: preserveCurrentSearch,
+      activeOptions: { exact: item.id === 'studyWorkspace' },
+    })),
+  }))
+
+  const designerSections = resolveDesignerNavigation(permissions).map((section) => ({
+    ...section,
+    items: section.items.map((item) => ({
+      ...item,
+      search: preserveCurrentSearch,
       activeOptions: { exact: false as const },
     })),
   }))
@@ -134,6 +146,7 @@ export function resolveNavigationModel(
 
   return {
     edcSections: EDC_NAVIGATION_SECTIONS,
+    designerSections,
     ctmsSections,
     pvSections,
   }

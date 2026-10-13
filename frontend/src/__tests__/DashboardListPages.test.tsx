@@ -21,6 +21,17 @@ vi.mock('@tanstack/react-router', () => ({
   },
 }))
 
+vi.mock('@/api/mutator', () => {
+  const customInstance = async <T,>(config: { url?: string; params?: unknown }): Promise<T> => {
+    const { api } = await import('@/lib/api')
+    const url = String(config.url ?? '').replace(/^\/api\/v1/, '')
+    const response = await api.get(url, { params: config.params })
+    return response.data as T
+  }
+
+  return { customInstance, default: customInstance }
+})
+
 function renderWithQueryClient(ui: React.ReactNode) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
@@ -112,10 +123,10 @@ describe('dashboard and list page composition', () => {
     expect(await screen.findByText('Data-cleaning progress')).toBeInTheDocument()
   })
 
-  it('preserves study server ordering, totals, pagination, permission action, and empty state', async () => {
+  it('preserves study server ordering, canonical platform fields, pagination, and empty state', async () => {
     const get = vi.spyOn(api, 'get').mockResolvedValue({
       data: {
-        items: [{ id: 'study-1', study_code: 'A-001', title: 'First study', phase: 'II', status: 'Active', created_at: '2026-01-01T00:00:00Z' }],
+        items: [{ id: 'study-1', study_code: 'A-001', title: 'First study', sponsor: 'Acme Pharma', status: 'Active', platform_managed: true, platform_revision: 7, platform_registry_status: 'active', created_at: '2026-01-01T00:00:00Z' }],
         page: 1,
         page_size: 20,
         total: 41,
@@ -125,7 +136,8 @@ describe('dashboard and list page composition', () => {
     renderWithQueryClient(<StudyListPage />)
     expect(await screen.findByText('41 total studies · server ordered')).toBeInTheDocument()
     expect(screen.getByRole('status', { name: 'Study status: Active' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Create Study' })).toBeInTheDocument()
+    expect(screen.getByText('Acme Pharma')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Create Study' })).not.toBeInTheDocument()
     expect(screen.getByText('Page 1 of 3 (41 total)')).toBeInTheDocument()
     expect(get).toHaveBeenCalledWith('/studies', { params: { page: 1, page_size: 20 } })
 

@@ -2,6 +2,13 @@
 
 export { CTMSHomePage } from './CTMSHomePage'
 export { CTMSWorkspacePage } from './WorkspacePage'
+export { CTMSCatalogReportPage, CTMSStudyAreaPage } from './StudyAreaPage'
+export { FinancialManagementPage } from './FinancialManagementPage'
+export type { FinancialTab } from './FinancialManagementPage'
+export { EntityManagementPage } from './entities'
+export { ReferenceDataPage } from './reference'
+export { MonitoringFindingsPage, MonitoringModulePage } from './monitoring'
+export type { MonitoringModuleView } from './monitoring'
 export type { CTMSView } from './WorkspacePage'
 export { resolveCTMSNavigation } from './navigation'
 export type { CTMSNavigationItem, CTMSNavigationSection } from './navigation'

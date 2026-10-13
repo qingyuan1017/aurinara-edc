@@ -20,6 +20,8 @@ import {
   type CTMSTaskPayload,
   type CTMSTaskUpdatePayload,
   type CTMSTransitionOption,
+  useCTMSMonitoringPlans,
+  useCTMSProjectOptions,
 } from '../api'
 import { useCTMSMutation } from '../offline'
 import { useCTMSStatusTransition } from '../hooks'
@@ -52,6 +54,9 @@ const planSchema = z.object({
   completion_criteria: optionalOwnedStringSchema({ label: 'Completion criteria', maxLength: 4000 }),
   risk_level: optionalOwnedStringSchema({ label: 'Risk level', maxLength: 100 }),
   monitoring_strategy: optionalOwnedStringSchema({ label: 'Monitoring strategy', maxLength: 4000 }),
+  visit_type: optionalOwnedStringSchema({ label: 'Visit type', maxLength: 100 }),
+  modality: optionalOwnedStringSchema({ label: 'Modality', maxLength: 30 }),
+  required_activities: optionalOwnedStringSchema({ label: 'Required activities', maxLength: 4000 }),
 })
 type PlanValues = z.infer<typeof planSchema>
 type PlanInput = z.input<typeof planSchema>
@@ -66,13 +71,17 @@ const versionSchema = z.object({
   completion_criteria: optionalOwnedStringSchema({ label: 'Completion criteria', maxLength: 4000 }),
   risk_level: optionalOwnedStringSchema({ label: 'Risk level', maxLength: 100 }),
   monitoring_strategy: optionalOwnedStringSchema({ label: 'Monitoring strategy', maxLength: 4000 }),
+  visit_type: optionalOwnedStringSchema({ label: 'Visit type', maxLength: 100 }),
+  modality: optionalOwnedStringSchema({ label: 'Modality', maxLength: 30 }),
+  required_activities: optionalOwnedStringSchema({ label: 'Required activities', maxLength: 4000 }),
 })
 type VersionValues = z.infer<typeof versionSchema>
 type VersionInput = z.input<typeof versionSchema>
 
 const activitySchema = z.object({
-  plan_id: ownedStringSchema({ label: 'Monitoring plan ID', maxLength: 200 }),
+  plan_id: ownedStringSchema({ label: 'Monitoring plan', maxLength: 200 }),
   activity_type: ownedStringSchema({ label: 'Activity type', maxLength: 100 }),
+  modality: ownedStringSchema({ label: 'Modality', maxLength: 30 }),
   planned_date: dateTime,
   site_id: optionalId,
   assigned_cra_id: optionalId,
@@ -132,16 +141,27 @@ function optional(value: string | undefined): string | undefined {
   return value && value.trim() ? value.trim() : undefined
 }
 
-function versionPayload(values: { objectives?: string; activity_types?: string; frequency?: string; frequency_value?: number; frequency_unit?: string; completion_criteria?: string; risk_level?: string; monitoring_strategy?: string }): CTMSMonitoringPlanVersionPayload {
+function projectOptionLabel(option: { label: string; secondary_label?: string | null }) {
+  return option.secondary_label ? `${option.label} · ${option.secondary_label}` : option.label
+}
+
+function withCurrentOption(options: Array<{ value: string; label: string }>, current?: string | null) {
+  if (!current || options.some((option) => option.value === current)) return options
+  return [{ value: current, label: 'Current selection (no longer available)' }, ...options]
+}
+
+function versionPayload(values: { objectives?: string; activity_types?: string; frequency?: string; frequency_value?: number; frequency_unit?: string; completion_criteria?: string; risk_level?: string; monitoring_strategy?: string; visit_type?: string; modality?: string; required_activities?: string }): CTMSMonitoringPlanVersionPayload {
+  const visitType = optional(values.visit_type)
   return {
     objectives: optional(values.objectives),
-    activity_types: values.activity_types?.split(',').map((item) => item.trim()).filter(Boolean),
+    activity_types: values.activity_types?.split(',').map((item) => item.trim()).filter(Boolean) ?? (visitType ? [visitType] : []),
     frequency: optional(values.frequency),
     frequency_value: values.frequency_value,
     frequency_unit: optional(values.frequency_unit),
     completion_criteria: optional(values.completion_criteria),
     risk_level: optional(values.risk_level),
     monitoring_strategy: optional(values.monitoring_strategy),
+    visit_rules: visitType ? [{ visit_type: visitType, frequency_value: values.frequency_value, frequency_unit: optional(values.frequency_unit), allowed_modalities: optional(values.modality) ? [values.modality!.trim()] : ['On-site'], required_activities: values.required_activities?.split('\n').map((item) => item.trim()).filter(Boolean) ?? [], report_due_days: 10 }] : [],
   }
 }
 
@@ -158,11 +178,13 @@ export interface CTMSFormCallbacks<T> {
 
 export function MonitoringPlanForm({ studyId, initial, onSaved, onCancel, correlationId }: CTMSFormCallbacks<CTMSMonitoringPlan> & { studyId: string; initial?: CTMSMonitoringPlan }) {
   const client = useQueryClient()
+  const projectOptions = useCTMSProjectOptions(studyId)
+  const siteOptions = withCurrentOption((projectOptions.data?.sites ?? []).map((site) => ({ value: site.id, label: projectOptionLabel(site) })), initial?.site_id)
   const methods = useForm<PlanInput, unknown, PlanValues>({
     resolver: zodResolver(planSchema),
     defaultValues: {
       name: initial?.name ?? '', description: initial?.description ?? '', site_id: initial?.site_id ?? '',
-      objectives: '', frequency: '', frequency_value: undefined, frequency_unit: '', completion_criteria: '', risk_level: '', monitoring_strategy: '',
+      objectives: '', frequency: '', frequency_value: undefined, frequency_unit: '', completion_criteria: '', risk_level: '', monitoring_strategy: '', visit_type: 'Routine Monitoring', modality: 'Hybrid', required_activities: 'Review informed consent documentation\nReview subject eligibility\nReview adverse event / SAE reporting\nReview investigational product accountability\nVerify critical source data\nReview protocol deviations\nReview essential site documents',
     },
   })
   const mutation = useCTMSMutation({
@@ -181,17 +203,17 @@ export function MonitoringPlanForm({ studyId, initial, onSaved, onCancel, correl
     <CTMSFormShell methods={methods} title={initial ? 'Update monitoring plan' : 'Create monitoring plan'} description="Monitoring plans and versions are CTMS-owned operational configuration. EDC Visit Instances remain read-only references." onSubmit={onSubmit} onCancel={onCancel} submitLabel={initial ? 'Update plan' : 'Create plan'} initialFocusName="name" mutation={{ action: initial ? 'Update monitoring plan' : 'Create monitoring plan', ...mutationProps(mutation) }}>
       <div className="grid gap-4 sm:grid-cols-2">
         <CTMSFormField control={methods.control} name="name" label="Plan name" required />
-        <CTMSFormField control={methods.control} name="site_id" label="Site ID (optional)" description="Canonical EDC Site ID used as scope only." />
+        <CTMSFormField control={methods.control} name="site_id" label="Site scope" type="select" options={siteOptions} description={projectOptions.isLoading ? 'Loading study sites…' : 'Leave blank for a study-level plan.'} disabled={projectOptions.isLoading} />
       </div>
       <CTMSFormField control={methods.control} name="description" label="Description" type="textarea" />
-      {!initial ? <div className="space-y-3 rounded border bg-muted/20 p-3"><h3 className="font-medium">Initial plan version</h3><div className="grid gap-4 sm:grid-cols-2"><CTMSFormField control={methods.control} name="objectives" label="Objectives" /><CTMSFormField control={methods.control} name="frequency" label="Frequency" /><CTMSFormField control={methods.control} name="frequency_value" label="Frequency value" type="number" /><CTMSFormField control={methods.control} name="frequency_unit" label="Frequency unit" /><CTMSFormField control={methods.control} name="risk_level" label="Risk level" /></div><CTMSFormField control={methods.control} name="monitoring_strategy" label="Monitoring strategy" type="textarea" /><CTMSFormField control={methods.control} name="completion_criteria" label="Completion criteria" type="textarea" /></div> : null}
+      {!initial ? <div className="space-y-3 rounded border bg-muted/20 p-3"><h3 className="font-medium">Initial plan version</h3><div className="grid gap-4 sm:grid-cols-2"><CTMSFormField control={methods.control} name="objectives" label="Objectives" /><CTMSFormField control={methods.control} name="frequency" label="Frequency" /><CTMSFormField control={methods.control} name="frequency_value" label="Frequency value" type="number" /><CTMSFormField control={methods.control} name="frequency_unit" label="Frequency unit" /><CTMSFormField control={methods.control} name="risk_level" label="Risk level" /><CTMSFormField control={methods.control} name="visit_type" label="Visit type" required /><CTMSFormField control={methods.control} name="modality" label="Allowed modality" required /></div><CTMSFormField control={methods.control} name="required_activities" label="Required activities" type="textarea" description="Enter one evidence-bearing checklist requirement per line." /><CTMSFormField control={methods.control} name="monitoring_strategy" label="Monitoring strategy" type="textarea" /><CTMSFormField control={methods.control} name="completion_criteria" label="Completion criteria" type="textarea" /></div> : null}
     </CTMSFormShell>
   )
 }
 
 export function MonitoringPlanVersionForm({ planId, onSaved, onCancel, correlationId }: CTMSFormCallbacks<unknown> & { planId: string }) {
   const client = useQueryClient()
-  const methods = useForm<VersionInput, unknown, VersionValues>({ resolver: zodResolver(versionSchema), defaultValues: { reason: '', objectives: '', activity_types: '', frequency: '', frequency_value: undefined, frequency_unit: '', completion_criteria: '', risk_level: '', monitoring_strategy: '' } })
+  const methods = useForm<VersionInput, unknown, VersionValues>({ resolver: zodResolver(versionSchema), defaultValues: { reason: '', objectives: '', activity_types: '', frequency: '', frequency_value: undefined, frequency_unit: '', completion_criteria: '', risk_level: '', monitoring_strategy: '', visit_type: '', modality: 'Hybrid', required_activities: '' } })
   const mutation = useCTMSMutation({
     mutationFn: (values: VersionValues) => {
       const payload: CTMSMonitoringPlanAmendPayload = { reason: values.reason, changes: versionPayload(values), correlation_id: correlationId }
@@ -200,7 +222,7 @@ export function MonitoringPlanVersionForm({ planId, onSaved, onCancel, correlati
     onSuccess: (value) => { void client.invalidateQueries({ queryKey: ['ctms', 'monitoring-plans'] }); void client.invalidateQueries({ queryKey: ['ctms', 'monitoring-plan-versions', planId] }); onSaved?.(value) },
     onError: (error) => { applyCTMSServerErrors(error, methods.setError) },
   })
-  return <CTMSFormShell methods={methods} title="Amend monitoring plan version" description="An amendment creates a new server-controlled version; the prior version is not edited in place." onSubmit={(values) => mutation.mutate(values)} onCancel={onCancel} submitLabel="Amend version" initialFocusName="reason" mutation={{ action: 'Amend monitoring plan version', ...mutationProps(mutation) }}><CTMSFormField control={methods.control} name="reason" label="Amendment reason" type="textarea" required /><div className="grid gap-4 sm:grid-cols-2"><CTMSFormField control={methods.control} name="objectives" label="Objectives" /><CTMSFormField control={methods.control} name="activity_types" label="Activity types" description="Comma-separated operational activity types." /><CTMSFormField control={methods.control} name="frequency" label="Frequency" /><CTMSFormField control={methods.control} name="frequency_value" label="Frequency value" type="number" /><CTMSFormField control={methods.control} name="frequency_unit" label="Frequency unit" /><CTMSFormField control={methods.control} name="risk_level" label="Risk level" /></div><CTMSFormField control={methods.control} name="monitoring_strategy" label="Monitoring strategy" type="textarea" /><CTMSFormField control={methods.control} name="completion_criteria" label="Completion criteria" type="textarea" /></CTMSFormShell>
+  return <CTMSFormShell methods={methods} title="Amend monitoring plan version" description="An amendment creates a new server-controlled version; the prior version is not edited in place." onSubmit={(values) => mutation.mutate(values)} onCancel={onCancel} submitLabel="Amend version" initialFocusName="reason" mutation={{ action: 'Amend monitoring plan version', ...mutationProps(mutation) }}><CTMSFormField control={methods.control} name="reason" label="Amendment reason" type="textarea" required /><div className="grid gap-4 sm:grid-cols-2"><CTMSFormField control={methods.control} name="objectives" label="Objectives" /><CTMSFormField control={methods.control} name="activity_types" label="Activity types" description="Comma-separated operational activity types." /><CTMSFormField control={methods.control} name="frequency" label="Frequency" /><CTMSFormField control={methods.control} name="frequency_value" label="Frequency value" type="number" /><CTMSFormField control={methods.control} name="frequency_unit" label="Frequency unit" /><CTMSFormField control={methods.control} name="risk_level" label="Risk level" /><CTMSFormField control={methods.control} name="visit_type" label="Replacement visit rule type" /><CTMSFormField control={methods.control} name="modality" label="Allowed modality" /></div><CTMSFormField control={methods.control} name="required_activities" label="Required activities" type="textarea" description="One requirement per line. Supplying a visit rule replaces inherited rules for this draft." /><CTMSFormField control={methods.control} name="monitoring_strategy" label="Monitoring strategy" type="textarea" /><CTMSFormField control={methods.control} name="completion_criteria" label="Completion criteria" type="textarea" /></CTMSFormShell>
 }
 
 export function MonitoringPlanVersionActions({ planId, canManage = true, onChanged }: { planId: string; canManage?: boolean; onChanged?: () => void }) {
@@ -213,20 +235,31 @@ export function MonitoringPlanVersionActions({ planId, canManage = true, onChang
 
 export function MonitoringActivityForm({ studyId, initial, onSaved, onCancel, correlationId }: CTMSFormCallbacks<CTMSMonitoringActivity> & { studyId: string; initial?: CTMSMonitoringActivity }) {
   const client = useQueryClient()
-  const methods = useForm<ActivityInput, unknown, ActivityValues>({ resolver: zodResolver(activitySchema), defaultValues: { plan_id: initial?.plan_version_id ?? '', activity_type: initial?.activity_type ?? '', planned_date: initial?.planned_date?.slice(0, 16) ?? '', site_id: initial?.site_id ?? '', assigned_cra_id: initial?.assigned_cra_id ?? '', edc_visit_instance_id: initial?.edc_visit_instance_id ?? '' } })
+  const plans = useCTMSMonitoringPlans(studyId, { pagination: { pageSize: 100 } })
+  const projectOptions = useCTMSProjectOptions(studyId)
+  const selectedPlanId = (plans.data?.items ?? []).find((plan) => plan.current_version_id === initial?.plan_version_id)?.id ?? ''
+  const planOptions = withCurrentOption((plans.data?.items ?? []).map((plan) => ({ value: plan.id, label: `${plan.name} · ${plan.site_id ? projectOptions.data?.sites.find((site) => site.id === plan.site_id)?.label ?? 'Site plan' : 'Study plan'} · ${plan.status}` })), selectedPlanId)
+  const siteOptions = withCurrentOption((projectOptions.data?.sites ?? []).map((site) => ({ value: site.id, label: projectOptionLabel(site) })), initial?.site_id)
+  const craOptions = withCurrentOption((projectOptions.data?.users ?? []).map((user) => ({ value: user.id, label: projectOptionLabel(user) })), initial?.assigned_cra_id)
+  const methods = useForm<ActivityInput, unknown, ActivityValues>({ resolver: zodResolver(activitySchema), defaultValues: { plan_id: '', activity_type: initial?.activity_type ?? 'Routine Monitoring', modality: initial?.modality ?? 'Hybrid', planned_date: initial?.planned_date?.slice(0, 16) ?? '', site_id: initial?.site_id ?? '', assigned_cra_id: initial?.assigned_cra_id ?? '', edc_visit_instance_id: initial?.edc_visit_instance_id ?? '' } })
+  React.useEffect(() => {
+    if (initial && selectedPlanId && !methods.getValues('plan_id')) methods.setValue('plan_id', selectedPlanId)
+  }, [initial, methods, selectedPlanId])
   const mutation = useCTMSMutation({
     mutationFn: (values: ActivityValues) => {
-      const payload: CTMSMonitoringActivityPayload = { plan_id: values.plan_id, activity_type: values.activity_type, planned_date: toIso(values.planned_date) ?? values.planned_date, site_id: optional(values.site_id), assigned_cra_id: optional(values.assigned_cra_id), edc_visit_instance_id: optional(values.edc_visit_instance_id), correlation_id: correlationId }
+      const payload: CTMSMonitoringActivityPayload = { plan_id: values.plan_id, activity_type: values.activity_type, modality: values.modality, planned_date: toIso(values.planned_date) ?? values.planned_date, site_id: optional(values.site_id), assigned_cra_id: optional(values.assigned_cra_id), edc_visit_instance_id: optional(values.edc_visit_instance_id), correlation_id: correlationId }
       return initial ? ctmsApi.updateMonitoringActivity(initial.id, payload) : ctmsApi.createMonitoringActivity(studyId, payload)
     },
     onSuccess: (value) => { void client.invalidateQueries({ queryKey: ctmsKeys.monitoringActivities(studyId) }); void client.invalidateQueries({ queryKey: ctmsKeys.monitoringPlans(studyId) }); onSaved?.(value) },
     onError: (error) => { applyCTMSServerErrors(error, methods.setError) },
   })
-  return <CTMSFormShell methods={methods} title={initial ? 'Update monitoring activity' : 'Schedule monitoring activity'} description="This is a CTMS operational activity. A linked EDC Visit Instance is a read-only canonical reference and cannot be rescheduled here." onSubmit={(values) => mutation.mutate(values)} onCancel={onCancel} submitLabel={initial ? 'Update activity' : 'Schedule activity'} initialFocusName="activity_type" mutation={{ action: initial ? 'Update monitoring activity' : 'Schedule monitoring activity', ...mutationProps(mutation) }}><div className="grid gap-4 sm:grid-cols-2"><CTMSFormField control={methods.control} name="plan_id" label="Monitoring plan version ID" required /><CTMSFormField control={methods.control} name="activity_type" label="Activity type" required /><CTMSFormField control={methods.control} name="planned_date" label="Planned date and time" type="datetime-local" required /><CTMSFormField control={methods.control} name="site_id" label="Site ID (optional)" /><CTMSFormField control={methods.control} name="assigned_cra_id" label="Assigned CRA ID" description="Assignment is validated by the CTMS API." /><CTMSFormField control={methods.control} name="edc_visit_instance_id" label="EDC Visit Instance ID (optional)" description="Reference only; CTMS cannot change the visit lifecycle." /></div></CTMSFormShell>
+  return <CTMSFormShell methods={methods} title={initial ? 'Update monitoring visit' : 'Schedule monitoring visit'} description="Choose configured study records; canonical identifiers are submitted by the application and are never typed by the user." onSubmit={(values) => mutation.mutate(values)} onCancel={onCancel} submitLabel={initial ? 'Update visit' : 'Schedule visit'} initialFocusName="plan_id" mutation={{ action: initial ? 'Update monitoring visit' : 'Schedule monitoring visit', ...mutationProps(mutation) }}><div className="grid gap-4 sm:grid-cols-2"><CTMSFormField control={methods.control} name="plan_id" label="Monitoring plan" type="select" options={planOptions} required disabled={plans.isLoading} description={plans.isLoading ? 'Loading monitoring plans…' : plans.data?.items.length ? 'The approved plan version will be captured when scheduled.' : 'Create a monitoring plan before scheduling a visit.'} /><CTMSFormField control={methods.control} name="activity_type" label="Visit type" type="select" options={[{ value: 'Site Qualification Visit', label: 'Site Qualification Visit (SQV / PSV)' }, { value: 'Site Initiation Visit', label: 'Site Initiation Visit (SIV)' }, { value: 'Routine Monitoring', label: 'Interim Monitoring Visit (IMV)' }, { value: 'Remote Monitoring Visit', label: 'Remote Monitoring Visit (RMV)' }, { value: 'Site Close-Out Visit', label: 'Site Close-Out Visit (COV)' }, { value: 'Unscheduled Visit', label: 'Unscheduled Visit' }]} required /><CTMSFormField control={methods.control} name="modality" label="Modality" type="select" options={[{ value: 'On-site', label: 'On-site' }, { value: 'Remote', label: 'Remote' }, { value: 'Hybrid', label: 'Hybrid' }]} required /><CTMSFormField control={methods.control} name="planned_date" label="Planned date and time" type="datetime-local" required /><CTMSFormField control={methods.control} name="site_id" label="Site" type="select" options={siteOptions} disabled={projectOptions.isLoading} description={projectOptions.isLoading ? 'Loading study sites…' : 'Optional for study-level monitoring activities.'} /><CTMSFormField control={methods.control} name="assigned_cra_id" label="Assigned CRA" type="select" options={craOptions} disabled={projectOptions.isLoading} description={projectOptions.isLoading ? 'Loading study team…' : 'Only active users assigned to this study are available.'} /></div>{initial?.edc_visit_instance_id ? <p className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">Linked EDC visit instance is retained as a read-only integration reference.</p> : null}</CTMSFormShell>
 }
 
 export function MonitoringActivityActions({ activity, onChanged }: { activity: CTMSMonitoringActivity; onChanged?: () => void }) {
   const client = useQueryClient()
+  const projectOptions = useCTMSProjectOptions(activity.study_id)
+  const craOptions = withCurrentOption((projectOptions.data?.users ?? []).map((user) => ({ value: user.id, label: projectOptionLabel(user) })), activity.assigned_cra_id)
   const [mode, setMode] = React.useState<'assign' | 'reschedule' | 'complete' | 'cancel' | null>(null)
   const methods = useForm<ActionInput, unknown, ActionValues>({ resolver: zodResolver(actionSchema), defaultValues: { assigned_cra_id: activity.assigned_cra_id ?? '', planned_date: activity.planned_date.slice(0, 16), reason: '', evidence: '', notes: '' } })
   const mutation = useCTMSMutation({
@@ -246,7 +279,7 @@ export function MonitoringActivityActions({ activity, onChanged }: { activity: C
     if (mode === 'cancel' && !values.reason) { methods.setError('reason', { type: 'required', message: 'A cancellation reason is required' }); return }
     mutation.mutate(values)
   }
-  return <div className="space-y-2"><div className="flex flex-wrap gap-2"><GuardedCTMSAction permission={PERMISSIONS.CTMS_MONITORING_ACTIVITY_MANAGEMENT} studyId={activity.study_id} onClick={() => setMode('assign')}>Assign CRA</GuardedCTMSAction><GuardedCTMSAction permission={PERMISSIONS.CTMS_MONITORING_ACTIVITY_MANAGEMENT} studyId={activity.study_id} onClick={() => setMode('reschedule')}>Reschedule activity</GuardedCTMSAction><GuardedCTMSAction permission={PERMISSIONS.CTMS_MONITORING_ACTIVITY_MANAGEMENT} studyId={activity.study_id} onClick={() => setMode('complete')}>Complete activity</GuardedCTMSAction><GuardedCTMSAction permission={PERMISSIONS.CTMS_MONITORING_ACTIVITY_MANAGEMENT} studyId={activity.study_id} onClick={() => setMode('cancel')}>Cancel activity</GuardedCTMSAction></div>{mode ? <CTMSFormShell methods={methods} title={`${mode[0].toUpperCase()}${mode.slice(1)} monitoring activity`} description="The CTMS API validates current status and allowed transition policy. EDC Visit Instance lifecycle is never changed." onSubmit={submit} onCancel={() => setMode(null)} submitLabel={mode === 'assign' ? 'Assign' : mode === 'reschedule' ? 'Reschedule' : mode === 'complete' ? 'Complete' : 'Cancel'} initialFocusName={mode === 'assign' ? 'assigned_cra_id' : mode === 'complete' ? 'evidence' : mode === 'reschedule' ? 'planned_date' : 'reason'} mutation={{ action: `${mode} monitoring activity`, ...mutationProps(mutation) }}>{mode === 'assign' ? <CTMSFormField control={methods.control} name="assigned_cra_id" label="Assigned CRA ID" required /> : null}{mode === 'reschedule' ? <><CTMSFormField control={methods.control} name="planned_date" label="New planned date and time" type="datetime-local" required /><CTMSFormField control={methods.control} name="reason" label="Rescheduling reason" type="textarea" required /></> : null}{mode === 'complete' ? <><CTMSFormField control={methods.control} name="evidence" label="Completion evidence" type="textarea" required /><CTMSFormField control={methods.control} name="notes" label="Completion notes" type="textarea" /></> : null}{mode === 'cancel' ? <CTMSFormField control={methods.control} name="reason" label="Cancellation reason" type="textarea" required /> : null}</CTMSFormShell> : null}</div>
+  return <div className="space-y-2"><div className="flex flex-wrap gap-2"><GuardedCTMSAction permission={PERMISSIONS.CTMS_MONITORING_ACTIVITY_MANAGEMENT} studyId={activity.study_id} onClick={() => setMode('assign')}>Assign CRA</GuardedCTMSAction><GuardedCTMSAction permission={PERMISSIONS.CTMS_MONITORING_ACTIVITY_MANAGEMENT} studyId={activity.study_id} onClick={() => setMode('reschedule')}>Reschedule activity</GuardedCTMSAction><GuardedCTMSAction permission={PERMISSIONS.CTMS_MONITORING_ACTIVITY_MANAGEMENT} studyId={activity.study_id} onClick={() => setMode('complete')}>Complete activity</GuardedCTMSAction><GuardedCTMSAction permission={PERMISSIONS.CTMS_MONITORING_ACTIVITY_MANAGEMENT} studyId={activity.study_id} onClick={() => setMode('cancel')}>Cancel activity</GuardedCTMSAction></div>{mode ? <CTMSFormShell methods={methods} title={`${mode[0].toUpperCase()}${mode.slice(1)} monitoring activity`} description="The CTMS API validates current status and allowed transition policy. EDC Visit Instance lifecycle is never changed." onSubmit={submit} onCancel={() => setMode(null)} submitLabel={mode === 'assign' ? 'Assign' : mode === 'reschedule' ? 'Reschedule' : mode === 'complete' ? 'Complete' : 'Cancel'} initialFocusName={mode === 'assign' ? 'assigned_cra_id' : mode === 'complete' ? 'evidence' : mode === 'reschedule' ? 'planned_date' : 'reason'} mutation={{ action: `${mode} monitoring activity`, ...mutationProps(mutation) }}>{mode === 'assign' ? <CTMSFormField control={methods.control} name="assigned_cra_id" label="Assigned CRA" type="select" options={craOptions} disabled={projectOptions.isLoading} required /> : null}{mode === 'reschedule' ? <><CTMSFormField control={methods.control} name="planned_date" label="New planned date and time" type="datetime-local" required /><CTMSFormField control={methods.control} name="reason" label="Rescheduling reason" type="textarea" required /></> : null}{mode === 'complete' ? <><CTMSFormField control={methods.control} name="evidence" label="Completion evidence" type="textarea" required /><CTMSFormField control={methods.control} name="notes" label="Completion notes" type="textarea" /></> : null}{mode === 'cancel' ? <CTMSFormField control={methods.control} name="reason" label="Cancellation reason" type="textarea" required /> : null}</CTMSFormShell> : null}</div>
 }
 
 export function OperationalTaskForm({ studyId, initial, onSaved, onCancel, correlationId }: CTMSFormCallbacks<CTMSTask> & { studyId: string; initial?: CTMSTask }) {

@@ -12,6 +12,7 @@ export interface CurrentUser {
   last_name: string
   roles: UserRoleAssignment[]
   permissions: string[]
+  authorization_source?: 'local' | 'platform'
 }
 
 export interface UserRoleAssignment {

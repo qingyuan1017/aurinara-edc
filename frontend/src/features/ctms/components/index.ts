@@ -34,3 +34,12 @@ export type { OperationalAttachmentPanelProps } from './OperationalAttachmentPan
 export { OperationalExportPanel } from './OperationalExportPanel'
 export { CoordinationRemediationPanel } from './CoordinationRemediationPanel'
 export type { CoordinationRemediationKind, CoordinationRemediationPanelProps, FailedEventRemediationPanelProps, ConflictRemediationPanelProps } from './CoordinationRemediationPanel'
+export {
+  MilestoneHierarchy,
+  ProjectGantt,
+  ProjectIssueList,
+  ProjectKanban,
+  ProjectToolbar,
+  ProjectWorkspaceHeader,
+} from './ProjectManagementViews'
+export type { ProjectView, ProjectWorkflowStatus } from './ProjectManagementViews'

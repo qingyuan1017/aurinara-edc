@@ -142,29 +142,35 @@ export interface CTMSActionRouteDescriptor {
 }
 
 export const CTMS_ACTION_ROUTE_MAP = {
+  referenceData: {
+    kind: 'route', route: '/ctms/references', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+  },
+  entityManagement: {
+    kind: 'route', route: '/ctms/entities', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+  },
   studyWorkspace: {
     kind: 'route', route: '/studies/$studyId/ctms', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalDashboards, owner: 'CTMS', clinicalMutation: false,
   },
   studyProfile: {
-    kind: 'route', route: '/studies/$studyId/ctms/profile', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+    kind: 'route', route: '/studies/$studyId/ctms/details', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
   },
   studyPlans: {
-    kind: 'route', route: '/studies/$studyId/ctms/plans', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+    kind: 'route', route: '/studies/$studyId/ctms/project-management', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
   },
   enrollment: {
     kind: 'route', route: '/studies/$studyId/ctms/enrollment', phase: 1, capability: CTMS_CAPABILITY_CODES.enrollmentPlanning, owner: 'CTMS', clinicalMutation: false,
   },
   milestones: {
-    kind: 'route', route: '/studies/$studyId/ctms/milestones', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalMilestones, owner: 'CTMS', clinicalMutation: false,
+    kind: 'route', route: '/studies/$studyId/ctms/project-management/milestones', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalMilestones, owner: 'CTMS', clinicalMutation: false,
   },
   siteActivation: {
     kind: 'route', route: '/sites/$siteId/ctms/activation', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalSites, owner: 'CTMS', clinicalMutation: false,
   },
   monitoringPlans: {
-    kind: 'route', route: '/studies/$studyId/ctms/monitoring-plans', phase: 2, capability: CTMS_CAPABILITY_CODES.monitoring, permission: 'ctms.monitoring_activity_management', owner: 'CTMS', clinicalMutation: false,
+    kind: 'route', route: '/studies/$studyId/ctms/monitoring/plans', phase: 2, capability: CTMS_CAPABILITY_CODES.monitoring, permission: 'ctms.monitoring_activity_management', owner: 'CTMS', clinicalMutation: false,
   },
   monitoringActivities: {
-    kind: 'route', route: '/studies/$studyId/ctms/monitoring-activities', phase: 2, capability: CTMS_CAPABILITY_CODES.monitoring, permission: 'ctms.monitoring_activity_management', owner: 'CTMS', clinicalMutation: false,
+    kind: 'route', route: '/studies/$studyId/ctms/monitoring/visits', phase: 2, capability: CTMS_CAPABILITY_CODES.monitoring, permission: 'ctms.monitoring_activity_management', owner: 'CTMS', clinicalMutation: false,
   },
   tasks: {
     kind: 'route', route: '/studies/$studyId/ctms/tasks', phase: 2, capability: CTMS_CAPABILITY_CODES.operationalTasks, permission: 'ctms.operational_study_management', owner: 'CTMS', clinicalMutation: false,
@@ -190,8 +196,35 @@ export const CTMS_ACTION_ROUTE_MAP = {
   conflicts: {
     kind: 'route', route: '/studies/$studyId/ctms/coordination/conflicts', phase: 3, capability: CTMS_CAPABILITY_CODES.coordinationConflicts, permission: 'ctms.conflict_management', owner: 'CTMS', clinicalMutation: false,
   },
+  contracts: {
+    kind: 'route', route: '/studies/$studyId/ctms/financial-management/contracts', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+  },
+  pricingTemplates: {
+    kind: 'route', route: '/studies/$studyId/ctms/financial-management/pricing-templates', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+  },
+  payments: {
+    kind: 'route', route: '/studies/$studyId/ctms/financial-management/payments', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+  },
+  ract: {
+    kind: 'route', route: '/studies/$studyId/ctms/rbm/ract', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+  },
+  kri: {
+    kind: 'route', route: '/studies/$studyId/ctms/rbm/kri', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+  },
+  monitoringIssues: {
+    kind: 'route', route: '/studies/$studyId/ctms/monitoring/issues', phase: 2, capability: CTMS_CAPABILITY_CODES.monitoring, owner: 'CTMS', clinicalMutation: false,
+  },
+  protocolDeviations: {
+    kind: 'route', route: '/studies/$studyId/ctms/protocol-deviations', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+  },
+  icf: {
+    kind: 'route', route: '/studies/$studyId/ctms/icf', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+  },
+  trackLogs: {
+    kind: 'route', route: '/studies/$studyId/ctms/track-logs', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, owner: 'CTMS', clinicalMutation: false,
+  },
   createStudyProfile: {
-    kind: 'action', route: '/studies/$studyId/ctms/profile', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, permission: 'ctms.operational_study_management', owner: 'CTMS', clinicalMutation: false,
+    kind: 'action', route: '/studies/$studyId/ctms/details', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalStudies, permission: 'ctms.operational_study_management', owner: 'CTMS', clinicalMutation: false,
   },
   manageSiteActivation: {
     kind: 'action', route: '/sites/$siteId/ctms/activation', phase: 1, capability: CTMS_CAPABILITY_CODES.operationalSites, permission: 'ctms.operational_site_management', owner: 'CTMS', clinicalMutation: false,

@@ -20,7 +20,6 @@ from app.api.deps import PaginationParams, get_db, require_permission
 from app.core.audit import audit_service
 from app.models.shared.identity import User
 from app.schemas.edc.site import (
-    SiteCreate,
     SiteResponse,
     SiteUpdate,
     SiteUserAssign,
@@ -42,9 +41,7 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 study_sites_router = APIRouter(prefix="/studies", tags=["sites"])
 
 
-@study_sites_router.get(
-    "/{study_id}/sites", response_model=PaginatedResponse[SiteResponse]
-)
+@study_sites_router.get("/{study_id}/sites", response_model=PaginatedResponse[SiteResponse])
 async def list_sites(
     study_id: UUID,
     session: DbSession,
@@ -63,26 +60,6 @@ async def list_sites(
         page_size=result.page_size,
         total=result.total,
     )
-
-
-@study_sites_router.post(
-    "/{study_id}/sites", response_model=SiteResponse, status_code=201
-)
-async def create_site(
-    study_id: UUID,
-    body: SiteCreate,
-    session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("site.manage"))],
-) -> SiteResponse:
-    """Create a new site within a study.
-
-    Permission: site.manage
-    Requirement 6.1: Persist site metadata.
-    """
-    site = await site_service.create_site(
-        session=session, study_id=study_id, data=body, actor_id=current_user.id
-    )
-    return SiteResponse.model_validate(site)
 
 
 # ---------------------------------------------------------------------------

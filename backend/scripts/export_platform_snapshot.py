@@ -1,4 +1,4 @@
-"""Export EDC identities and explicit role mappings for reviewed platform import."""
+"""Export EDC identities and canonical role IDs for reviewed platform import."""
 
 import argparse
 import asyncio
@@ -86,6 +86,7 @@ async def export_snapshot(identity_map_path: Path, output_path: Path) -> None:
                 "id": str(study.id),
                 "code": study.study_code,
                 "display_name": study.title,
+                "sponsor": study.sponsor,
                 "status": "archived" if str(study.status) == "Archived" else "active",
                 "created_by": str(study.created_by),
             }

@@ -101,6 +101,7 @@ describe('CTMS export lifecycle properties', () => {
       const exportId = String(path).split('/').pop() ?? ''
       return { data: jobs.get(exportId) } as never
     })
+    let verifiedCreateDrawer = false
 
     for (const scenario of cases) {
       const serialized = serializeCTMSExportRequest(scenario.request)
@@ -146,6 +147,11 @@ describe('CTMS export lifecycle properties', () => {
 
       if (scenario.canManage) {
         expect(screen.getByRole('button', { name: 'Request operational export' })).toBeInTheDocument()
+        if (!verifiedCreateDrawer) {
+          fireEvent.click(screen.getByRole('button', { name: 'Request operational export' }))
+          expect(screen.getByRole('dialog', { name: 'Request operational export' })).toBeInTheDocument()
+          verifiedCreateDrawer = true
+        }
       } else {
         expect(screen.queryByRole('button', { name: 'Request operational export' })).not.toBeInTheDocument()
       }

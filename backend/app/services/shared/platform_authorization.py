@@ -16,6 +16,7 @@ import httpx
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ServiceUnavailableError
 from app.models.shared.identity import User
+from app.schemas.shared.permission import normalize_permission_code
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,14 @@ class PlatformDecision:
     policy_version: int
     expires_at: datetime
     reason_code: str
+
+
+@dataclass(frozen=True, slots=True)
+class PlatformRegisteredRole:
+    id: UUID
+    source_role_id: UUID
+    name: str
+    scope_level: str
 
 
 class AuthorizationGateway(Protocol):
@@ -56,6 +65,7 @@ def get_authorization_decision() -> PlatformDecision | None:
 def namespaced_permission(permission: str) -> str:
     """Map legacy permission codes to the stable control-plane namespace."""
 
+    permission = normalize_permission_code(permission)
     if permission.startswith(("edc.", "ctms.", "pv.", "platform.", "artifact.")):
         return permission
     return f"edc.{permission}"
@@ -253,6 +263,69 @@ class PlatformAuthorizationClient:
         with self._lock:
             self._token = (token, time.monotonic() + expires_in - 15)
         return token
+
+    def sync_roles(self, roles: list[dict[str, object]]) -> tuple[PlatformRegisteredRole, ...]:
+        """Register the complete EDC role catalog and return canonical mappings."""
+
+        if not self._base_url:
+            raise ServiceUnavailableError("Platform authorization is not configured")
+        try:
+            response = self._client.put(
+                f"{self._base_url}/v1/products/aurinara-edc/roles",
+                headers={"Authorization": f"Bearer {self.service_token()}"},
+                json={"roles": roles},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return tuple(
+                PlatformRegisteredRole(
+                    id=UUID(item["id"]),
+                    source_role_id=UUID(item["source_role_id"]),
+                    name=str(item["name"]),
+                    scope_level=str(item["scope_level"]),
+                )
+                for item in payload
+            )
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
+            raise ServiceUnavailableError(
+                "Platform role registration is temporarily unavailable"
+            ) from error
+
+    def sync_site(
+        self,
+        *,
+        study_id: UUID,
+        site_id: UUID,
+        name: str,
+        country: str | None,
+        state: str | None,
+        city: str | None,
+        status: str = "active",
+    ) -> None:
+        """Register a CTMS-created canonical Site with the control plane."""
+
+        if not self._base_url:
+            raise ServiceUnavailableError("Platform authorization is not configured")
+        try:
+            response = self._client.put(
+                f"{self._base_url}/v1/products/aurinara-edc/studies/{study_id}/sites/{site_id}",
+                headers={"Authorization": f"Bearer {self.service_token()}"},
+                json={
+                    "name": name,
+                    "country": country,
+                    "state": state,
+                    "city": city,
+                    "status": status,
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if UUID(payload["id"]) != site_id or UUID(payload["study_id"]) != study_id:
+                raise ValueError("platform returned a different canonical Site identity")
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
+            raise ServiceUnavailableError(
+                "Platform Site registration is temporarily unavailable"
+            ) from error
 
     def invalidate(self, *, study_id: UUID | None = None) -> None:
         """Invalidate cached allows after a membership, policy, or user event."""

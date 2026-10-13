@@ -65,18 +65,61 @@ Tasks marked with `*` are optional test tasks. Property tests use Hypothesis, on
 - [x] 2.1 Implement canonical identity resolution and cross-module ownership guards
   - Resolve canonical Study and Site identities and EDC Subject, Visit_Instance, and Query identifiers through stable IDs; reject display-name identity, unknown references, ambiguous matches, and competing clinical-record creation.
   - Define service-level guards that reject CTMS commands containing EDC-owned Study_Version, subject identity/binding, Visit_Instance, Form_Instance, Field_Value, Query lifecycle, quality, lock, signature, attachment, or clinical-export mutations before any transaction changes state.
-  - Preserve read-only canonical EDC identifiers on CTMS records and record source/target/rule/correlation metadata for linked identities.
+  - Preserve the platform-managed canonical Study identifier plus read-only canonical EDC Site/Subject/Visit identifiers on CTMS records, and record source/target/rule/correlation metadata for linked identities.
   - _Requirements: 1.2–1.8, 3.6–3.8, 4.7–4.8, 5.4, 5.6–5.7, 6.1–6.2, 6.15, 11.6_
 
 - [x] 2.2 Implement `Operational_Study_Service` and study planning persistence
   - Add operational study profile, study plan, enrollment plan, readiness criteria, operational milestone, status history, archive, and dashboard/report query models using the canonical `study_id`.
-  - Implement create/update/transition/archive operations for sponsor, phase, therapeutic area, indication, operational owner, planning metadata, and statuses `Draft`, `Planning`, `Ready`, `Active`, `Enrollment Closed`, `Suspended`, and `Closed`; require configured reasons and retain history while Active.
+  - Implement create/update/transition/archive operations for CTMS-owned study configuration, operational owner, planning metadata, and statuses `Draft`, `Planning`, `Ready`, `Active`, `Enrollment Closed`, `Suspended`, and `Closed`; expose platform-owned name and sponsor as read-only values, require configured reasons, and retain history while Active.
   - Audit every CTMS change and ensure no operation mutates EDC `Study_Version` or clinical configuration.
   - _Requirements: 3.1–3.10, 14.1, 14.6_
 
+- [x] 2.2a Move operational study configuration and entity assignment into CTMS
+  - Project platform-owned Study name and sponsor as read-only values; remove them from CTMS mutation contracts.
+  - Add the full CTMS study setup fields for classification, purpose, enrollment/site expectations, dates, currency, and query expectations with validation and audit coverage.
+  - Add reusable Country, Site, Depot, Staff, Participating Organization, and Investigational Product catalog records and scoped Study assignments; create Sites in CTMS, synchronize the generated CTMS identifier to the shared canonical Site record, and remove manual identifier entry.
+  - _Requirements: 3.1, 3.5–3.13_
+
+- [x] 2.2b Add configurable CTMS reference data
+  - Add seeded, auditable Country, Participating Organization Type, Therapeutic Area, and Indication reference values with active/inactive lifecycle controls.
+  - Populate linked entity and operational-study dropdowns from active API values instead of hardcoded frontend options.
+  - _Requirements: 3.1, 3.12–3.14_
+
+- [x] 2.2c Implement the expanded Study Operations persistence boundary
+  - Add auditable, retained study-scoped records and APIs for Contract, Pricing Template, Payment Trigger/Request, RACT, KRI, Monitoring Issue, Protocol Deviation, ICF, and Tracking Log.
+  - Validate Site/Subject references against the selected Study and preserve clinical identifiers as reference-only values.
+  - _Requirements: 3.16–3.17_
+
+- [x] 2.2d Add Jira-style CTMS project milestones and master activities
+  - Add Study/Country/Site scope, all-country/all-site defaults, configured Milestone Type reference data, milestone containment, role/user assignment, and exact scope validation to the backend models, schemas, services, routes, audit flow, and additive migration.
+  - Add right-drawer create/edit flows, a persisted Kanban board, Gantt timeline, list view, and milestone/activity hierarchy to the CTMS Project Management frontend.
+  - Consolidate activities and milestones under one Project Management navigation item and native workspace; drive ordered Kanban columns and activity status validation from editable Project Status reference values with stable codes.
+  - Reject cross-study Sites, inactive or out-of-scope Users, mismatched milestone/activity scopes, and milestone scope changes that conflict with linked activities.
+  - _Requirements: 3.18–3.24_
+
+- [x] 2.2e Implement Phase 2 contract-driven financial operations
+  - Add normalized Contract, effective-dated Contract Version, Payment Term, Financial Event, Payable Item, Invoice/Line, Payment, and Payment Allocation models with decimal money, uniqueness constraints, and an additive migration.
+  - Lock executed payment terms, use amendments for subsequent versions, calculate idempotent event-based payables with caps and holdbacks, and retain immutable calculation snapshots with canonical reference validation.
+  - Require payable approval before partial invoice matching; reconcile partial ERP settlements without over-allocation; derive the financial overview from the shared ledger and audit/outbox every mutation atomically.
+  - Build the Study Financials workspace for overview, structured contract setup, verified-event calculation, approval, invoice matching, and settlement reconciliation.
+  - Add versioned study budgets and approved baselines, contract lifecycle transitions and documents, payment reversals, authoritative contract audit history, invoice aging, and due-date cash-flow reporting.
+  - Present Overview, Contracts, Budgets, Payments, Invoices, and Reporting as study tabs; present Details, Documents, Budget, Payment Terms, Amendments, and Audit Trail inside contract management.
+  - _Requirements: 15.1–15.18_
+
+- [x] 2.2f Qualify the Phase 2 financial lifecycle
+  - Verify Contract -> Version -> Term -> Event -> Payable -> Approval -> Invoice -> Settlement behavior, holdback arithmetic, contract caps, event idempotency, executed-term immutability, partial settlement/reversal, approved budget totals, ledger-derived overview/reporting, migration rollback, and frontend event submission.
+  - _Requirements: 15.2–15.18_
+
+- [x] 2.2g Add configurable multi-item contract rate cards
+  - Add fixed, visit, CRF, invoice, lab, quantity, procedure, milestone, recurring, pass-through, and adjustment calculation bases with categories, units, caps, holdbacks, and arbitrary dimensions.
+  - Link contracts to active participating organizations assigned to the Study and charge items to published EDC visit/CRF definitions without duplicating or mutating EDC configuration.
+  - Match verified events against definition/category/dimension slices and preserve every matched link in immutable calculation snapshots.
+  - Add organization/type/direction contract filters and an EDC-aware charge-item editor to the existing Contract Management Payment Terms tab.
+  - _Requirements: 15.15–15.18_
+
 - [x] 2.3 Write the operational study lifecycle property test
   - **Property 4: Operational study lifecycle is independent of clinical configuration**
-  - Generate profiles, plans, readiness criteria, milestones, and status sequences; verify only configured transitions succeed, required history/reasons persist, and canonical EDC Study/Study_Version/clinical configuration snapshots remain unchanged.
+  - Generate profiles, plans, readiness criteria, milestones, and status sequences; verify only configured transitions succeed, required history/reasons persist, and the platform-managed canonical Study projection plus EDC Study_Version/clinical configuration snapshots remain unchanged.
   - **Validates: Requirements 3.1–3.10**
 
 - [x] 2.4 Implement `Operational_Site_Service`, activation/readiness actions, and contacts references
@@ -229,6 +272,11 @@ Tasks marked with `*` are optional test tasks. Property tests use Hypothesis, on
   - Add monitoring, enrollment, and task reports with status/owner/priority/due-date/trend filters; calculate only in-scope CTMS records and approved projections.
   - Label projected clinical metrics as read-only with source module, source timestamp, and freshness; reuse shared dashboard aggregation and authorization primitives without blending EDC clinical content.
   - _Requirements: 5.15, 8.5–8.7, 10.11, 11.12, 13.1–13.7, 14.1–14.3_
+
+- [x] 5.1a Implement the expanded CTMS report catalog
+  - Add backend catalog and execution routes for Project Management, CRF, and Query reports used by CTMS navigation.
+  - Build Project Management output from CTMS-owned tasks, milestones, and monitoring activities; build CRF/Query output only from current approved minimized projections and return read-only provenance.
+  - _Requirements: 13.17–13.19_
 
 - [x] 5.2 Write the dashboard/report scope property test
   - **Property 17: Operational dashboards and reports are scope-consistent**

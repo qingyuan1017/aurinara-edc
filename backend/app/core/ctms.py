@@ -1,8 +1,8 @@
 """Shared CTMS module identifiers and phased capability metadata.
 
 This module contains platform-level contracts only. CTMS-owned records belong in
-``app.models.ctms`` and must reference EDC clinical identities rather than
-recreating them.
+``app.models.ctms``. CTMS creates the shared canonical Site identity, while
+references to EDC-owned clinical Subject and Visit identities remain read-only.
 """
 
 from __future__ import annotations

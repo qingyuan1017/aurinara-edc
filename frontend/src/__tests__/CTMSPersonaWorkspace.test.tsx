@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppShell } from '@/components/layout/AppShell'
 import { CTMSWorkspacePage } from '@/features/ctms/WorkspacePage'
@@ -8,13 +8,22 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/lib/auth'
 import { useStudyContext } from '@/lib/study-context'
 import { PERMISSIONS } from '@/lib/permissions'
+import { ThemeProvider } from '@/lib/theme'
+
+let currentPathname = '/ctms'
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ to, children, ...props }: { to: string; children: React.ReactNode; [key: string]: unknown }) => (
-    <a href={to} {...props}>{children}</a>
-  ),
+  Link: ({ to, children, ...props }: { to: string; children: React.ReactNode; search?: unknown; activeOptions?: unknown; activeProps?: unknown; [key: string]: unknown }) => {
+    const { search, activeOptions, activeProps, ...anchorProps } = props
+    void search
+    void activeOptions
+    void activeProps
+    return <a href={to} {...anchorProps}>{children}</a>
+  },
   Outlet: () => <div data-testid="outlet" />,
+  useLocation: () => ({ pathname: currentPathname }),
   useNavigate: () => vi.fn(),
+  useSearch: () => ({}),
 }))
 
 const edcNavigation = [
@@ -22,12 +31,10 @@ const edcNavigation = [
   'Studies',
   'Sites',
   'Subjects',
-  'Form Builder',
   'Queries',
   'Data Cleaning',
   'SDV Worklist',
   'Clinical Review',
-  'Edit Checks',
   'AI Assistant',
   'Notifications',
   'Exports',
@@ -95,13 +102,16 @@ function mockCapabilities(response: unknown = enabledManifest) {
   })
 }
 
-function renderShell(grantedPermissions: readonly string[], response: unknown = enabledManifest, roleName = 'CTMS_Viewer') {
+function renderShell(grantedPermissions: readonly string[], response: unknown = enabledManifest, roleName = 'CTMS_Viewer', pathname = '/ctms') {
+  currentPathname = pathname
   setUser(grantedPermissions, roleName)
   useStudyContext.setState({ selectedStudyId: 'study-1', selectedSiteId: 'site-1' })
   mockCapabilities(response)
   return render(
     <QueryClientProvider client={queryClient()}>
-      <AppShell />
+      <ThemeProvider>
+        <AppShell />
+      </ThemeProvider>
     </QueryClientProvider>,
   )
 }
@@ -134,6 +144,7 @@ function expectCTMSLink(label: string, expected: boolean) {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  currentPathname = '/ctms'
   useAuthStore.setState({ user: null, isAuthenticated: false })
   useStudyContext.setState({ selectedStudyId: null, selectedSiteId: null })
 })
@@ -141,32 +152,34 @@ afterEach(() => {
 describe('CTMS persona, workspace, and EDC-shell component coverage', () => {
   it.each([
     { persona: 'Admin', role: 'CTMS_Admin', granted: permissions.admin, required: ['Failed events', 'Conflicts', 'Exports'] },
-    { persona: 'Operations User', role: 'CTMS_Operations_User', granted: permissions.operations, required: ['Exports', 'Monitoring activities'], absent: ['Failed events', 'Conflicts'] },
-    { persona: 'Viewer', role: 'CTMS_Viewer', granted: permissions.viewer, required: ['Overview', 'Projections'], absent: ['Failed events', 'Conflicts'] },
+    { persona: 'Operations User', role: 'CTMS_Operations_User', granted: permissions.operations, required: ['Exports', 'Monitoring'], absent: ['Failed events', 'Conflicts'] },
+    { persona: 'Viewer', role: 'CTMS_Viewer', granted: permissions.viewer, required: ['Overview', 'Study Details'], absent: ['Failed events', 'Conflicts'] },
     { persona: 'mixed permissions', role: 'mixed', granted: permissions.mixed, required: ['Conflicts'], absent: ['Failed events', 'Exports'] },
-  ])('resolves CTMS navigation for $persona without changing EDC navigation', async ({ role, granted, required, absent }) => {
+  ])('resolves CTMS navigation for $persona', async ({ role, granted, required, absent }) => {
     renderShell(granted, enabledManifest, role)
 
-    expectBaselineEDCNavigation()
     expect(await screen.findByLabelText('CTMS navigation')).toBeInTheDocument()
     for (const label of required) expectCTMSLink(label, true)
     for (const label of absent ?? []) expectCTMSLink(label, false)
   })
 
   it('preserves every baseline EDC navigation item when CTMS is disabled or unavailable', async () => {
-    const disabled = renderShell(permissions.viewer, { module: 'CTMS', enabled: false, phase: 0, capabilities: [] })
+    const disabled = renderShell(permissions.viewer, { module: 'CTMS', enabled: false, phase: 0, capabilities: [] }, 'CTMS_Viewer', '/')
     expectBaselineEDCNavigation()
     expect(screen.queryByLabelText('CTMS navigation')).not.toBeInTheDocument()
     disabled.unmount()
 
+    currentPathname = '/'
     setUser(permissions.viewer)
     vi.spyOn(api, 'get').mockImplementation((url) => {
       if (String(url) === '/ctms/capabilities') return Promise.reject(new Error('capability service unavailable')) as never
-      return Promise.resolve({ data: {} }) as never
+      return Promise.resolve({ data: { items: [], page: 1, page_size: 20, total: 0 } }) as never
     })
     render(
       <QueryClientProvider client={queryClient()}>
-        <AppShell />
+        <ThemeProvider>
+          <AppShell />
+        </ThemeProvider>
       </QueryClientProvider>,
     )
     expectBaselineEDCNavigation()
@@ -201,8 +214,22 @@ describe('CTMS persona, workspace, and EDC-shell component coverage', () => {
     expect(screen.getByText('study-123')).toBeInTheDocument()
     expect(screen.getByText('EDC Site ID')).toBeInTheDocument()
     expect(screen.getByText('site-456')).toBeInTheDocument()
+    expect(screen.queryByText('Canonical scope')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('CTMS workspace sections')).not.toBeInTheDocument()
     expect(await screen.findAllByText(/has no records configured yet/)).not.toHaveLength(0)
     expect(screen.getAllByRole('link', { name: 'Review site activation' }).length).toBeGreaterThan(0)
+  })
+
+  it('renders filters inside the active list panel instead of at page level', async () => {
+    renderWorkspace(
+      permissions.viewer,
+      (path) => path === '/ctms/capabilities' ? enabledManifest : { operational: {}, projected_clinical: [], generated_at: '2026-10-13T12:00:00Z' },
+      { view: 'overview', studyId: 'study-1' },
+    )
+
+    const listPanel = await screen.findByRole('region', { name: 'Overview list and filters' })
+    expect(within(listPanel).getByRole('toolbar', { name: 'CTMS filters' })).toBeInTheDocument()
+    expect(screen.queryByText('Canonical scope')).not.toBeInTheDocument()
   })
 
   it.each([

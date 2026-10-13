@@ -28,13 +28,36 @@ class ReportQueryResponse(BaseSchema):
     updated_at: UtcDatetime | None
 
 
-__all__ = ["ReportQueryCreate", "ReportQueryResponse"]
-
-
 class CTMSReportResponse(BaseSchema):
     study_id: UUID
     site_id: UUID | None = None
+    category: str | None = None
     report_type: str
+    label: str | None = None
+    data_source: str = "ctms"
+    read_only: bool = True
     items: list[dict[str, Any]] = Field(default_factory=list)
     totals: dict[str, Any] = Field(default_factory=dict)
     generated_at: UtcDatetime
+
+
+class CTMSReportDefinition(BaseSchema):
+    category: str
+    category_label: str
+    report_type: str
+    label: str
+    data_source: str
+    read_only: bool = True
+
+
+class CTMSReportCatalogResponse(BaseSchema):
+    items: list[CTMSReportDefinition] = Field(default_factory=list)
+
+
+__all__ = [
+    "CTMSReportCatalogResponse",
+    "CTMSReportDefinition",
+    "CTMSReportResponse",
+    "ReportQueryCreate",
+    "ReportQueryResponse",
+]

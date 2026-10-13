@@ -12,11 +12,14 @@ from app.api.routes.ctms.contacts import router as contacts_router
 from app.api.routes.ctms.coordination import router as coordination_router
 from app.api.routes.ctms.dashboards import router as dashboards_router
 from app.api.routes.ctms.enrollment import router as enrollment_router
+from app.api.routes.ctms.entities import router as entities_router
 from app.api.routes.ctms.exports import router as exports_router
+from app.api.routes.ctms.financials import router as financials_router
 from app.api.routes.ctms.health import router as health_router
 from app.api.routes.ctms.milestones import router as milestones_router
 from app.api.routes.ctms.monitoring import router as monitoring_router
 from app.api.routes.ctms.projections import router as projections_router
+from app.api.routes.ctms.reference_data import router as reference_data_router
 from app.api.routes.ctms.reports import router as reports_router
 from app.api.routes.ctms.sites import (
     activation_actions_router,
@@ -25,8 +28,9 @@ from app.api.routes.ctms.sites import (
 from app.api.routes.ctms.sites import (
     router as sites_router,
 )
-from app.api.routes.ctms.studies import operational_studies_router
+from app.api.routes.ctms.studies import operational_studies_router, project_management_router
 from app.api.routes.ctms.studies import router as studies_router
+from app.api.routes.ctms.study_operations import router as study_operations_router
 from app.api.routes.ctms.tasks import router as tasks_router
 from app.core.openapi import CTMS_ERROR_RESPONSES
 
@@ -37,7 +41,12 @@ for resource_router in (
     capabilities_router,
     health_router,
     studies_router,
+    entities_router,
+    reference_data_router,
     operational_studies_router,
+    project_management_router,
+    study_operations_router,
+    financials_router,
     sites_router,
     operational_sites_router,
     activation_actions_router,

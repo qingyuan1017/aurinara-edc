@@ -10,6 +10,7 @@ export interface CTMSFilterBarProps {
   onChange: (change: Partial<CTMSFilterState>) => void
   onClear: () => void
   showReportType?: boolean
+  embedded?: boolean
 }
 
 const statusOptions = ['Active', 'Open', 'Blocked', 'Completed', 'Failed', 'Scheduled', 'Overdue']
@@ -25,11 +26,9 @@ const fieldClassName = 'mt-1 text-sm'
 const selectClassName = 'mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
 const filterLabelClassName = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground'
 
-export function CTMSFilterBar({ filters, onChange, onClear, showReportType = false }: CTMSFilterBarProps) {
+export function CTMSFilterBar({ filters, onChange, onClear, showReportType = false, embedded = false }: CTMSFilterBarProps) {
   const activeFilters = activeCTMSFilters(filters)
-
-  return (
-    <PageToolbar label="CTMS filters" className="space-y-3 bg-card p-4" aria-labelledby="ctms-filter-heading">
+  const content = <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="ctms-filter-heading" className="text-sm font-semibold text-foreground">Filters</h2>
         {activeFilters.length > 0 && (
@@ -90,6 +89,8 @@ export function CTMSFilterBar({ filters, onChange, onClear, showReportType = fal
         <span className="font-semibold text-foreground">Active filters:</span>
         {activeFilters.length === 0 ? <span className="text-muted-foreground">None</span> : activeFilters.map((filter) => <Badge key={filter.label} variant="info">{filter.label}: {filter.value}</Badge>)}
       </div>
-    </PageToolbar>
-  )
+    </>
+
+  if (embedded) return <div role="toolbar" aria-label="CTMS filters" className="space-y-3 border-b bg-muted/20 p-4">{content}</div>
+  return <PageToolbar label="CTMS filters" className="space-y-3 bg-card p-4">{content}</PageToolbar>
 }

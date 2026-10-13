@@ -1,8 +1,9 @@
 import { useNavigate } from '@tanstack/react-router'
-import { Building2, ClipboardList, Lock } from 'lucide-react'
+import { Building2, ClipboardList, Lock, PencilRuler } from 'lucide-react'
 import { useAuthStore } from '@/lib/auth'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
 import { useCTMSCapabilityState } from '@/features/ctms'
+import { getDesignerLandingPath } from '@/features/designer/navigation'
 import { useModuleStore, type AppModule } from '@/lib/module-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -18,7 +19,7 @@ interface ModuleOption {
 
 /**
  * ModuleSelectPage — post-login landing where the user chooses which product
- * module to work in (EDC or CTMS). The sidebar is then scoped to that module.
+ * module to work in. The sidebar is then scoped to that module.
  *
  * CTMS availability mirrors the same authority gates used by the shell: the
  * server capability manifest must report the module as ready AND the user must
@@ -33,6 +34,8 @@ export function ModuleSelectPage() {
   const canReadCTMS = usePermission(PERMISSIONS.CTMS_OPERATIONAL_DATA_READ)
 
   const ctmsAvailable = ctmsState.status === 'ready' && canReadCTMS
+  const designerLandingPath = getDesignerLandingPath(user?.permissions ?? [])
+  const designerAvailable = designerLandingPath !== null
   const ctmsReason =
     ctmsState.status !== 'ready'
       ? 'CTMS is not enabled for this environment.'
@@ -41,6 +44,14 @@ export function ModuleSelectPage() {
         : undefined
 
   const options: readonly ModuleOption[] = [
+    {
+      id: 'designer',
+      title: 'Designer',
+      description: 'Study design — versions, forms, visits, schedules, rules, and controlled terminology.',
+      icon: PencilRuler,
+      available: designerAvailable,
+      unavailableReason: designerAvailable ? undefined : 'Your account does not have Designer access.',
+    },
     {
       id: 'edc',
       title: 'EDC',
@@ -60,7 +71,9 @@ export function ModuleSelectPage() {
 
   const choose = (module: AppModule) => {
     setModule(module)
-    navigate({ to: module === 'ctms' ? '/ctms' : '/' })
+    navigate({
+      to: module === 'designer' ? (designerLandingPath ?? '/designer/forms') : module === 'ctms' ? '/ctms' : '/',
+    })
   }
 
   const displayName = user ? `${user.first_name} ${user.last_name}` : 'there'
@@ -72,7 +85,7 @@ export function ModuleSelectPage() {
         <p className="text-muted-foreground">Choose a module to get started. You can switch modules anytime from the sidebar.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {options.map((option) => {
           const Icon = option.icon
           const disabled = !option.available

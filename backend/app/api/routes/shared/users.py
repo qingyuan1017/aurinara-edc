@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PaginationParams, get_db, require_permission
 from app.core.audit import audit_service
-from app.core.exceptions import NotFoundError
+from app.core.config import get_settings
+from app.core.exceptions import ConflictError, NotFoundError
 from app.core.permissions import PERMISSION_CODES
 from app.core.security import hash_password
 from app.models.shared.identity import User
@@ -47,6 +48,14 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 # Repository singletons
 _user_repo = UserRepository()
 _role_repo = RoleRepository()
+
+
+def require_local_authorization_management() -> None:
+    if get_settings().platform_authorization_mode == "enforced":
+        raise ConflictError(
+            message="User and role assignments are managed in Aurinara Platform",
+            details={"reason": "PLATFORM_MANAGED_AUTHORIZATION"},
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +91,7 @@ async def list_users(
     "/users",
     response_model=UserResponse,
     status_code=201,
+    dependencies=[Depends(require_local_authorization_management)],
 )
 async def create_user(
     body: UserCreate,
@@ -126,6 +136,7 @@ async def get_user(user_id: UUID, session: DbSession) -> UserResponse:
 @router.patch(
     "/users/{user_id}",
     response_model=UserResponse,
+    dependencies=[Depends(require_local_authorization_management)],
 )
 async def update_user(
     user_id: UUID,
@@ -165,6 +176,7 @@ async def update_user(
 @router.post(
     "/users/{user_id}/deactivate",
     response_model=UserResponse,
+    dependencies=[Depends(require_local_authorization_management)],
 )
 async def deactivate_user(
     user_id: UUID,
@@ -208,6 +220,7 @@ async def list_roles(
     "/roles",
     response_model=RoleResponse,
     status_code=201,
+    dependencies=[Depends(require_local_authorization_management)],
 )
 async def create_role(
     body: RoleCreateRequest,
@@ -263,6 +276,7 @@ async def list_permissions() -> list[str]:
 @router.post(
     "/studies/{study_id}/users/{user_id}/assign",
     response_model=UserResponse,
+    dependencies=[Depends(require_local_authorization_management)],
 )
 async def assign_roles(
     study_id: UUID,
@@ -298,6 +312,7 @@ async def assign_roles(
     "/auth/invite",
     response_model=InvitationResponse,
     status_code=201,
+    dependencies=[Depends(require_local_authorization_management)],
 )
 async def send_invitation(
     body: InvitationCreate,

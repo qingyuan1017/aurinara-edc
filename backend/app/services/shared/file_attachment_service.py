@@ -90,6 +90,7 @@ class FileAttachmentService:
             "contact",
             "operational_task",
             "operational_contact",
+            "financial_contract",
         }
     )
     _CLINICAL_PARENT_TYPES: ClassVar[frozenset[str]] = frozenset(
@@ -119,6 +120,7 @@ class FileAttachmentService:
         "contact": "ctms.operational-study-management",
         "operational_contact": "ctms.operational-study-management",
         "operational": "ctms.operational-study-management",
+        "financial_contract": "ctms.operational-study-management",
     }
 
     def __init__(

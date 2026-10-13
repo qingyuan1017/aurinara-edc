@@ -273,6 +273,11 @@ class AuthService:
             status=loaded_user.status,
             mfa_enabled=loaded_user.mfa_enabled,
             roles=roles,
+            authorization_source=(
+                "platform"
+                if get_settings().platform_authorization_mode == "enforced"
+                else "local"
+            ),
         )
 
     # ------------------------------------------------------------------

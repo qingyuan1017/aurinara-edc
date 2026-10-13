@@ -13,6 +13,8 @@ import {
 } from '@/features/ctms'
 import { PV_DISABLED_MANIFEST, normalizePVCapabilities } from '@/features/pv'
 import { PERMISSIONS } from '@/lib/permissions'
+import { getDesignerLandingPath } from '@/features/designer/navigation'
+import { CTMS_REPORT_DEFINITIONS } from '@/features/ctms/reportCatalog'
 
 const allPermissions = Object.values(PERMISSIONS)
 const readyState = normalizeCTMSCapabilities({
@@ -35,12 +37,32 @@ describe('navigation model adapter', () => {
       'study-data',
       'data-quality',
       'operations',
-      'designer',
       'administration',
     ]))
   })
 
-  it('delegates CTMS filtering and preserves section IDs, item IDs, and descendant matching', () => {
+  it('keeps Designer navigation in its own permission-filtered module', () => {
+    const model = resolveNavigationModel(readyState, disabledPVState, allPermissions)
+    const designerItems = model.designerSections.flatMap((section) => section.items)
+
+    expect(model.edcSections.flatMap((section) => section.items).some((item) => item.to.startsWith('/designer'))).toBe(false)
+    expect(model.designerSections.map((section) => section.id)).toEqual([
+      'lifecycle',
+      'crf-design',
+      'rules-and-standards',
+    ])
+    expect(designerItems.map((item) => item.to)).toContain('/designer/forms')
+    expect(designerItems.map((item) => item.to)).toContain('/designer/versions')
+    expect(designerItems.every((item) => item.activeOptions.exact === false)).toBe(true)
+
+    const noDesignerAccess = resolveNavigationModel(readyState, disabledPVState, [])
+    expect(noDesignerAccess.designerSections).toEqual([])
+    expect(getDesignerLandingPath([PERMISSIONS.DESIGNER_FORM_READ])).toBe('/designer/forms')
+    expect(getDesignerLandingPath([PERMISSIONS.DESIGNER_STUDY_VERSION_READ])).toBe('/designer/versions')
+    expect(getDesignerLandingPath([])).toBeNull()
+  })
+
+  it('delegates CTMS filtering and uses exact matching for the Overview parent route', () => {
     const model = resolveNavigationModel(readyState, disabledPVState, allPermissions, {
       studyId: 'study/one',
       siteId: 'site one',
@@ -48,19 +70,42 @@ describe('navigation model adapter', () => {
     const items = model.ctmsSections.flatMap((section) => section.items)
 
     expect(model.ctmsSections.map((section) => section.id)).toEqual([
+      'entity-management',
       'study-operations',
+      'project-management',
+      'financial-management',
+      'rbm',
+      'monitoring',
+      'study-records',
       'site-operations',
+      'reports',
       'reporting-exports',
       'coordination-health',
     ])
     expect(items.map((item) => item.id)).toEqual([
-      'studyWorkspace', 'studyProfile', 'studyPlans', 'enrollment', 'milestones',
-      'monitoringPlans', 'monitoringActivities', 'tasks', 'contacts', 'projections',
-      'siteActivation', 'reports', 'exports', 'failedEvents', 'conflicts', 'health',
+      'referenceData', 'entityManagement',
+      'studyWorkspace', 'studyProfile',
+      'projectManagement',
+      'financialOverview',
+      'ract', 'kri',
+      'monitoringOverview',
+      'protocolDeviations', 'icf', 'trackLogs',
+      'siteActivation',
+      ...CTMS_REPORT_DEFINITIONS.map((report) => report.id),
+      'exports', 'failedEvents', 'conflicts', 'health',
     ])
-    expect(items.every((item) => item.activeOptions.exact === false)).toBe(true)
+    expect(items.find((item) => item.id === 'studyWorkspace')?.activeOptions.exact).toBe(true)
+    expect(items.filter((item) => item.id !== 'studyWorkspace').every((item) => item.activeOptions.exact === false)).toBe(true)
     expect(items.every((item) => item.search === preserveCurrentSearch)).toBe(true)
     expect(items.find((item) => item.id === 'studyWorkspace')?.to).toBe('/studies/study%2Fone/ctms')
+    expect(items.find((item) => item.id === 'studyProfile')?.to).toBe('/studies/study%2Fone/ctms/details')
+    expect(items.find((item) => item.id === 'projectManagement')?.to).toBe('/studies/study%2Fone/ctms/project-management')
+    expect(items.find((item) => item.id === 'financialOverview')?.to).toBe('/studies/study%2Fone/ctms/financial-management')
+    expect(items.find((item) => item.id === 'monitoringOverview')?.to).toBe('/studies/study%2Fone/ctms/monitoring')
+    expect(items.find((item) => item.id === 'reportGantt')?.to).toBe('/studies/study%2Fone/ctms/reports/project-management/gantt')
+    expect(items.find((item) => item.id === 'reportGantt')?.group).toBe('Project Management')
+    expect(items.find((item) => item.id === 'reportCrfStatusSummary')?.group).toBe('CRF')
+    expect(items.find((item) => item.id === 'reportQueryAgingSummary')?.group).toBe('Query')
     expect(items.find((item) => item.id === 'siteActivation')?.to).toBe('/sites/site%20one/ctms/activation')
   })
 

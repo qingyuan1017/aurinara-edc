@@ -4,8 +4,9 @@ import { useAuthStore } from '@/lib/auth'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
 import { useCTMSCapabilityState } from '@/features/ctms'
 import { usePVCapabilityState } from '@/features/pv'
+import { getDesignerLandingPath } from '@/features/designer/navigation'
 import { useStudyContext } from '@/lib/study-context'
-import { useModuleStore, type AppModule } from '@/lib/module-context'
+import { resolveAppModule, useModuleStore, type AppModule } from '@/lib/module-context'
 import { resolveNavigationModel } from '@/lib/navigation-model'
 import { PageContainer } from '@/components/patterns/PageContainer'
 import { AppHeader } from './AppHeader'
@@ -36,11 +37,7 @@ export function AppShell() {
   // The URL is authoritative for the visible hierarchy, including direct
   // links and browser refreshes. The store remembers the user's last choice
   // for consumers that need it, while every module switch lands on its root.
-  const activeModule: AppModule = pathname.includes('/pv')
-    ? 'pv'
-    : pathname.includes('/ctms')
-      ? 'ctms'
-      : 'edc'
+  const activeModule = resolveAppModule(pathname)
 
   // Navigation is a convenience filter only; every CTMS and PV API route
   // remains server-authorized and direct navigation renders Access Denied.
@@ -50,6 +47,8 @@ export function AppShell() {
   })
   const showCTMS = ctmsState.status === 'ready' && canReadCTMS
   const showPV = pvState.status === 'ready' && canReadPV
+  const designerLandingPath = getDesignerLandingPath(user?.permissions ?? [])
+  const showDesigner = designerLandingPath !== null
 
   const handleLogout = async () => {
     await logout()
@@ -59,7 +58,15 @@ export function AppShell() {
 
   const handleModuleChange = (module: AppModule) => {
     setModule(module)
-    navigate({ to: module === 'ctms' ? '/ctms' : module === 'pv' ? '/pv' : '/' })
+    navigate({
+      to: module === 'designer'
+        ? (designerLandingPath ?? '/designer/forms')
+        : module === 'ctms'
+          ? '/ctms'
+          : module === 'pv'
+            ? '/pv'
+            : '/',
+    })
   }
 
   const displayName = user
@@ -75,9 +82,11 @@ export function AppShell() {
         collapsed={!sidebarOpen}
         onCollapsedChange={(collapsed) => setSidebarOpen(!collapsed)}
         edcSections={navigationModel.edcSections}
+        designerSections={navigationModel.designerSections}
         ctmsSections={navigationModel.ctmsSections}
         pvSections={navigationModel.pvSections}
         showCTMS={showCTMS}
+        showDesigner={showDesigner}
         showPV={showPV}
         activeModule={activeModule}
         onModuleChange={handleModuleChange}

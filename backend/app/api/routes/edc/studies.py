@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PaginationParams, get_db, require_permission
 from app.core.audit import audit_service
+from app.core.exceptions import ConflictError
 from app.schemas.edc.study import (
     StudyCreate,
     StudyResponse,
@@ -83,15 +84,10 @@ async def create_study(
     Permission: study.create
     Requirement 4.1: Persist study metadata.
     """
-    study = await study_service.create_study(
-        session=session, data=body, actor_id=current_user.id
+    raise ConflictError(
+        message="Canonical studies are created through Aurinara Platform",
+        details={"reason": "CANONICAL_STUDY_MANAGED_EXTERNALLY"},
     )
-    # The initial version is created by the service, but the relationship is
-    # not guaranteed to be loaded on this newly-created ORM instance. Load it
-    # explicitly before Pydantic reads the response model so async SQLAlchemy
-    # does not attempt implicit I/O during serialization.
-    await session.refresh(study, attribute_names=["versions"])
-    return StudyResponse.model_validate(study)
 
 
 @router.get("/{study_id}", response_model=StudyResponse)

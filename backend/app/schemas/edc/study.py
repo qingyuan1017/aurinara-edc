@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from app.models.edc.study import StudyStatus
 
@@ -56,12 +56,9 @@ class StudyCreate(BaseCreateSchema):
 class StudyUpdate(BaseUpdateSchema):
     """Request body for updating an existing Study (partial PATCH)."""
 
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True, extra="forbid")
+
     protocol_number: str | None = None
-    title: str | None = Field(None, min_length=1, max_length=500)
-    sponsor: str | None = None
-    phase: str | None = None
-    therapeutic_area: str | None = None
-    indication: str | None = None
 
 
 class StudyStatusTransition(BaseCreateSchema):
@@ -85,6 +82,9 @@ class StudyResponse(BaseSchema):
     created_by: UUID
     created_at: UtcDatetime
     updated_at: UtcDatetime | None = None
+    platform_managed: bool = False
+    platform_revision: int | None = None
+    platform_registry_status: str | None = None
     versions: list[StudyVersionResponse] = Field(default_factory=list)
 
 

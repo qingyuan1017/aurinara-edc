@@ -23,14 +23,23 @@ from app.core.ctms import ensure_utc, utc_now
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.request_context import get_actor, get_correlation_id
 from app.models.ctms.monitoring import (
+    MonitoringActionItem,
     MonitoringActivity,
     MonitoringActivityScheduleHistory,
     MonitoringActivityStatus,
     MonitoringActivityType,
+    MonitoringChecklistResult,
+    MonitoringFinding,
+    MonitoringFindingStatus,
     MonitoringPlan,
     MonitoringPlanStatus,
     MonitoringPlanVersion,
     MonitoringPlanVersionStatus,
+    MonitoringReportStatus,
+    MonitoringRule,
+    MonitoringVisitActivity,
+    MonitoringVisitModality,
+    MonitoringVisitReport,
 )
 from app.models.edc.subject import Subject
 from app.models.edc.visit import VisitInstance
@@ -67,6 +76,19 @@ _ACTIVITY_FIELDS = {
     "issue_reference",
     "escalation_id",
     "escalation_reference",
+    "modality",
+}
+
+_RULE_FIELDS = {
+    "visit_type",
+    "frequency_value",
+    "frequency_unit",
+    "trigger",
+    "allowed_modalities",
+    "expected_duration_hours",
+    "required_activities",
+    "report_due_days",
+    "sort_order",
 }
 
 
@@ -157,7 +179,9 @@ def _evidence(value: Mapping[str, Any] | str | None) -> dict[str, Any]:
     if not isinstance(value, Mapping) or not value:
         raise ValidationError("Completion evidence is required")
     result = dict(value)
-    if not any(str(result.get(key, "")).strip() for key in ("reference", "evidence_reference", "uri", "id")):
+    if not any(
+        str(result.get(key, "")).strip() for key in ("reference", "evidence_reference", "uri", "id")
+    ):
         # Structured evidence is allowed, but must not be an empty object.
         result["reference"] = json.dumps(result, sort_keys=True, separators=(",", ":"))
     return result
@@ -244,21 +268,95 @@ class MonitoringService:
 
     @staticmethod
     def _version_data(values: Mapping[str, Any]) -> dict[str, Any]:
-        unknown = set(values) - _PLAN_VERSION_FIELDS - {"correlation_id", "amendment_reason"}
+        unknown = (
+            set(values)
+            - _PLAN_VERSION_FIELDS
+            - {
+                "correlation_id",
+                "amendment_reason",
+                "visit_rules",
+            }
+        )
         if unknown:
-            raise ValidationError("Unknown monitoring plan version field", {"field": sorted(unknown)[0]})
+            raise ValidationError(
+                "Unknown monitoring plan version field", {"field": sorted(unknown)[0]}
+            )
         data = {field: values[field] for field in _PLAN_VERSION_FIELDS if field in values}
         data.setdefault("activity_types", [])
+        if not data["activity_types"] and values.get("visit_rules"):
+            data["activity_types"] = [
+                _enum_value(_mapping(rule).get("visit_type", "")) for rule in values["visit_rules"]
+            ]
         data.setdefault("responsibilities", {})
         data.setdefault("scope", {})
         data.setdefault("thresholds", {})
         allowed_types = {item.value for item in MonitoringActivityType}
         invalid = set(data["activity_types"] or []) - allowed_types
         if invalid:
-            raise ValidationError("Unsupported monitoring activity type", {"activity_type": sorted(invalid)[0]})
+            raise ValidationError(
+                "Unsupported monitoring activity type", {"activity_type": sorted(invalid)[0]}
+            )
         return data
 
-    async def _resolve_plan(self, session: AsyncSession, plan: MonitoringPlan | UUID | str) -> MonitoringPlan:
+    @staticmethod
+    def _rule_data(value: Mapping[str, Any] | Any, *, sort_order: int) -> dict[str, Any]:
+        data = _mapping(value)
+        unknown = set(data) - _RULE_FIELDS
+        if unknown:
+            raise ValidationError("Unknown monitoring rule field", {"field": sorted(unknown)[0]})
+        visit_type = _enum_value(data.get("visit_type", ""))
+        if visit_type not in {item.value for item in MonitoringActivityType}:
+            raise ValidationError("Unsupported monitoring visit type", {"visit_type": visit_type})
+        modalities = [_enum_value(item) for item in data.get("allowed_modalities", [])]
+        invalid_modalities = set(modalities) - {item.value for item in MonitoringVisitModality}
+        if invalid_modalities:
+            raise ValidationError(
+                "Unsupported monitoring visit modality",
+                {"modality": sorted(invalid_modalities)[0]},
+            )
+        required = []
+        for index, activity in enumerate(data.get("required_activities", [])):
+            if isinstance(activity, Mapping):
+                label = str(activity.get("requirement") or activity.get("label") or "").strip()
+                key = str(activity.get("key") or f"activity-{index + 1}")
+                reference = activity.get("plan_reference")
+            else:
+                label = str(activity).strip()
+                key = f"activity-{index + 1}"
+                reference = None
+            if not label:
+                raise ValidationError("Monitoring rule activities must not be blank")
+            required.append({"key": key, "requirement": label, "plan_reference": reference})
+        return {
+            "visit_type": visit_type,
+            "frequency_value": data.get("frequency_value"),
+            "frequency_unit": data.get("frequency_unit"),
+            "trigger": data.get("trigger"),
+            "allowed_modalities": modalities,
+            "expected_duration_hours": data.get("expected_duration_hours"),
+            "required_activities": required,
+            "report_due_days": data.get("report_due_days", 10),
+            "sort_order": data.get("sort_order", sort_order),
+        }
+
+    async def _add_rules(
+        self,
+        session: AsyncSession,
+        version: MonitoringPlanVersion,
+        values: list[Any],
+    ) -> None:
+        for index, raw in enumerate(values):
+            session.add(
+                MonitoringRule(
+                    plan_version_id=version.id,
+                    **self._rule_data(raw, sort_order=index),
+                )
+            )
+        await session.flush()
+
+    async def _resolve_plan(
+        self, session: AsyncSession, plan: MonitoringPlan | UUID | str
+    ) -> MonitoringPlan:
         if isinstance(plan, MonitoringPlan):
             return plan
         plan_id = _uuid(plan, "plan_id")
@@ -283,7 +381,9 @@ class MonitoringService:
         )
         resolved = result.scalars().first()
         if resolved is None:
-            raise NotFoundError("Monitoring plan version was not found", {"plan_version_id": str(version_id)})
+            raise NotFoundError(
+                "Monitoring plan version was not found", {"plan_version_id": str(version_id)}
+            )
         return resolved
 
     async def _resolve_activity(
@@ -300,7 +400,9 @@ class MonitoringService:
         )
         resolved = result.scalars().first()
         if resolved is None:
-            raise NotFoundError("Monitoring activity was not found", {"activity_id": str(activity_id)})
+            raise NotFoundError(
+                "Monitoring activity was not found", {"activity_id": str(activity_id)}
+            )
         return resolved
 
     async def create_plan(
@@ -321,12 +423,18 @@ class MonitoringService:
         canonical_study_id, canonical_site_id = await self._canonical_study_site(
             session, study_id, site_id or values.get("site_id")
         )
-        scope = type("MonitoringScope", (), {"study_id": canonical_study_id, "site_id": canonical_site_id})()
+        scope = type(
+            "MonitoringScope", (), {"study_id": canonical_study_id, "site_id": canonical_site_id}
+        )()
         self._check_scope(user, scope)
         name = str(values.get("name") or "").strip()
         if not name:
             raise ValidationError("Monitoring plan name is required")
-        unknown = set(values) - {"name", "description", "site_id", "correlation_id", "version"} - _PLAN_VERSION_FIELDS
+        unknown = (
+            set(values)
+            - {"name", "description", "site_id", "correlation_id", "version"}
+            - _PLAN_VERSION_FIELDS
+        )
         if unknown:
             raise ValidationError("Unknown monitoring plan field", {"field": sorted(unknown)[0]})
         correlation = _correlation(correlation_id or values.get("correlation_id"), actor)
@@ -346,7 +454,9 @@ class MonitoringService:
         await session.flush()
         version_values = _mapping(values.get("version"))
         if not version_values:
-            version_values = {field: values[field] for field in _PLAN_VERSION_FIELDS if field in values}
+            version_values = {
+                field: values[field] for field in _PLAN_VERSION_FIELDS if field in values
+            }
         version_data = self._version_data(version_values)
         version = MonitoringPlanVersion(
             plan_id=plan.id,
@@ -363,6 +473,7 @@ class MonitoringService:
         )
         session.add(version)
         await session.flush()
+        await self._add_rules(session, version, list(version_values.get("visit_rules") or []))
         await ctms_atomicity_service.record_mutation(
             session,
             entity_type="monitoring_plan",
@@ -410,11 +521,17 @@ class MonitoringService:
         resolved = await self._resolve_plan(session, plan)
         self._check_scope(user, resolved)
         if resolved.status == MonitoringPlanStatus.PUBLISHED.value:
-            raise ConflictError("Published monitoring plans are immutable; amend by creating a new draft")
+            raise ConflictError(
+                "Published monitoring plans are immutable; amend by creating a new draft"
+            )
         unknown = set(values) - {"name", "description", "correlation_id"}
         if unknown:
             raise ValidationError("Unknown monitoring plan field", {"field": sorted(unknown)[0]})
-        changed = [field for field in ("name", "description") if field in values and getattr(resolved, field) != values[field]]
+        changed = [
+            field
+            for field in ("name", "description")
+            if field in values and getattr(resolved, field) != values[field]
+        ]
         if not changed:
             return resolved
         if "name" in changed and not str(values["name"]).strip():
@@ -456,7 +573,9 @@ class MonitoringService:
         self._check_scope(user, resolved_plan)
         if resolved_plan.status == MonitoringPlanStatus.ARCHIVED.value:
             raise ConflictError("Archived monitoring plans cannot be published")
-        resolved_version = await self._resolve_version(session, version) if version is not None else None
+        resolved_version = (
+            await self._resolve_version(session, version) if version is not None else None
+        )
         if resolved_version is None:
             version_result = await session.execute(
                 select(MonitoringPlanVersion).where(
@@ -498,7 +617,10 @@ class MonitoringService:
             changed_fields=["status", "published_by", "published_at"],
             previous_status=MonitoringPlanVersionStatus.DRAFT.value,
             status=resolved_version.status,
-            payload={"plan_id": resolved_plan.id, "version_number": resolved_version.version_number},
+            payload={
+                "plan_id": resolved_plan.id,
+                "version_number": resolved_version.version_number,
+            },
         )
         await ctms_atomicity_service.record_mutation(
             session,
@@ -545,10 +667,7 @@ class MonitoringService:
             raise NotFoundError("Current published monitoring plan version was not found")
         values = _mapping(changes)
         assert_ctms_command_safe(values, operation="amend_monitoring_plan")
-        version_data = {
-            field: getattr(current, field)
-            for field in _PLAN_VERSION_FIELDS
-        }
+        version_data = {field: getattr(current, field) for field in _PLAN_VERSION_FIELDS}
         version_data.update(self._version_data(values))
         actor_uuid = _actor_id(actor, actor_id)
         correlation = _correlation(correlation_id, actor)
@@ -568,6 +687,25 @@ class MonitoringService:
         )
         session.add(version)
         await session.flush()
+        if "visit_rules" in values:
+            await self._add_rules(session, version, list(values.get("visit_rules") or []))
+        else:
+            current_rules = list(
+                (
+                    await session.execute(
+                        select(MonitoringRule)
+                        .where(MonitoringRule.plan_version_id == current.id)
+                        .order_by(MonitoringRule.sort_order)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            await self._add_rules(
+                session,
+                version,
+                [{field: getattr(rule, field) for field in _RULE_FIELDS} for rule in current_rules],
+            )
         await ctms_atomicity_service.record_mutation(
             session,
             entity_type="monitoring_plan_version",
@@ -588,17 +726,27 @@ class MonitoringService:
     amend_version = amend_plan
 
     async def list_versions(
-        self, session: AsyncSession, plan: MonitoringPlan | UUID | str, *, published_only: bool = False
+        self,
+        session: AsyncSession,
+        plan: MonitoringPlan | UUID | str,
+        *,
+        published_only: bool = False,
     ) -> list[MonitoringPlanVersion]:
         resolved_plan = await self._resolve_plan(session, plan)
-        query = select(MonitoringPlanVersion).where(MonitoringPlanVersion.plan_id == resolved_plan.id)
+        query = select(MonitoringPlanVersion).where(
+            MonitoringPlanVersion.plan_id == resolved_plan.id
+        )
         if published_only:
-            query = query.where(MonitoringPlanVersion.status == MonitoringPlanVersionStatus.PUBLISHED.value)
+            query = query.where(
+                MonitoringPlanVersion.status == MonitoringPlanVersionStatus.PUBLISHED.value
+            )
         query = query.order_by(MonitoringPlanVersion.version_number.asc())
         result = await session.execute(query)
         return list(result.scalars().all())
 
-    async def get_published_versions(self, session: AsyncSession, plan: MonitoringPlan | UUID | str) -> list[MonitoringPlanVersion]:
+    async def get_published_versions(
+        self, session: AsyncSession, plan: MonitoringPlan | UUID | str
+    ) -> list[MonitoringPlanVersion]:
         return await self.list_versions(session, plan, published_only=True)
 
     async def archive_plan(
@@ -666,11 +814,16 @@ class MonitoringService:
         assert_ctms_command_safe(values, operation="schedule_monitoring_activity")
         resolved_plan = await self._resolve_plan(session, plan)
         self._check_scope(user, resolved_plan)
-        if resolved_plan.status != MonitoringPlanStatus.PUBLISHED.value or resolved_plan.current_version_id is None:
+        if (
+            resolved_plan.status != MonitoringPlanStatus.PUBLISHED.value
+            or resolved_plan.current_version_id is None
+        ):
             raise ConflictError("Activities require a published monitoring plan")
         unknown = set(values) - _ACTIVITY_FIELDS - {"correlation_id", "reason"}
         if unknown:
-            raise ValidationError("Unknown monitoring activity field", {"field": sorted(unknown)[0]})
+            raise ValidationError(
+                "Unknown monitoring activity field", {"field": sorted(unknown)[0]}
+            )
         study_id = resolved_plan.study_id
         site_value = values.get("site_id", resolved_plan.site_id)
         _, site_id = await self._canonical_study_site(session, study_id, site_value)
@@ -680,17 +833,48 @@ class MonitoringService:
         scheduled_at = _timestamp(planned_date or values.get("planned_date"), "planned_date")
         if scheduled_at is None:
             raise ValidationError("planned_date is required")
+        modality = _enum_value(values.get("modality") or MonitoringVisitModality.ON_SITE.value)
+        if modality not in {item.value for item in MonitoringVisitModality}:
+            raise ValidationError("Unsupported monitoring visit modality", {"modality": modality})
+        rule = (
+            (
+                await session.execute(
+                    select(MonitoringRule).where(
+                        MonitoringRule.plan_version_id == resolved_plan.current_version_id,
+                        MonitoringRule.visit_type == kind,
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if rule is not None and rule.allowed_modalities and modality not in rule.allowed_modalities:
+            raise ValidationError(
+                "Visit modality is not permitted by the approved monitoring plan",
+                {"modality": modality, "visit_type": kind},
+            )
         actor_uuid = _actor_id(actor, actor_id)
         cra_value = assigned_cra_id or values.get("assigned_cra_id")
-        cra_id = await self._active_cra(session, cra_value, study_id=study_id, site_id=site_id, user=user) if cra_value else None
+        cra_id = (
+            await self._active_cra(
+                session, cra_value, study_id=study_id, site_id=site_id, user=user
+            )
+            if cra_value
+            else None
+        )
         visit_value = edc_visit_instance_id or values.get("edc_visit_instance_id")
-        visit_id = await self._canonical_visit(session, visit_value, study_id=study_id, site_id=site_id) if visit_value else None
+        visit_id = (
+            await self._canonical_visit(session, visit_value, study_id=study_id, site_id=site_id)
+            if visit_value
+            else None
+        )
         correlation = _correlation(correlation_id or values.get("correlation_id"), actor)
         activity = MonitoringActivity(
             plan_version_id=resolved_plan.current_version_id,
             study_id=study_id,
             site_id=site_id,
             activity_type=kind,
+            modality=modality,
             planned_date=scheduled_at,
             assigned_cra_id=cra_id,
             status=MonitoringActivityStatus.SCHEDULED.value,
@@ -707,6 +891,31 @@ class MonitoringService:
         )
         session.add(activity)
         await session.flush()
+        activity.visit_code = f"MV-{scheduled_at.year}-{str(activity.id).split('-')[0].upper()}"
+        if rule is not None:
+            for index, required in enumerate(rule.required_activities):
+                item = required if isinstance(required, Mapping) else {"requirement": required}
+                requirement = str(item.get("requirement") or "").strip()
+                if not requirement:
+                    continue
+                session.add(
+                    MonitoringVisitActivity(
+                        visit_id=activity.id,
+                        rule_id=rule.id,
+                        study_id=activity.study_id,
+                        site_id=activity.site_id,
+                        requirement_key=str(item.get("key") or f"activity-{index + 1}"),
+                        requirement=requirement,
+                        plan_reference=item.get("plan_reference"),
+                        result=MonitoringChecklistResult.PENDING.value,
+                        sort_order=index,
+                        created_by=actor_uuid,
+                        updated_by=actor_uuid,
+                        correlation_id=correlation,
+                        created_at=utc_now(),
+                        updated_at=utc_now(),
+                    )
+                )
         history = MonitoringActivityScheduleHistory(
             activity_id=activity.id,
             previous_planned_date=None,
@@ -727,9 +936,20 @@ class MonitoringService:
             actor_id=actor_uuid,
             correlation_id=correlation,
             action="schedule",
-            changed_fields=["plan_version_id", "activity_type", "planned_date", "assigned_cra_id", "edc_visit_instance_id"],
+            changed_fields=[
+                "plan_version_id",
+                "activity_type",
+                "modality",
+                "planned_date",
+                "assigned_cra_id",
+                "edc_visit_instance_id",
+            ],
             status=activity.status,
-            payload={"plan_id": resolved_plan.id, "activity_id": activity.id, "edc_visit_instance_id": visit_id},
+            payload={
+                "plan_id": resolved_plan.id,
+                "activity_id": activity.id,
+                "edc_visit_instance_id": visit_id,
+            },
         )
         if activity.assigned_cra_id is not None:
             await notification_service.on_monitoring_assigned(
@@ -752,7 +972,13 @@ class MonitoringService:
         correlation_id: UUID | str | None = None,
     ) -> MonitoringActivity:
         resolved = await self._resolve_activity(session, activity)
-        cra_id = await self._active_cra(session, assigned_cra_id, study_id=resolved.study_id, site_id=resolved.site_id, user=user)
+        cra_id = await self._active_cra(
+            session,
+            assigned_cra_id,
+            study_id=resolved.study_id,
+            site_id=resolved.site_id,
+            user=user,
+        )
         actor_uuid = _actor_id(actor, actor_id)
         correlation = _correlation(correlation_id, actor)
         if resolved.assigned_cra_id == cra_id:
@@ -793,8 +1019,13 @@ class MonitoringService:
     ) -> MonitoringActivity:
         resolved = await self._resolve_activity(session, activity)
         self._check_scope(user, resolved)
-        if resolved.status in {MonitoringActivityStatus.COMPLETED.value, MonitoringActivityStatus.CANCELLED.value}:
-            raise ConflictError("Completed or cancelled monitoring activities cannot be rescheduled")
+        if resolved.status in {
+            MonitoringActivityStatus.COMPLETED.value,
+            MonitoringActivityStatus.CANCELLED.value,
+        }:
+            raise ConflictError(
+                "Completed or cancelled monitoring activities cannot be rescheduled"
+            )
         new_date = _timestamp(planned_date, "planned_date")
         assert new_date is not None
         change_reason = _required_reason(reason, "A rescheduling reason is required")
@@ -872,6 +1103,49 @@ class MonitoringService:
 
     mark_overdue = process_overdue_activities
 
+    async def start_activity(
+        self,
+        session: AsyncSession,
+        activity: MonitoringActivity | UUID | str,
+        *,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        user: Any | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> MonitoringActivity:
+        resolved = await self._resolve_activity(session, activity)
+        self._check_scope(user, resolved)
+        if resolved.status not in {
+            MonitoringActivityStatus.PLANNED.value,
+            MonitoringActivityStatus.SCHEDULED.value,
+            MonitoringActivityStatus.RESCHEDULED.value,
+            MonitoringActivityStatus.OVERDUE.value,
+        }:
+            raise ConflictError("Only an active monitoring visit can be started")
+        actor_uuid = _actor_id(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        previous = resolved.status
+        resolved.status = MonitoringActivityStatus.IN_PROGRESS.value
+        resolved.actual_start_at = utc_now()
+        resolved.updated_by = actor_uuid
+        resolved.updated_at = utc_now()
+        await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="monitoring_activity",
+            entity_id=resolved.id,
+            study_id=resolved.study_id,
+            site_id=resolved.site_id,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action="start",
+            changed_fields=["status", "actual_start_at"],
+            previous_status=previous,
+            status=resolved.status,
+            payload={"plan_version_id": resolved.plan_version_id},
+        )
+        return resolved
+
     async def complete_activity(
         self,
         session: AsyncSession,
@@ -886,10 +1160,27 @@ class MonitoringService:
     ) -> MonitoringActivity:
         resolved = await self._resolve_activity(session, activity)
         self._check_scope(user, resolved)
-        if resolved.status in {MonitoringActivityStatus.COMPLETED.value, MonitoringActivityStatus.CANCELLED.value}:
+        if resolved.status in {
+            MonitoringActivityStatus.COMPLETED.value,
+            MonitoringActivityStatus.CANCELLED.value,
+        }:
             raise ConflictError("Only active monitoring activities can be completed")
+        checklist = await self.list_checklist(session, resolved)
+        pending = [
+            item.requirement_key
+            for item in checklist
+            if item.result == MonitoringChecklistResult.PENDING.value
+        ]
+        if pending:
+            raise ConflictError(
+                "All monitoring checklist items must be documented before completion",
+                {"pending_requirements": pending},
+            )
         completion_evidence = _evidence(evidence)
-        assert_ctms_command_safe({"evidence": completion_evidence, "notes": notes}, operation="complete_monitoring_activity")
+        assert_ctms_command_safe(
+            {"evidence": completion_evidence, "notes": notes},
+            operation="complete_monitoring_activity",
+        )
         actor_uuid = _actor_id(actor, actor_id)
         correlation = _correlation(correlation_id, actor)
         resolved.status = MonitoringActivityStatus.COMPLETED.value
@@ -897,6 +1188,8 @@ class MonitoringService:
         resolved.completion_notes = notes
         resolved.completed_by = actor_uuid
         resolved.completed_at = utc_now()
+        resolved.actual_start_at = resolved.actual_start_at or resolved.completed_at
+        resolved.actual_end_at = resolved.completed_at
         resolved.updated_by = actor_uuid
         resolved.updated_at = utc_now()
         await session.flush()
@@ -909,7 +1202,15 @@ class MonitoringService:
             actor_id=actor_uuid,
             correlation_id=correlation,
             action="complete",
-            changed_fields=["status", "completion_evidence", "completion_notes", "completed_by", "completed_at"],
+            changed_fields=[
+                "status",
+                "completion_evidence",
+                "completion_notes",
+                "completed_by",
+                "completed_at",
+                "actual_start_at",
+                "actual_end_at",
+            ],
             previous_status=MonitoringActivityStatus.SCHEDULED.value,
             status=resolved.status,
             payload={"edc_visit_instance_id": resolved.edc_visit_instance_id},
@@ -931,7 +1232,10 @@ class MonitoringService:
     ) -> MonitoringActivity:
         resolved = await self._resolve_activity(session, activity)
         self._check_scope(user, resolved)
-        if resolved.status in {MonitoringActivityStatus.COMPLETED.value, MonitoringActivityStatus.CANCELLED.value}:
+        if resolved.status in {
+            MonitoringActivityStatus.COMPLETED.value,
+            MonitoringActivityStatus.CANCELLED.value,
+        }:
             raise ConflictError("Completed or cancelled monitoring activities cannot be cancelled")
         cancellation_reason = _required_reason(reason, "A cancellation reason is required")
         actor_uuid = _actor_id(actor, actor_id)
@@ -960,6 +1264,651 @@ class MonitoringService:
         return resolved
 
     cancel = cancel_activity
+
+    async def list_checklist(
+        self, session: AsyncSession, visit: MonitoringActivity | UUID | str
+    ) -> list[MonitoringVisitActivity]:
+        resolved = await self._resolve_activity(session, visit)
+        result = await session.execute(
+            select(MonitoringVisitActivity)
+            .where(MonitoringVisitActivity.visit_id == resolved.id)
+            .order_by(MonitoringVisitActivity.sort_order, MonitoringVisitActivity.created_at)
+        )
+        return list(result.scalars().all())
+
+    async def add_checklist_item(
+        self,
+        session: AsyncSession,
+        visit: MonitoringActivity | UUID | str,
+        payload: Mapping[str, Any] | Any,
+        *,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        user: Any | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> MonitoringVisitActivity:
+        resolved = await self._resolve_activity(session, visit)
+        self._check_scope(user, resolved)
+        if resolved.status in {
+            MonitoringActivityStatus.COMPLETED.value,
+            MonitoringActivityStatus.CANCELLED.value,
+        }:
+            raise ConflictError("Checklist requirements cannot be added to a closed visit")
+        values = _mapping(payload)
+        requirement = str(values.get("requirement") or "").strip()
+        key = str(values.get("requirement_key") or "").strip()
+        if not requirement or not key:
+            raise ValidationError("Checklist requirement and key are required")
+        actor_uuid = _actor_id(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        item = MonitoringVisitActivity(
+            visit_id=resolved.id,
+            study_id=resolved.study_id,
+            site_id=resolved.site_id,
+            requirement_key=key,
+            requirement=requirement,
+            plan_reference=values.get("plan_reference"),
+            result=MonitoringChecklistResult.PENDING.value,
+            sort_order=int(values.get("sort_order", 0)),
+            created_by=actor_uuid,
+            updated_by=actor_uuid,
+            correlation_id=correlation,
+            created_at=utc_now(),
+            updated_at=utc_now(),
+        )
+        session.add(item)
+        await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="monitoring_visit_activity",
+            entity_id=item.id,
+            study_id=item.study_id,
+            site_id=item.site_id,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action="create",
+            changed_fields=["requirement_key", "requirement", "plan_reference"],
+            status=item.result,
+            payload={"visit_id": resolved.id},
+        )
+        return item
+
+    async def update_checklist_item(
+        self,
+        session: AsyncSession,
+        item_id: UUID | str,
+        payload: Mapping[str, Any] | Any,
+        *,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        user: Any | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> MonitoringVisitActivity:
+        item = await session.get(MonitoringVisitActivity, _uuid(item_id, "checklist_item_id"))
+        if item is None or item.deleted_at is not None:
+            raise NotFoundError("Monitoring checklist item was not found")
+        self._check_scope(user, item)
+        visit = await self._resolve_activity(session, item.visit_id)
+        if visit.status in {
+            MonitoringActivityStatus.COMPLETED.value,
+            MonitoringActivityStatus.CANCELLED.value,
+        }:
+            raise ConflictError("Checklist results cannot be changed after visit closure")
+        values = _mapping(payload)
+        allowed = {
+            "result",
+            "review_details",
+            "observations",
+            "subject_reference",
+            "record_reference",
+            "evidence_references",
+        }
+        unknown = set(values) - allowed
+        if unknown:
+            raise ValidationError("Unknown checklist result field", {"field": sorted(unknown)[0]})
+        result = _enum_value(values.get("result") or item.result)
+        if result not in {choice.value for choice in MonitoringChecklistResult}:
+            raise ValidationError("Unsupported checklist result", {"result": result})
+        if (
+            result == MonitoringChecklistResult.NOT_APPLICABLE.value
+            and not str(values.get("review_details") or "").strip()
+        ):
+            raise ValidationError("Not Applicable requires review details")
+        actor_uuid = _actor_id(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        previous = item.result
+        for field in allowed - {"result"}:
+            if field in values:
+                setattr(item, field, values[field])
+        item.result = result
+        item.completed_at = None if result == MonitoringChecklistResult.PENDING.value else utc_now()
+        item.completed_by = (
+            None if result == MonitoringChecklistResult.PENDING.value else actor_uuid
+        )
+        item.updated_by = actor_uuid
+        item.updated_at = utc_now()
+        await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="monitoring_visit_activity",
+            entity_id=item.id,
+            study_id=item.study_id,
+            site_id=item.site_id,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action="record_result",
+            changed_fields=sorted(values),
+            previous_status=previous,
+            status=item.result,
+            payload={"visit_id": item.visit_id},
+        )
+        return item
+
+    async def list_reports(
+        self, session: AsyncSession, visit: MonitoringActivity | UUID | str
+    ) -> list[MonitoringVisitReport]:
+        resolved = await self._resolve_activity(session, visit)
+        result = await session.execute(
+            select(MonitoringVisitReport)
+            .where(MonitoringVisitReport.visit_id == resolved.id)
+            .order_by(MonitoringVisitReport.version_number)
+        )
+        return list(result.scalars().all())
+
+    async def create_report(
+        self,
+        session: AsyncSession,
+        visit: MonitoringActivity | UUID | str,
+        payload: Mapping[str, Any] | Any | None = None,
+        *,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        user: Any | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> MonitoringVisitReport:
+        resolved = await self._resolve_activity(session, visit)
+        self._check_scope(user, resolved)
+        if resolved.status == MonitoringActivityStatus.CANCELLED.value:
+            raise ConflictError("A report cannot be created for a cancelled visit")
+        existing = await self.list_reports(session, resolved)
+        if existing and existing[-1].status != MonitoringReportStatus.FINALIZED.value:
+            raise ConflictError("The visit already has an active monitoring report")
+        values = _mapping(payload)
+        actor_uuid = _actor_id(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        previous = existing[-1] if existing else None
+        report = MonitoringVisitReport(
+            visit_id=resolved.id,
+            previous_report_id=previous.id if previous else None,
+            version_number=(previous.version_number + 1) if previous else 1,
+            study_id=resolved.study_id,
+            site_id=resolved.site_id,
+            status=MonitoringReportStatus.DRAFT.value,
+            content=dict(values.get("content") or (previous.content if previous else {})),
+            created_by=actor_uuid,
+            updated_by=actor_uuid,
+            correlation_id=correlation,
+            created_at=utc_now(),
+            updated_at=utc_now(),
+        )
+        session.add(report)
+        await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="monitoring_visit_report",
+            entity_id=report.id,
+            study_id=report.study_id,
+            site_id=report.site_id,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action="create",
+            changed_fields=["visit_id", "version_number", "content"],
+            status=report.status,
+            payload={"visit_id": report.visit_id, "version_number": report.version_number},
+        )
+        return report
+
+    async def update_report(
+        self,
+        session: AsyncSession,
+        report_id: UUID | str,
+        payload: Mapping[str, Any] | Any,
+        *,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        user: Any | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> MonitoringVisitReport:
+        report = await session.get(MonitoringVisitReport, _uuid(report_id, "report_id"))
+        if report is None or report.deleted_at is not None:
+            raise NotFoundError("Monitoring visit report was not found")
+        self._check_scope(user, report)
+        if report.status not in {
+            MonitoringReportStatus.DRAFT.value,
+            MonitoringReportStatus.REVISION_REQUIRED.value,
+        }:
+            raise ConflictError("Only draft or revision-required reports can be edited")
+        values = _mapping(payload)
+        if "content" not in values:
+            raise ValidationError("Structured report content is required")
+        actor_uuid = _actor_id(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        report.content = dict(values["content"])
+        report.updated_by = actor_uuid
+        report.updated_at = utc_now()
+        await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="monitoring_visit_report",
+            entity_id=report.id,
+            study_id=report.study_id,
+            site_id=report.site_id,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action="update",
+            changed_fields=["content"],
+            status=report.status,
+            payload={"visit_id": report.visit_id},
+        )
+        return report
+
+    async def transition_report(
+        self,
+        session: AsyncSession,
+        report_id: UUID | str,
+        action: str,
+        *,
+        comments: str | None = None,
+        document_reference: str | None = None,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        user: Any | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> MonitoringVisitReport:
+        report = await session.get(MonitoringVisitReport, _uuid(report_id, "report_id"))
+        if report is None or report.deleted_at is not None:
+            raise NotFoundError("Monitoring visit report was not found")
+        self._check_scope(user, report)
+        normalized = action.strip().lower().replace("-", "_").replace(" ", "_")
+        transitions = {
+            "submit": (
+                {
+                    MonitoringReportStatus.DRAFT.value,
+                    MonitoringReportStatus.REVISION_REQUIRED.value,
+                },
+                MonitoringReportStatus.SUBMITTED.value,
+            ),
+            "start_review": (
+                {MonitoringReportStatus.SUBMITTED.value},
+                MonitoringReportStatus.UNDER_REVIEW.value,
+            ),
+            "request_revision": (
+                {MonitoringReportStatus.UNDER_REVIEW.value},
+                MonitoringReportStatus.REVISION_REQUIRED.value,
+            ),
+            "approve": (
+                {MonitoringReportStatus.UNDER_REVIEW.value},
+                MonitoringReportStatus.APPROVED.value,
+            ),
+            "finalize": (
+                {MonitoringReportStatus.APPROVED.value},
+                MonitoringReportStatus.FINALIZED.value,
+            ),
+        }
+        if normalized not in transitions:
+            raise ValidationError("Unsupported monitoring report action", {"action": action})
+        allowed, target = transitions[normalized]
+        if report.status not in allowed:
+            raise ConflictError(
+                "Monitoring report transition is not allowed",
+                {"status": report.status, "action": normalized},
+            )
+        if normalized == "request_revision" and not str(comments or "").strip():
+            raise ValidationError("Reviewer comments are required when requesting revision")
+        actor_uuid = _actor_id(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        previous = report.status
+        now = utc_now()
+        report.status = target
+        report.reviewer_comments = comments if comments is not None else report.reviewer_comments
+        if normalized == "submit":
+            report.submitted_at, report.submitted_by = now, actor_uuid
+        elif normalized in {"start_review", "request_revision"}:
+            report.reviewed_at, report.reviewed_by = now, actor_uuid
+        elif normalized == "approve":
+            report.approved_at, report.approved_by = now, actor_uuid
+        elif normalized == "finalize":
+            # Build the controlled snapshot before the single finalizing flush;
+            # otherwise an autoflush would make the newly-finalized row
+            # immutable before its snapshot fields are populated.
+            with session.no_autoflush:
+                visit = await self._resolve_activity(session, report.visit_id)
+                if visit.status != MonitoringActivityStatus.COMPLETED.value:
+                    raise ConflictError(
+                        "A monitoring report can be finalized only after the visit is completed"
+                    )
+                checklist = await self.list_checklist(session, report.visit_id)
+                findings = list(
+                    (
+                        await session.execute(
+                            select(MonitoringFinding).where(
+                                MonitoringFinding.visit_id == report.visit_id
+                            )
+                        )
+                    ).scalars()
+                )
+            report.finalized_at, report.finalized_by = now, actor_uuid
+            report.document_reference = document_reference
+            report.controlled_snapshot = {
+                "report_id": str(report.id),
+                "version_number": report.version_number,
+                "finalized_at": now.isoformat().replace("+00:00", "Z"),
+                "finalized_by": str(actor_uuid),
+                "content": report.content,
+                "checklist": [
+                    {
+                        "requirement": item.requirement,
+                        "result": item.result,
+                        "observations": item.observations,
+                        "completed_by": str(item.completed_by) if item.completed_by else None,
+                    }
+                    for item in checklist
+                ],
+                "findings": [
+                    {"finding_code": item.finding_code, "status": item.status} for item in findings
+                ],
+            }
+        report.updated_by = actor_uuid
+        report.updated_at = now
+        await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="monitoring_visit_report",
+            entity_id=report.id,
+            study_id=report.study_id,
+            site_id=report.site_id,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action=normalized,
+            changed_fields=["status"],
+            previous_status=previous,
+            status=report.status,
+            reason=comments,
+            payload={"visit_id": report.visit_id, "version_number": report.version_number},
+        )
+        return report
+
+    async def create_finding(
+        self,
+        session: AsyncSession,
+        *,
+        study_id: UUID | str,
+        payload: Mapping[str, Any] | Any,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        user: Any | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> MonitoringFinding:
+        values = _mapping(payload)
+        canonical_study_id, canonical_site_id = await self._canonical_study_site(
+            session, study_id, values.get("site_id")
+        )
+        visit = None
+        if values.get("visit_id"):
+            visit = await self._resolve_activity(session, values["visit_id"])
+            if visit.study_id != canonical_study_id or (
+                canonical_site_id is not None and visit.site_id != canonical_site_id
+            ):
+                raise ConflictError("Finding source visit is outside the requested scope")
+            canonical_site_id = canonical_site_id or visit.site_id
+        report_id = values.get("report_id")
+        if report_id:
+            report = await session.get(MonitoringVisitReport, _uuid(report_id, "report_id"))
+            if report is None or report.study_id != canonical_study_id:
+                raise ConflictError("Finding source report is outside the requested scope")
+            if canonical_site_id is not None and report.site_id != canonical_site_id:
+                raise ConflictError("Finding source report is outside the requested site scope")
+            canonical_site_id = canonical_site_id or report.site_id
+            if visit and report.visit_id != visit.id:
+                raise ConflictError("Finding report and visit do not match")
+        scope = type(
+            "MonitoringScope", (), {"study_id": canonical_study_id, "site_id": canonical_site_id}
+        )()
+        self._check_scope(user, scope)
+        category = str(values.get("category") or "").strip()
+        description = str(values.get("description") or "").strip()
+        if not category or not description:
+            raise ValidationError("Finding category and description are required")
+        actor_uuid = _actor_id(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        finding_uuid = uuid4()
+        finding = MonitoringFinding(
+            id=finding_uuid,
+            finding_code=f"FIND-{str(finding_uuid).split('-')[0].upper()}",
+            study_id=canonical_study_id,
+            site_id=canonical_site_id,
+            visit_id=visit.id if visit else None,
+            report_id=_uuid(report_id, "report_id") if report_id else None,
+            category=category,
+            severity=_enum_value(values.get("severity")),
+            description=description,
+            responsible_party=values.get("responsible_party"),
+            owner_id=values.get("owner_id"),
+            due_date=_timestamp(values.get("due_date"), "due_date"),
+            status=MonitoringFindingStatus.OPEN.value,
+            capa_required=bool(values.get("capa_required", False)),
+            capa_reference=values.get("capa_reference"),
+            created_by=actor_uuid,
+            updated_by=actor_uuid,
+            correlation_id=correlation,
+            created_at=utc_now(),
+            updated_at=utc_now(),
+        )
+        session.add(finding)
+        await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="monitoring_finding",
+            entity_id=finding.id,
+            study_id=finding.study_id,
+            site_id=finding.site_id,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action="create",
+            changed_fields=["category", "severity", "description", "due_date", "capa_required"],
+            status=finding.status,
+            payload={"finding_code": finding.finding_code, "visit_id": finding.visit_id},
+        )
+        return finding
+
+    async def transition_finding(
+        self,
+        session: AsyncSession,
+        finding_id: UUID | str,
+        status: MonitoringFindingStatus | str,
+        *,
+        reason: str,
+        resolution: str | None = None,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        user: Any | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> MonitoringFinding:
+        finding = await session.get(MonitoringFinding, _uuid(finding_id, "finding_id"))
+        if finding is None or finding.deleted_at is not None:
+            raise NotFoundError("Monitoring finding was not found")
+        self._check_scope(user, finding)
+        target = _enum_value(status)
+        transitions = {
+            MonitoringFindingStatus.OPEN.value: {
+                MonitoringFindingStatus.ACTION_ASSIGNED.value,
+                MonitoringFindingStatus.IN_PROGRESS.value,
+                MonitoringFindingStatus.CANCELLED.value,
+            },
+            MonitoringFindingStatus.ACTION_ASSIGNED.value: {
+                MonitoringFindingStatus.IN_PROGRESS.value,
+                MonitoringFindingStatus.CANCELLED.value,
+            },
+            MonitoringFindingStatus.IN_PROGRESS.value: {
+                MonitoringFindingStatus.PENDING_VERIFICATION.value,
+                MonitoringFindingStatus.CANCELLED.value,
+            },
+            MonitoringFindingStatus.PENDING_VERIFICATION.value: {
+                MonitoringFindingStatus.CLOSED.value,
+                MonitoringFindingStatus.IN_PROGRESS.value,
+            },
+            MonitoringFindingStatus.CLOSED.value: {MonitoringFindingStatus.OPEN.value},
+            MonitoringFindingStatus.CANCELLED.value: {MonitoringFindingStatus.OPEN.value},
+        }
+        if target not in transitions.get(finding.status, set()):
+            raise ConflictError(
+                "Monitoring finding transition is not allowed",
+                {"status": finding.status, "target": target},
+            )
+        transition_reason = _required_reason(reason)
+        if target == MonitoringFindingStatus.CLOSED.value and not str(resolution or "").strip():
+            raise ValidationError("Resolution is required to close a monitoring finding")
+        actor_uuid = _actor_id(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        previous = finding.status
+        finding.status = target
+        finding.resolution = resolution if resolution is not None else finding.resolution
+        if target == MonitoringFindingStatus.CLOSED.value:
+            finding.verified_by = actor_uuid
+            finding.verified_at = utc_now()
+            finding.closed_at = utc_now()
+            finding.closure_reason = transition_reason
+        elif target == MonitoringFindingStatus.OPEN.value:
+            finding.verified_by = None
+            finding.verified_at = None
+            finding.closed_at = None
+            finding.closure_reason = transition_reason
+        elif target == MonitoringFindingStatus.CANCELLED.value:
+            finding.closure_reason = transition_reason
+        finding.updated_by = actor_uuid
+        finding.updated_at = utc_now()
+        await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="monitoring_finding",
+            entity_id=finding.id,
+            study_id=finding.study_id,
+            site_id=finding.site_id,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action="transition",
+            changed_fields=["status", "resolution", "verified_by", "verified_at"],
+            previous_status=previous,
+            status=finding.status,
+            reason=transition_reason,
+            payload={"finding_code": finding.finding_code},
+        )
+        return finding
+
+    async def create_action_item(
+        self,
+        session: AsyncSession,
+        finding_id: UUID | str,
+        payload: Mapping[str, Any] | Any,
+        *,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        user: Any | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> MonitoringActionItem:
+        finding = await session.get(MonitoringFinding, _uuid(finding_id, "finding_id"))
+        if finding is None or finding.deleted_at is not None:
+            raise NotFoundError("Monitoring finding was not found")
+        self._check_scope(user, finding)
+        if finding.status in {
+            MonitoringFindingStatus.CLOSED.value,
+            MonitoringFindingStatus.CANCELLED.value,
+        }:
+            raise ConflictError("Actions cannot be added to a closed finding")
+        values = _mapping(payload)
+        title = str(values.get("title") or "").strip()
+        if not title:
+            raise ValidationError("Action title is required")
+        actor_uuid = _actor_id(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        action = MonitoringActionItem(
+            finding_id=finding.id,
+            study_id=finding.study_id,
+            site_id=finding.site_id,
+            title=title,
+            description=values.get("description"),
+            owner_id=values.get("owner_id"),
+            responsible_party=values.get("responsible_party"),
+            due_date=_timestamp(values.get("due_date"), "due_date"),
+            status="Open",
+            created_by=actor_uuid,
+            updated_by=actor_uuid,
+            correlation_id=correlation,
+            created_at=utc_now(),
+            updated_at=utc_now(),
+        )
+        session.add(action)
+        if finding.status == MonitoringFindingStatus.OPEN.value:
+            finding.status = MonitoringFindingStatus.ACTION_ASSIGNED.value
+            finding.updated_by = actor_uuid
+            finding.updated_at = utc_now()
+        await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="monitoring_action_item",
+            entity_id=action.id,
+            study_id=action.study_id,
+            site_id=action.site_id,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action="create",
+            changed_fields=["title", "owner_id", "responsible_party", "due_date"],
+            status=action.status,
+            payload={"finding_id": finding.id},
+        )
+        return action
+
+    async def complete_action_item(
+        self,
+        session: AsyncSession,
+        action_id: UUID | str,
+        evidence: Mapping[str, Any] | str,
+        *,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        user: Any | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> MonitoringActionItem:
+        action = await session.get(MonitoringActionItem, _uuid(action_id, "action_id"))
+        if action is None or action.deleted_at is not None:
+            raise NotFoundError("Monitoring action item was not found")
+        self._check_scope(user, action)
+        if action.status == "Completed":
+            raise ConflictError("Monitoring action is already completed")
+        actor_uuid = _actor_id(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        action.status = "Completed"
+        action.completion_evidence = _evidence(evidence)
+        action.completed_at = utc_now()
+        action.completed_by = actor_uuid
+        action.updated_by = actor_uuid
+        action.updated_at = utc_now()
+        await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="monitoring_action_item",
+            entity_id=action.id,
+            study_id=action.study_id,
+            site_id=action.site_id,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action="complete",
+            changed_fields=["status", "completion_evidence", "completed_at", "completed_by"],
+            previous_status="Open",
+            status=action.status,
+            payload={"finding_id": action.finding_id},
+        )
+        return action
 
 
 monitoring_service = MonitoringService()

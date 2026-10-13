@@ -1,14 +1,28 @@
 import { create } from 'zustand'
 
 /** The top-level product modules a user can work in. */
-export type AppModule = 'edc' | 'ctms' | 'pv'
+export type AppModule = 'designer' | 'edc' | 'ctms' | 'pv'
 
 const STORAGE_KEY = 'active_module'
+const LEGACY_DESIGNER_PATH = /^\/studies\/[^/]+\/(?:forms|versions|edit-checks)\/?$/
+
+/** Resolve the product hierarchy for direct links as well as module switches. */
+export function resolveAppModule(pathname: string): AppModule {
+  if (pathname.includes('/pv')) return 'pv'
+  if (pathname.includes('/ctms')) return 'ctms'
+  if (
+    pathname.includes('/designer')
+    || pathname === '/forms'
+    || pathname === '/edit-checks'
+    || LEGACY_DESIGNER_PATH.test(pathname)
+  ) return 'designer'
+  return 'edc'
+}
 
 function readStoredModule(): AppModule | null {
   try {
     const value = localStorage.getItem(STORAGE_KEY)
-    return value === 'edc' || value === 'ctms' || value === 'pv' ? value : null
+    return value === 'designer' || value === 'edc' || value === 'ctms' || value === 'pv' ? value : null
   } catch {
     return null
   }
@@ -41,7 +55,7 @@ interface ModuleState {
 }
 
 /**
- * Module store — tracks which product module (EDC, CTMS, or PV) the user has
+ * Module store — tracks which product module (Designer, EDC, CTMS, or PV) the user has
  * selected. The choice is persisted to localStorage so a returning user's
  * preference is remembered, while `resolvedThisSession` lets the app re-show
  * the picker once per fresh login.

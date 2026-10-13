@@ -14,8 +14,13 @@ from app.models.ctms.enrollment import (
 from app.models.ctms.monitoring import (
     MonitoringActivityStatus,
     MonitoringActivityType,
+    MonitoringChecklistResult,
+    MonitoringFindingSeverity,
+    MonitoringFindingStatus,
     MonitoringPlanStatus,
     MonitoringPlanVersionStatus,
+    MonitoringReportStatus,
+    MonitoringVisitModality,
 )
 from app.models.ctms.operational_site import (
     ActivationActionStatus,
@@ -72,11 +77,17 @@ API_TAGS: Final[list[dict[str, str]]] = [
         "description": "PV/Safety capability and health metadata. PV owns safety data only.",
     },
     {"name": "pv-cases", "description": "Safety case intake, capture, lifecycle, and versions."},
-    {"name": "pv-assessments", "description": "Seriousness, causality, expectedness, and severity."},
+    {
+        "name": "pv-assessments",
+        "description": "Seriousness, causality, expectedness, and severity.",
+    },
     {"name": "pv-coding", "description": "MedDRA and WHODrug coding with dictionary versions."},
     {"name": "pv-narratives", "description": "Versioned case narratives and history."},
     {"name": "pv-reports", "description": "Regulatory reporting, clocks, and ICSR/E2B."},
-    {"name": "pv-reconciliation", "description": "One-way, read-only EDC adverse-event reconciliation."},
+    {
+        "name": "pv-reconciliation",
+        "description": "One-way, read-only EDC adverse-event reconciliation.",
+    },
     {"name": "pv-attachments", "description": "Safety attachments on shared file primitives."},
     {"name": "pv-exports", "description": "PV-owned safety export jobs."},
     {"name": "pv-dashboards", "description": "Scoped PV safety dashboards and reports."},
@@ -92,12 +103,27 @@ def _values(enum_type: type) -> list[str | int]:
 CTMS_ERROR_RESPONSES: Final[dict[int, dict[str, object]]] = {
     400: {"model": CTMSErrorEnvelope, "description": "Invalid CTMS operation or business rule."},
     401: {"model": CTMSErrorEnvelope, "description": "Authentication is required."},
-    403: {"model": CTMSErrorEnvelope, "description": "The requested CTMS scope or operation is not permitted."},
-    404: {"model": CTMSErrorEnvelope, "description": "The CTMS resource or canonical reference was not found."},
-    409: {"model": CTMSErrorEnvelope, "description": "Ownership, ordering, idempotency, or coordination conflict."},
+    403: {
+        "model": CTMSErrorEnvelope,
+        "description": "The requested CTMS scope or operation is not permitted.",
+    },
+    404: {
+        "model": CTMSErrorEnvelope,
+        "description": "The CTMS resource or canonical reference was not found.",
+    },
+    409: {
+        "model": CTMSErrorEnvelope,
+        "description": "Ownership, ordering, idempotency, or coordination conflict.",
+    },
     422: {"model": CTMSErrorEnvelope, "description": "The CTMS request failed schema validation."},
-    500: {"model": CTMSErrorEnvelope, "description": "The request failed without exposing internal details."},
-    503: {"model": CTMSErrorEnvelope, "description": "A CTMS dependency is temporarily unavailable."},
+    500: {
+        "model": CTMSErrorEnvelope,
+        "description": "The request failed without exposing internal details.",
+    },
+    503: {
+        "model": CTMSErrorEnvelope,
+        "description": "A CTMS dependency is temporarily unavailable.",
+    },
 }
 
 
@@ -105,11 +131,26 @@ CTMS_ERROR_RESPONSES: Final[dict[int, dict[str, object]]] = {
 PV_ERROR_RESPONSES: Final[dict[int, dict[str, object]]] = {
     400: {"model": ErrorEnvelope, "description": "Invalid PV/Safety operation or business rule."},
     401: {"model": ErrorEnvelope, "description": "Authentication is required."},
-    403: {"model": ErrorEnvelope, "description": "The requested PV scope or operation is not permitted."},
-    404: {"model": ErrorEnvelope, "description": "The PV safety resource or canonical reference was not found."},
-    409: {"model": ErrorEnvelope, "description": "Ownership, lifecycle, versioning, or coordination conflict."},
-    422: {"model": ErrorEnvelope, "description": "The PV request failed schema or safety-data validation."},
-    500: {"model": ErrorEnvelope, "description": "The request failed without exposing internal details."},
+    403: {
+        "model": ErrorEnvelope,
+        "description": "The requested PV scope or operation is not permitted.",
+    },
+    404: {
+        "model": ErrorEnvelope,
+        "description": "The PV safety resource or canonical reference was not found.",
+    },
+    409: {
+        "model": ErrorEnvelope,
+        "description": "Ownership, lifecycle, versioning, or coordination conflict.",
+    },
+    422: {
+        "model": ErrorEnvelope,
+        "description": "The PV request failed schema or safety-data validation.",
+    },
+    500: {
+        "model": ErrorEnvelope,
+        "description": "The request failed without exposing internal details.",
+    },
     503: {"model": ErrorEnvelope, "description": "A PV dependency is temporarily unavailable."},
 }
 
@@ -144,6 +185,11 @@ CTMS_OPENAPI_EXTENSIONS: Final[dict[str, object]] = {
         "monitoring_plan_version_status": _values(MonitoringPlanVersionStatus),
         "monitoring_activity_type": _values(MonitoringActivityType),
         "monitoring_activity_status": _values(MonitoringActivityStatus),
+        "monitoring_visit_modality": _values(MonitoringVisitModality),
+        "monitoring_checklist_result": _values(MonitoringChecklistResult),
+        "monitoring_report_status": _values(MonitoringReportStatus),
+        "monitoring_finding_severity": _values(MonitoringFindingSeverity),
+        "monitoring_finding_status": _values(MonitoringFindingStatus),
         "operational_task_status": _values(OperationalTaskStatus),
         "operational_task_priority": _values(OperationalTaskPriority),
         "operational_contact_status": _values(OperationalContactStatus),
@@ -154,7 +200,11 @@ CTMS_OPENAPI_EXTENSIONS: Final[dict[str, object]] = {
             authoritative_module="EDC",
             writable_module="EDC",
             projection_target="CTMS",
-            projection_types=[ProjectionType.SUBJECT_STATUS, ProjectionType.QUERY_SUMMARY, ProjectionType.DATA_QUALITY_SIGNAL],
+            projection_types=[
+                ProjectionType.SUBJECT_STATUS,
+                ProjectionType.QUERY_SUMMARY,
+                ProjectionType.DATA_QUALITY_SIGNAL,
+            ],
         ).model_dump(mode="json"),
         CTMSOwnershipContract(
             authoritative_module="CTMS",

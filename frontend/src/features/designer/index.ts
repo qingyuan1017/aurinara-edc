@@ -16,3 +16,11 @@ export { ArmsPage } from './ArmsPage'
 export { CrfAccessPage } from './CrfAccessPage'
 export { RawDataVariablesPage } from './RawDataVariablesPage'
 export { CodingSettingsPage } from './CodingSettingsPage'
+export {
+  DESIGNER_NAVIGATION_SECTIONS,
+  getDesignerLandingPath,
+  resolveDesignerNavigation,
+  type DesignerNavigationItem,
+  type DesignerNavigationSection,
+  type DesignerRoutePath,
+} from './navigation'

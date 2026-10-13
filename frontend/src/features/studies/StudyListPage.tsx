@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   createColumnHelper,
@@ -8,19 +7,10 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DataTableShell, PageContainer, PageHeader, PageToolbar, StatusBadge } from '@/components/patterns'
-import {
-  getListStudiesApiV1StudiesGetQueryKey,
-  useCreateStudyApiV1StudiesPost,
-  useListStudiesApiV1StudiesGet,
-} from '@/api/endpoints/studies/studies'
-import type { StudyCreate, StudyResponse } from '@/api/model'
-import { usePermission, PERMISSIONS } from '@/lib/permissions'
+import { useListStudiesApiV1StudiesGet } from '@/api/endpoints/studies/studies'
+import type { StudyResponse } from '@/api/model'
 
 const columnHelper = createColumnHelper<StudyResponse>()
 
@@ -30,8 +20,8 @@ const columns = [
     cell: (info) => <Link to="/studies/$studyId" params={{ studyId: info.row.original.id }} className="font-medium text-primary hover:underline">{info.getValue()}</Link>,
   }),
   columnHelper.accessor('title', { header: 'Title' }),
-  columnHelper.accessor('phase', {
-    header: 'Phase',
+  columnHelper.accessor('sponsor', {
+    header: 'Sponsor',
     cell: (info) => info.getValue() ?? '—',
   }),
   columnHelper.accessor('status', {
@@ -45,36 +35,13 @@ const columns = [
 ]
 
 export function StudyListPage() {
-  const queryClient = useQueryClient()
-  const canCreate = usePermission(PERMISSIONS.STUDY_CREATE)
   const [page, setPage] = useState(1)
-  const [showModal, setShowModal] = useState(false)
-  const [formData, setFormData] = useState<StudyCreate>({ study_code: '', title: '', phase: '' })
-  const [error, setError] = useState<string | null>(null)
 
   const { data, isLoading, isError, refetch } = useListStudiesApiV1StudiesGet({
     page,
     page_size: 20,
   }, {
     query: { refetchInterval: 30_000, refetchIntervalInBackground: false },
-  })
-
-  const createMutation = useCreateStudyApiV1StudiesPost({
-    mutation: {
-      onSuccess: () => {
-        // Match every page of the studies list regardless of params.
-        queryClient.invalidateQueries({
-          queryKey: getListStudiesApiV1StudiesGetQueryKey(),
-        })
-        setShowModal(false)
-        setFormData({ study_code: '', title: '', phase: '' })
-        setError(null)
-      },
-      onError: (err) => {
-        const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        setError(msg ?? 'Failed to create study')
-      },
-    },
   })
 
   const table = useReactTable({
@@ -90,8 +57,7 @@ export function StudyListPage() {
     <PageContainer wide>
       <PageHeader
         title="Studies"
-        description="Review studies available in your authorized workspace."
-        actions={canCreate ? <Button type="button" onClick={() => setShowModal(true)}>Create Study</Button> : null}
+        description="Studies are created in Aurinara Platform. Name and sponsor are synchronized here as read-only canonical information."
       />
 
       <PageToolbar label="Study list controls">
@@ -144,19 +110,6 @@ export function StudyListPage() {
           </div>
         </PageToolbar>
       ) : null}
-
-      <Dialog open={showModal} onOpenChange={(open) => { setShowModal(open); if (!open) setError(null) }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create Study</DialogTitle><DialogDescription>Create a study in the current authorized workspace.</DialogDescription></DialogHeader>
-          {error ? <p className="rounded border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive" role="alert">{error}</p> : null}
-          <form onSubmit={(event) => { event.preventDefault(); createMutation.mutate({ data: formData }) }} className="space-y-3">
-            <div className="space-y-1.5"><Label htmlFor="study-code">Code</Label><Input id="study-code" type="text" value={formData.study_code} onChange={(event) => setFormData((current) => ({ ...current, study_code: event.target.value }))} required /></div>
-            <div className="space-y-1.5"><Label htmlFor="study-title">Title</Label><Input id="study-title" type="text" value={formData.title} onChange={(event) => setFormData((current) => ({ ...current, title: event.target.value }))} required /></div>
-            <div className="space-y-1.5"><Label htmlFor="study-phase">Phase</Label><Select value={formData.phase ?? ''} onValueChange={(value) => setFormData((current) => ({ ...current, phase: value }))}><SelectTrigger id="study-phase" aria-label="Phase"><SelectValue placeholder="Select phase…" /></SelectTrigger><SelectContent><SelectItem value="I">Phase I</SelectItem><SelectItem value="II">Phase II</SelectItem><SelectItem value="III">Phase III</SelectItem><SelectItem value="IV">Phase IV</SelectItem></SelectContent></Select></div>
-            <DialogFooter><Button type="button" variant="outline" onClick={() => { setShowModal(false); setError(null) }}>Cancel</Button><Button type="submit" pending={createMutation.isPending} loadingText="Creating…">Create</Button></DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </PageContainer>
   )
 }

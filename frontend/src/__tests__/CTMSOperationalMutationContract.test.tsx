@@ -24,7 +24,11 @@ function renderForm(ui: ReactNode) {
 }
 
 const study: CTMSOperationalStudy = {
-  id: 'profile-1', study_id: 'study-1', sponsor: 'Initial sponsor', phase: 'Phase 2', status: 'Draft', created_at: '', updated_at: '',
+  id: 'profile-1', study_id: 'study-1', study_name: 'Platform study', sponsor: 'Platform sponsor', phase: 'Phase 2',
+  study_type: 'Interventional', main_purpose: 'Treatment', blind_method: 'Double blind', randomized: true,
+  expected_subject_count: 120, language: 'English', expected_site_count: 12, construction_period: '24 months',
+  planned_start_date: '2027-01-01', planned_end_date: '2028-12-31', study_currency: 'USD',
+  status: 'Draft', created_at: '', updated_at: '',
 }
 
 const site: CTMSOperationalSite = {
@@ -32,7 +36,7 @@ const site: CTMSOperationalSite = {
 }
 
 const plan: CTMSStudyPlan = {
-  id: 'plan-1', study_id: 'study-1', title: 'Initial plan', status: 'Draft', created_at: '', updated_at: '',
+  id: 'plan-1', study_id: 'study-1', title: 'Initial plan', scope_level: 'study', status: 'Draft', created_at: '', updated_at: '',
 }
 
 const target: CTMSEnrollmentTarget = {
@@ -59,15 +63,16 @@ beforeEach(() => {
 
 describe('CTMS operational form and mutation contracts', () => {
   it('updates a study profile with only owned fields, request metadata, and scoped cache refresh', async () => {
-    const patch = vi.spyOn(api, 'patch').mockResolvedValue({ data: { ...study, sponsor: 'Updated sponsor', request_id: 'request-study-1', correlation_id: 'correlation-study-1' } } as never)
+    const patch = vi.spyOn(api, 'patch').mockResolvedValue({ data: { ...study, main_purpose: 'Prevention', request_id: 'request-study-1', correlation_id: 'correlation-study-1' } } as never)
     const { invalidateQueries } = renderForm(<OperationalStudyForm studyId="study-1" initialValue={study} />)
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Operational sponsor' }), { target: { value: 'Updated sponsor' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Main purpose' }), { target: { value: 'Prevention' } })
     fireEvent.click(screen.getByRole('button', { name: 'Update profile' }))
 
-    await waitFor(() => expect(patch).toHaveBeenCalledWith('/ctms/operational-studies/profile-1', expect.objectContaining({ sponsor: 'Updated sponsor' })))
+    await waitFor(() => expect(patch).toHaveBeenCalledWith('/ctms/operational-studies/profile-1', expect.objectContaining({ main_purpose: 'Prevention' })))
+    expect(patch.mock.calls[0]?.[1]).not.toHaveProperty('sponsor')
     expect(patch.mock.calls[0]?.[1]).not.toHaveProperty('clinical_data')
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Request ID request-study-1'))
+    await waitFor(() => expect(screen.getAllByRole('status').some((item) => item.textContent?.includes('Request ID request-study-1'))).toBe(true))
     expect(invalidateQueries.mock.calls.map(([options]) => options?.queryKey)).toEqual(expect.arrayContaining([
       ctmsKeys.studyProfile('study-1'), ctmsKeys.dashboard('study-1'), ['ctms', 'report', 'study-1'],
     ]))
@@ -119,8 +124,8 @@ describe('CTMS operational form and mutation contracts', () => {
   it('updates a study plan and refreshes the plan query family', async () => {
     const patch = vi.spyOn(api, 'patch').mockResolvedValue({ data: plan } as never)
     const { invalidateQueries } = renderForm(<StudyPlanForm studyId="study-1" initialValue={plan} />)
-    fireEvent.change(screen.getByRole('textbox', { name: 'Plan title' }), { target: { value: 'Updated operational plan' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Update plan' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Updated operational plan' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Update activity' }))
 
     await waitFor(() => expect(patch).toHaveBeenCalledWith('/ctms/study-plans/plan-1', expect.objectContaining({ title: 'Updated operational plan' })))
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ctmsKeys.plans('study-1') })
@@ -188,15 +193,15 @@ describe('CTMS operational form and mutation contracts', () => {
     ['409', 409, 'CTMS_CONFLICT', 'The record changed before this update was committed.', 'request-409-1'],
   ])('preserves the form and renders a safe %s response with its request ID', async (_label, status, code, message, requestId) => {
     const post = vi.spyOn(api, 'post').mockRejectedValue({ response: { status, data: { error: { code, message }, request_id: requestId } } })
-    const { invalidateQueries } = renderForm(<OperationalStudyForm studyId="study-1" />)
-    const sponsor = screen.getByRole('textbox', { name: 'Operational sponsor' })
-    fireEvent.change(sponsor, { target: { value: 'Entered sponsor' } })
+    const { invalidateQueries } = renderForm(<OperationalStudyForm studyId="study-1" initialValue={{ ...study, id: '' }} />)
+    const purpose = screen.getByRole('textbox', { name: 'Main purpose' })
+    fireEvent.change(purpose, { target: { value: 'Prevention' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create profile' }))
 
     await waitFor(() => expect(post).toHaveBeenCalled())
     await waitFor(() => expect(screen.getAllByRole('alert').some((alert) => alert.textContent?.includes(message))).toBe(true))
     expect(screen.getAllByRole('alert').some((alert) => alert.textContent?.includes(requestId))).toBe(true)
-    expect(sponsor).toHaveValue('Entered sponsor')
+    expect(purpose).toHaveValue('Prevention')
     expect(invalidateQueries).not.toHaveBeenCalled()
   })
 })

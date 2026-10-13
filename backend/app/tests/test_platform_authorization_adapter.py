@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -7,8 +8,14 @@ import pytest
 
 from app.core.config import Settings
 from app.core.exceptions import AuthorizationError, ServiceUnavailableError
+from app.core.permissions import ROLE_DEFINITIONS
+from app.schemas.shared.permission import CTMS_PERMISSION_ALIASES, PV_PERMISSION_ALIASES
 from app.services.shared.permission_service import PermissionService
-from app.services.shared.platform_authorization import PlatformAuthorizationClient, PlatformDecision
+from app.services.shared.platform_authorization import (
+    PlatformAuthorizationClient,
+    PlatformDecision,
+    namespaced_permission,
+)
 
 
 @dataclass
@@ -114,6 +121,73 @@ def test_service_token_requests_cognito_scope_and_resource() -> None:
     assert client.service_token() == "token"
 
 
+@pytest.mark.parametrize("alias,canonical", CTMS_PERMISSION_ALIASES.items())
+def test_ctms_permission_aliases_match_registered_platform_actions(
+    alias: str, canonical: str
+) -> None:
+    assert namespaced_permission(alias) == canonical
+    assert namespaced_permission(f"ctms.{alias}") == canonical
+    assert namespaced_permission(canonical) == canonical
+
+
+@pytest.mark.parametrize("alias,canonical", PV_PERMISSION_ALIASES.items())
+def test_pv_permission_aliases_match_registered_platform_actions(
+    alias: str, canonical: str
+) -> None:
+    expected = f"edc.{canonical}"
+    assert namespaced_permission(alias) == expected
+    assert namespaced_permission(f"pv.{alias}") == expected
+    assert namespaced_permission(canonical) == expected
+
+
+def test_every_supported_alias_is_granted_by_a_builtin_role() -> None:
+    builtin_permissions = {
+        permission
+        for definition in ROLE_DEFINITIONS.values()
+        for permission in definition["permissions"]
+    }
+    assert set(CTMS_PERMISSION_ALIASES.values()) <= builtin_permissions
+    assert set(PV_PERMISSION_ALIASES.values()) <= builtin_permissions
+
+
+def test_authorization_request_normalizes_route_permission_before_platform_decision() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/authorization/decisions"
+        assert json.loads(request.content)["action"] == "ctms.operational_data_read"
+        return httpx.Response(
+            200,
+            json={
+                "allowed": True,
+                "decision_id": str(uuid4()),
+                "policy_version": 5,
+                "expires_at": (datetime.now(UTC) + timedelta(seconds=30)).isoformat(),
+                "reason_code": "permission_granted",
+            },
+        )
+
+    settings = Settings(
+        _env_file=None,
+        environment="test",
+        platform_control_plane_url="https://platform.test",
+        platform_authorization_mode="enforced",
+        platform_identity_issuer="https://issuer.test",
+        platform_service_token_url="https://issuer.test/token",
+        platform_service_client_id="client",
+        platform_service_client_secret="secret",
+    )
+    client = PlatformAuthorizationClient(settings, httpx.MockTransport(handler))
+    client._token = ("service-token", float("inf"))
+
+    decision = client.decide(
+        _local_user(),
+        "ctms.operational-data-read",
+        study_id=uuid4(),
+        site_id=None,
+    )
+
+    assert decision.allowed is True
+
+
 def test_batch_authorization_uses_one_control_plane_request() -> None:
     study_ids = (uuid4(), uuid4())
 
@@ -157,3 +231,102 @@ def test_batch_authorization_uses_one_control_plane_request() -> None:
     )
 
     assert [decision.allowed for decision in decisions] == [True, False]
+
+
+def test_role_catalog_registration_returns_platform_mappings() -> None:
+    source_role_id = uuid4()
+    platform_role_id = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "PUT"
+        assert request.url.path == "/v1/products/aurinara-edc/roles"
+        assert request.headers["Authorization"] == "Bearer service-token"
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": str(platform_role_id),
+                    "source_role_id": str(source_role_id),
+                    "product": "aurinara-edc",
+                    "name": "Data Manager",
+                    "description": "Study data management",
+                    "scope_level": "study",
+                    "assignable": True,
+                    "status": "active",
+                }
+            ],
+        )
+
+    settings = Settings(
+        _env_file=None,
+        environment="test",
+        platform_control_plane_url="https://platform.test",
+        platform_authorization_mode="enforced",
+        platform_service_token_url="https://issuer.test/token",
+        platform_service_client_id="client",
+        platform_service_client_secret="secret",
+    )
+    client = PlatformAuthorizationClient(settings, httpx.MockTransport(handler))
+    client._token = ("service-token", float("inf"))
+
+    registered = client.sync_roles(
+        [
+            {
+                "source_role_id": str(source_role_id),
+                "name": "Data Manager",
+                "description": "Study data management",
+                "scope_level": "study",
+                "permissions": ["edc.query.create"],
+            }
+        ]
+    )
+
+    assert registered[0].id == platform_role_id
+    assert registered[0].source_role_id == source_role_id
+    assert registered[0].scope_level == "study"
+
+
+def test_ctms_site_registration_preserves_the_generated_canonical_id() -> None:
+    study_id = uuid4()
+    site_id = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "PUT"
+        assert request.url.path == (f"/v1/products/aurinara-edc/studies/{study_id}/sites/{site_id}")
+        assert request.headers["Authorization"] == "Bearer service-token"
+        assert json.loads(request.content) == {
+            "name": "General Hospital",
+            "country": "US",
+            "state": "New York",
+            "city": "New York",
+            "status": "active",
+        }
+        return httpx.Response(
+            200,
+            json={
+                "id": str(site_id),
+                "study_id": str(study_id),
+                "name": "General Hospital",
+            },
+        )
+
+    settings = Settings(
+        _env_file=None,
+        environment="test",
+        platform_control_plane_url="https://platform.test",
+        platform_authorization_mode="enforced",
+        platform_service_token_url="https://issuer.test/token",
+        platform_service_client_id="client",
+        platform_service_client_secret="secret",
+    )
+    client = PlatformAuthorizationClient(settings, httpx.MockTransport(handler))
+    client._token = ("service-token", float("inf"))
+
+    client.sync_site(
+        study_id=study_id,
+        site_id=site_id,
+        name="General Hospital",
+        country="US",
+        state="New York",
+        city="New York",
+    )

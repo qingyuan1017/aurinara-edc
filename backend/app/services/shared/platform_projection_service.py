@@ -12,7 +12,6 @@ from app.models.shared.identity import Role, User, UserRole, UserStatus
 from app.models.shared.platform_projection import (
     PlatformMembershipProjection,
     PlatformProjectionEvent,
-    PlatformRoleMapping,
 )
 
 
@@ -47,6 +46,10 @@ async def apply_platform_event(session: AsyncSession, event: PlatformEvent) -> b
         return await _apply_user_event(session, event)
     if event.type == "platform.membership.changed.v1":
         return await _apply_membership_event(session, event)
+    if event.type == "platform.assignment.changed.v1":
+        if event.data.get("product") != "aurinara-edc":
+            return False
+        return await _apply_system_assignment_event(session, event)
     if event.type not in {"platform.study.created.v1", "platform.study.updated.v1"}:
         return False
     study = await session.get(Study, event.aggregate_id)
@@ -60,12 +63,14 @@ async def apply_platform_event(session: AsyncSession, event: PlatformEvent) -> b
             )
         # The shared event establishes identity only. EDC clinical configuration,
         # status transitions, and StudyVersion creation remain EDC-owned actions.
+        created_by = await _resolve_local_user_id(session, UUID(str(event.data["created_by"])))
         study = Study(
             id=event.aggregate_id,
             study_code=code,
             title=str(event.data["display_name"]),
+            sponsor=(str(event.data["sponsor"]) if event.data.get("sponsor") else None),
             status=StudyStatus.draft,
-            created_by=UUID(str(event.data["created_by"])),
+            created_by=created_by,
             platform_managed=True,
             platform_revision=event.sequence,
             platform_registry_status=str(event.data["status"]),
@@ -78,6 +83,8 @@ async def apply_platform_event(session: AsyncSession, event: PlatformEvent) -> b
                 details={"reason": "STUDY_IDENTITY_CONFLICT", "study_code": code},
             )
         study.title = str(event.data["display_name"])
+        if "sponsor" in event.data:
+            study.sponsor = str(event.data["sponsor"]) if event.data["sponsor"] else None
         study.platform_managed = True
         study.platform_revision = event.sequence
         study.platform_registry_status = str(event.data["status"])
@@ -121,9 +128,9 @@ async def _apply_user_event(session: AsyncSession, event: PlatformEvent) -> bool
         )
         session.add(user)
     elif user.platform_revision is None or event.sequence > user.platform_revision:
-        if (
-            user.external_issuer is not None
-            and (user.external_issuer, user.external_subject) != (issuer, subject)
+        if user.external_issuer is not None and (user.external_issuer, user.external_subject) != (
+            issuer,
+            subject,
         ):
             raise ConflictError(
                 message="Canonical user subject does not match the local identity",
@@ -162,6 +169,8 @@ def _user_status(value: str) -> UserStatus:
 
 
 async def _apply_membership_event(session: AsyncSession, event: PlatformEvent) -> bool:
+    if event.data.get("product") not in {None, "aurinara-edc"}:
+        return False
     study_id = UUID(str(event.data["study_id"]))
     user_id = UUID(str(event.data["user_id"]))
     raw_site_id = event.data.get("site_id")
@@ -180,30 +189,7 @@ async def _apply_membership_event(session: AsyncSession, event: PlatformEvent) -
         await session.flush()
         return True
     role_ids = [UUID(str(value)) for value in event.data.get("role_ids", [])]
-    role_mapping: dict[UUID, UUID] = {}
-    if role_ids:
-        mappings_result = await session.execute(
-            select(PlatformRoleMapping).where(
-                PlatformRoleMapping.platform_role_id.in_(role_ids)
-            )
-        )
-        role_mapping = {
-            item.platform_role_id: item.local_role_id for item in mappings_result.scalars()
-        }
-        missing = set(role_ids) - set(role_mapping)
-        if missing:
-            raise ConflictError(
-                message="Platform membership references an unmapped role",
-                details={"reason": "ROLE_MAPPING_REQUIRED"},
-            )
-        local_roles_result = await session.execute(
-            select(Role.id).where(Role.id.in_(role_mapping.values()))
-        )
-        if set(local_roles_result.scalars()) != set(role_mapping.values()):
-            raise ConflictError(
-                message="Platform role mapping references a missing local role",
-                details={"reason": "ROLE_MAPPING_INVALID"},
-            )
+    await _validate_role_ids(session, role_ids)
     await session.execute(
         delete(UserRole).where(
             UserRole.user_id == user_id,
@@ -218,7 +204,7 @@ async def _apply_membership_event(session: AsyncSession, event: PlatformEvent) -
         [
             UserRole(
                 user_id=user_id,
-                role_id=role_mapping[role_id],
+                role_id=role_id,
                 study_id=study_id,
                 site_id=site_id,
                 assigned_by=assigned_by,
@@ -249,3 +235,108 @@ async def _apply_membership_event(session: AsyncSession, event: PlatformEvent) -
     )
     await session.flush()
     return True
+
+
+async def _apply_system_assignment_event(session: AsyncSession, event: PlatformEvent) -> bool:
+    platform_user_id = UUID(str(event.data["user_id"]))
+    issuer = str(event.data.get("issuer") or "")
+    subject = str(event.data.get("subject") or "")
+    user = await session.get(User, platform_user_id)
+    if user is None and issuer and subject:
+        user = await session.scalar(
+            select(User).where(
+                User.external_issuer == issuer,
+                User.external_subject == subject,
+            )
+        )
+    if user is None:
+        raise ConflictError(
+            message="Platform assignment references an unknown local user",
+            details={"reason": "USER_PROJECTION_REQUIRED"},
+        )
+    scope_key = f"system:{platform_user_id}"
+    cursor = await session.get(PlatformMembershipProjection, scope_key)
+    if cursor is not None and event.sequence <= cursor.sequence:
+        session.add(
+            PlatformProjectionEvent(
+                id=event.id,
+                event_type=event.type,
+                aggregate_id=event.aggregate_id,
+                sequence=event.sequence,
+            )
+        )
+        await session.flush()
+        return True
+    role_ids = [UUID(str(value)) for value in event.data.get("role_ids", [])]
+    await _validate_role_ids(session, role_ids)
+    await session.execute(
+        delete(UserRole).where(
+            UserRole.user_id == user.id,
+            UserRole.study_id.is_(None),
+            UserRole.site_id.is_(None),
+            UserRole.platform_managed.is_(True),
+        )
+    )
+    assigned_by_raw = event.data.get("assigned_by")
+    assigned_by = UUID(str(assigned_by_raw)) if assigned_by_raw else None
+    if assigned_by is not None and await session.get(User, assigned_by) is None:
+        assigned_by = user.id if assigned_by_raw == str(platform_user_id) else None
+    session.add_all(
+        [
+            UserRole(
+                user_id=user.id,
+                role_id=role_id,
+                study_id=None,
+                site_id=None,
+                assigned_by=assigned_by,
+                platform_managed=True,
+                platform_role_id=role_id,
+            )
+            for role_id in role_ids
+        ]
+    )
+    if cursor is None:
+        session.add(
+            PlatformMembershipProjection(
+                scope_key=scope_key,
+                study_id=None,
+                user_id=user.id,
+                site_id=None,
+                sequence=event.sequence,
+            )
+        )
+    else:
+        cursor.sequence = event.sequence
+    session.add(
+        PlatformProjectionEvent(
+            id=event.id,
+            event_type=event.type,
+            aggregate_id=event.aggregate_id,
+            sequence=event.sequence,
+        )
+    )
+    await session.flush()
+    return True
+
+
+async def _validate_role_ids(session: AsyncSession, role_ids: list[UUID]) -> None:
+    if not role_ids:
+        return
+    local_roles_result = await session.execute(select(Role.id).where(Role.id.in_(role_ids)))
+    if set(local_roles_result.scalars()) != set(role_ids):
+        raise ConflictError(
+            message="Platform assignment references a missing EDC role",
+            details={"reason": "ROLE_NOT_REGISTERED"},
+        )
+
+
+async def _resolve_local_user_id(session: AsyncSession, platform_user_id: UUID) -> UUID:
+    if await session.get(User, platform_user_id) is not None:
+        return platform_user_id
+    cursor = await session.get(PlatformMembershipProjection, f"system:{platform_user_id}")
+    if cursor is not None and await session.get(User, cursor.user_id) is not None:
+        return cursor.user_id
+    raise ConflictError(
+        message="Platform event references an unknown local user",
+        details={"reason": "USER_PROJECTION_REQUIRED"},
+    )

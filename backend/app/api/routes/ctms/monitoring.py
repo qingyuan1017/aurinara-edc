@@ -8,27 +8,44 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import PaginationParams, get_db, require_ctms_permission
 from app.core.request_context import get_correlation_id
 from app.models.ctms.monitoring import (
     MonitoringActivity,
     MonitoringActivityStatus,
+    MonitoringFinding,
+    MonitoringFindingSeverity,
+    MonitoringFindingStatus,
     MonitoringPlan,
 )
 from app.models.shared.identity import User
 from app.schemas.ctms.monitoring import (
+    MonitoringActionComplete,
+    MonitoringActionCreate,
+    MonitoringActionResponse,
     MonitoringActivityAssign,
     MonitoringActivityCancel,
     MonitoringActivityComplete,
     MonitoringActivityCreate,
     MonitoringActivityReschedule,
     MonitoringActivityResponse,
+    MonitoringFindingCreate,
+    MonitoringFindingResponse,
+    MonitoringFindingTransition,
     MonitoringPlanAmend,
     MonitoringPlanCreate,
     MonitoringPlanResponse,
     MonitoringPlanUpdate,
     MonitoringPlanVersionResponse,
+    MonitoringReportCreate,
+    MonitoringReportResponse,
+    MonitoringReportTransition,
+    MonitoringReportUpdate,
+    MonitoringVisitActivityCreate,
+    MonitoringVisitActivityResponse,
+    MonitoringVisitActivityUpdate,
 )
 from app.schemas.shared.base import PaginatedResponse
 from app.services.ctms.monitoring_service import monitoring_service
@@ -295,5 +312,279 @@ async def cancel_monitoring_activity(
             actor=current_user,
             user=current_user,
             correlation_id=body.correlation_id or get_correlation_id(),
+        )
+    )
+
+
+@router.post(
+    "/monitoring-activities/{activity_id}/start", response_model=MonitoringActivityResponse
+)
+async def start_monitoring_activity(
+    activity_id: UUID, session: DbSession, current_user: WriteGuard
+):
+    return MonitoringActivityResponse.model_validate(
+        await monitoring_service.start_activity(
+            session,
+            activity_id,
+            actor=current_user,
+            user=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
+@router.get(
+    "/monitoring-activities/{activity_id}/checklist",
+    response_model=list[MonitoringVisitActivityResponse],
+)
+async def list_monitoring_checklist(activity_id: UUID, session: DbSession, current_user: ReadGuard):
+    return [
+        MonitoringVisitActivityResponse.model_validate(item)
+        for item in await monitoring_service.list_checklist(session, activity_id)
+    ]
+
+
+@router.post(
+    "/monitoring-activities/{activity_id}/checklist",
+    response_model=MonitoringVisitActivityResponse,
+    status_code=201,
+)
+async def add_monitoring_checklist_item(
+    activity_id: UUID,
+    body: MonitoringVisitActivityCreate,
+    session: DbSession,
+    current_user: WriteGuard,
+):
+    return MonitoringVisitActivityResponse.model_validate(
+        await monitoring_service.add_checklist_item(
+            session,
+            activity_id,
+            body,
+            actor=current_user,
+            user=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
+@router.patch(
+    "/monitoring-checklist-items/{item_id}", response_model=MonitoringVisitActivityResponse
+)
+async def update_monitoring_checklist_item(
+    item_id: UUID,
+    body: MonitoringVisitActivityUpdate,
+    session: DbSession,
+    current_user: WriteGuard,
+):
+    return MonitoringVisitActivityResponse.model_validate(
+        await monitoring_service.update_checklist_item(
+            session,
+            item_id,
+            body,
+            actor=current_user,
+            user=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
+@router.get(
+    "/monitoring-activities/{activity_id}/reports",
+    response_model=list[MonitoringReportResponse],
+)
+async def list_monitoring_reports(activity_id: UUID, session: DbSession, current_user: ReadGuard):
+    return [
+        MonitoringReportResponse.model_validate(report)
+        for report in await monitoring_service.list_reports(session, activity_id)
+    ]
+
+
+@router.post(
+    "/monitoring-activities/{activity_id}/reports",
+    response_model=MonitoringReportResponse,
+    status_code=201,
+)
+async def create_monitoring_report(
+    activity_id: UUID,
+    body: MonitoringReportCreate,
+    session: DbSession,
+    current_user: WriteGuard,
+):
+    return MonitoringReportResponse.model_validate(
+        await monitoring_service.create_report(
+            session,
+            activity_id,
+            body,
+            actor=current_user,
+            user=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
+@router.patch("/monitoring-reports/{report_id}", response_model=MonitoringReportResponse)
+async def update_monitoring_report(
+    report_id: UUID,
+    body: MonitoringReportUpdate,
+    session: DbSession,
+    current_user: WriteGuard,
+):
+    return MonitoringReportResponse.model_validate(
+        await monitoring_service.update_report(
+            session,
+            report_id,
+            body,
+            actor=current_user,
+            user=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
+@router.post("/monitoring-reports/{report_id}/transition", response_model=MonitoringReportResponse)
+async def transition_monitoring_report(
+    report_id: UUID,
+    body: MonitoringReportTransition,
+    session: DbSession,
+    current_user: WriteGuard,
+):
+    return MonitoringReportResponse.model_validate(
+        await monitoring_service.transition_report(
+            session,
+            report_id,
+            body.action,
+            comments=body.comments,
+            document_reference=body.document_reference,
+            actor=current_user,
+            user=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
+@router.get(
+    "/studies/{study_id}/monitoring-findings",
+    response_model=PaginatedResponse[MonitoringFindingResponse],
+)
+async def list_monitoring_findings(
+    study_id: UUID,
+    session: DbSession,
+    current_user: ReadGuard,
+    pagination: Annotated[PaginationParams, Depends()],
+    site_id: UUID | None = None,
+    status: MonitoringFindingStatus | None = None,
+    severity: MonitoringFindingSeverity | None = None,
+):
+    conditions = [MonitoringFinding.study_id == study_id, MonitoringFinding.deleted_at.is_(None)]
+    if site_id is not None:
+        conditions.append(MonitoringFinding.site_id == site_id)
+    if status is not None:
+        conditions.append(MonitoringFinding.status == status.value)
+    if severity is not None:
+        conditions.append(MonitoringFinding.severity == severity.value)
+    total = int(
+        await session.scalar(select(func.count()).select_from(MonitoringFinding).where(*conditions))
+        or 0
+    )
+    findings = await session.scalars(
+        select(MonitoringFinding)
+        .options(selectinload(MonitoringFinding.actions))
+        .where(*conditions)
+        .order_by(MonitoringFinding.created_at.desc())
+        .offset(pagination.offset)
+        .limit(pagination.page_size)
+    )
+    return PaginatedResponse(
+        items=[MonitoringFindingResponse.model_validate(item) for item in findings],
+        page=pagination.page,
+        page_size=pagination.page_size,
+        total=total,
+    )
+
+
+@router.post(
+    "/studies/{study_id}/monitoring-findings",
+    response_model=MonitoringFindingResponse,
+    status_code=201,
+)
+async def create_monitoring_finding(
+    study_id: UUID,
+    body: MonitoringFindingCreate,
+    session: DbSession,
+    current_user: WriteGuard,
+):
+    return MonitoringFindingResponse.model_validate(
+        await monitoring_service.create_finding(
+            session,
+            study_id=study_id,
+            payload=body,
+            actor=current_user,
+            user=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
+@router.post(
+    "/monitoring-findings/{finding_id}/transition", response_model=MonitoringFindingResponse
+)
+async def transition_monitoring_finding(
+    finding_id: UUID,
+    body: MonitoringFindingTransition,
+    session: DbSession,
+    current_user: WriteGuard,
+):
+    return MonitoringFindingResponse.model_validate(
+        await monitoring_service.transition_finding(
+            session,
+            finding_id,
+            body.status,
+            reason=body.reason,
+            resolution=body.resolution,
+            actor=current_user,
+            user=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
+@router.post(
+    "/monitoring-findings/{finding_id}/actions",
+    response_model=MonitoringActionResponse,
+    status_code=201,
+)
+async def create_monitoring_action(
+    finding_id: UUID,
+    body: MonitoringActionCreate,
+    session: DbSession,
+    current_user: WriteGuard,
+):
+    return MonitoringActionResponse.model_validate(
+        await monitoring_service.create_action_item(
+            session,
+            finding_id,
+            body,
+            actor=current_user,
+            user=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
+@router.post("/monitoring-actions/{action_id}/complete", response_model=MonitoringActionResponse)
+async def complete_monitoring_action(
+    action_id: UUID,
+    body: MonitoringActionComplete,
+    session: DbSession,
+    current_user: WriteGuard,
+):
+    return MonitoringActionResponse.model_validate(
+        await monitoring_service.complete_action_item(
+            session,
+            action_id,
+            body.evidence,
+            actor=current_user,
+            user=current_user,
+            correlation_id=get_correlation_id(),
         )
     )

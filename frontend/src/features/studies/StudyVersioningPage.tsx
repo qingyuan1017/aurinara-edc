@@ -156,8 +156,8 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
             empty={!versions.length}
             emptyTitle="No study versions found."
             emptyDescription={canCreate
-              ? 'Create the first EDC-owned draft to begin configuring visits, forms, and edit checks.'
-              : 'A user with study-version creation permission must create the initial EDC draft.'}
+              ? 'Create the first Designer-owned draft to begin configuring visits, forms, and edit checks.'
+              : 'A user with study-version creation permission must create the initial Designer draft.'}
             emptyAction={canCreate ? (
               <Button
                 type="button"

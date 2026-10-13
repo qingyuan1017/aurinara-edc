@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react'
 import { useStudyContext } from '@/lib/study-context'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
 import { AccessDeniedPage } from '@/features/auth/AccessDeniedPage'
-import { DataTableShell, DetailCard, EmptyState as SharedEmptyState, ErrorState, PageContainer, PageHeader, PageToolbar } from '@/components/patterns'
+import { DataTableShell, DetailCard, EmptyState as SharedEmptyState, ErrorState, PageContainer, PageHeader } from '@/components/patterns'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useCTMSCapabilityState, CTMS_CAPABILITY_CODES, type CTMSCapabilityCode, type CTMSCapabilityState } from './capabilities'
+import { MonitoringVisitWorkspace } from './monitoring'
 import { useCTMSMutation, useCTMSOfflineState } from './offline'
 import { classifyCTMSQueryState, type CTMSQueryState } from './state'
 import {
@@ -19,17 +21,18 @@ import {
   MonitoringPlanVersionActions,
   OperationalContactForm,
   OperationalContactStatusForm,
-  OperationalMilestoneForm,
   OperationalSiteForm,
   OperationalStudyForm,
   OperationalTaskForm,
   OperationalTaskStatusForm,
+  ProjectMilestoneForm,
   QueryFollowUpForm,
   StudyPlanForm,
 } from './forms'
 import {
   ctmsApi,
   getCTMSErrorMessage,
+  normalizeCTMSError,
   useCTMSActivation,
   useCTMSConflicts,
   useCTMSContacts,
@@ -37,11 +40,13 @@ import {
   useCTMSExports,
   useCTMSFailedEvents,
   useCTMSHealth,
-  useCTMSMilestones,
   useCTMSMonitoringActivities,
   useCTMSMonitoringPlanVersions,
   useCTMSMonitoringPlans,
   useCTMSPlans,
+  useCTMSProjectMilestones,
+  useCTMSProjectOptions,
+  useCTMSReferenceValues,
   useCTMSProjections,
   useCTMSReport,
   useCTMSStudyProfile,
@@ -55,8 +60,10 @@ import {
   type CTMSConflict,
   type CTMSMonitoringActivity,
   type CTMSMonitoringPlan,
+  type CTMSProjectMilestone,
   type CTMSQualitySignal,
   type CTMSQueryContext,
+  type CTMSStudyPlan,
 } from './api'
 import { invalidateCTMSCoordinationRemediation } from './cache'
 import {
@@ -68,7 +75,6 @@ import {
   type CTMSSearchState,
 } from './filters'
 import {
-  CanonicalIdentifierList,
   ModuleBadge,
   MonitoringActivitySummary,
   OwnershipCard,
@@ -80,6 +86,12 @@ import {
   CTMSFilterBar,
   CoordinationRemediationPanel,
   OperationalExportPanel,
+  MilestoneHierarchy,
+  ProjectGantt,
+  ProjectIssueList,
+  ProjectKanban,
+  ProjectToolbar,
+  ProjectWorkspaceHeader,
   OperationalAttachmentPanel,
   ResponsiveRecordList,
   type ResponsiveRecordColumn,
@@ -91,10 +103,10 @@ export type CTMSView = 'overview' | 'site-dashboard' | 'profile' | 'plans' | 'ac
 interface WorkspaceProps { view: CTMSView; studyId?: string; siteId?: string; reportType?: string }
 interface Scope { studyId?: string; siteId?: string }
 
-type FilterableView = Extract<CTMSView, 'overview' | 'plans' | 'enrollment' | 'milestones' | 'monitoring-plans' | 'monitoring-activities' | 'tasks' | 'contacts' | 'projections' | 'reports' | 'exports'>
+type FilterableView = Extract<CTMSView, 'overview' | 'enrollment' | 'monitoring-plans' | 'monitoring-activities' | 'tasks' | 'contacts' | 'projections' | 'reports' | 'exports'>
 
 function supportsFilters(view: CTMSView): view is FilterableView {
-  return view !== 'profile' && view !== 'site-dashboard' && view !== 'activation' && view !== 'health' && view !== 'failed-events' && view !== 'conflicts'
+  return view !== 'profile' && view !== 'plans' && view !== 'milestones' && view !== 'site-dashboard' && view !== 'activation' && view !== 'health' && view !== 'failed-events' && view !== 'conflicts'
 }
 
 const VIEW_CAPABILITIES: Record<CTMSView, { phase: 1 | 2 | 3; capability: CTMSCapabilityCode }> = {
@@ -134,37 +146,6 @@ const LEGACY_CAPABILITY_ALIASES: Partial<Record<CTMSCapabilityCode, readonly str
   [CTMS_CAPABILITY_CODES.coordinationConflicts]: ['conflicts'],
 }
 
-const NAV_SECTIONS: readonly { id: string; label: string; items: readonly { view: CTMSView; label: string; path: string; scope: 'study' | 'site' }[] }[] = [
-  {
-    id: 'study-operations', label: 'Study operations', items: [
-      { view: 'overview', label: 'Overview', path: '', scope: 'study' },
-      { view: 'profile', label: 'Operational profile', path: '/profile', scope: 'study' },
-      { view: 'plans', label: 'Plans', path: '/plans', scope: 'study' },
-      { view: 'enrollment', label: 'Enrollment', path: '/enrollment', scope: 'study' },
-      { view: 'milestones', label: 'Milestones', path: '/milestones', scope: 'study' },
-      { view: 'monitoring-plans', label: 'Monitoring plans', path: '/monitoring-plans', scope: 'study' },
-      { view: 'monitoring-activities', label: 'Monitoring activities', path: '/monitoring-activities', scope: 'study' },
-      { view: 'tasks', label: 'Tasks', path: '/tasks', scope: 'study' },
-      { view: 'contacts', label: 'Contacts', path: '/contacts', scope: 'study' },
-      { view: 'projections', label: 'Projections', path: '/projections', scope: 'study' },
-    ],
-  },
-  { id: 'site-operations', label: 'Site operations', items: [{ view: 'site-dashboard', label: 'Site dashboard', path: '', scope: 'site' }, { view: 'activation', label: 'Site activation', path: '/ctms/activation', scope: 'site' }] },
-  {
-    id: 'reporting-exports', label: 'Reporting & exports', items: [
-      { view: 'reports', label: 'Reports & dashboards', path: '/reports/dashboard', scope: 'study' },
-      { view: 'exports', label: 'Exports', path: '/exports', scope: 'study' },
-    ],
-  },
-  {
-    id: 'coordination-health', label: 'Coordination & health', items: [
-      { view: 'failed-events', label: 'Failed events', path: '/coordination/failed-events', scope: 'study' },
-      { view: 'conflicts', label: 'Conflicts', path: '/coordination/conflicts', scope: 'study' },
-      { view: 'health', label: 'Health', path: '/health', scope: 'study' },
-    ],
-  },
-]
-
 function Card({ title, children }: { title: string; children: React.ReactNode }) { return <DetailCard title={title}>{children}</DetailCard> }
 function EmptyState({ label, actionHref, actionLabel }: { label: string; actionHref?: string; actionLabel?: string }) {
   return <SharedEmptyState title={label} description={`${label} has no records configured yet.`} action={actionHref && actionLabel ? <Button asChild variant="outline" size="sm"><a href={actionHref}>{actionLabel}</a></Button> : undefined} />
@@ -172,10 +153,11 @@ function EmptyState({ label, actionHref, actionLabel }: { label: string; actionH
 
 type WorkspaceQuery = { isLoading: boolean; isFetching?: boolean; error: unknown; refetch: () => unknown; data?: unknown }
 
-function QueryState({ query, label, children, workerStatus }: { query: WorkspaceQuery; label: string; children: React.ReactNode; workerStatus?: string | null }) {
+function QueryState({ query, label, children, workerStatus, unframed = false }: { query: WorkspaceQuery; label: string; children: React.ReactNode; workerStatus?: string | null; unframed?: boolean }) {
   const { isOffline } = useCTMSOfflineState()
   const classified = classifyCTMSQueryState({ isLoading: query.isLoading, isFetching: query.isFetching, data: query.data, error: query.error, isOnline: isOffline ? false : true, workerStatus })
   const state: Exclude<CTMSQueryState, 'success' | 'empty' | 'refreshing'> | 'refreshing' | undefined = classified === 'success' || classified === 'empty' ? undefined : classified
+  if (unframed && state === undefined) return <section aria-label={label} data-state="success" className="min-w-0">{children}</section>
   return <DataTableShell label={label} state={state} errorMessage={query.error ? getCTMSErrorMessage(query.error) : undefined} onRetry={() => void query.refetch()}>{children}</DataTableShell>
 }
 
@@ -221,8 +203,8 @@ function routePath(view: CTMSView, scope: Scope, reportType = 'dashboard'): stri
   if (!scope.studyId) return view === 'overview' ? '/ctms' : null
   if (view === 'reports') return `/studies/${encodeURIComponent(scope.studyId)}/ctms/reports/${encodeURIComponent(reportType)}`
   const suffix: Record<Exclude<CTMSView, 'activation' | 'site-dashboard' | 'overview' | 'reports'>, string> = {
-    profile: '/profile', plans: '/plans', enrollment: '/enrollment', milestones: '/milestones',
-    'monitoring-plans': '/monitoring-plans', 'monitoring-activities': '/monitoring-activities', tasks: '/tasks', contacts: '/contacts', projections: '/projections', exports: '/exports', health: '/health', 'failed-events': '/coordination/failed-events', conflicts: '/coordination/conflicts',
+    profile: '/details', plans: '/project-management', enrollment: '/enrollment', milestones: '/project-management',
+    'monitoring-plans': '/monitoring/plans', 'monitoring-activities': '/monitoring/visits', tasks: '/tasks', contacts: '/contacts', projections: '/projections', exports: '/exports', health: '/health', 'failed-events': '/coordination/failed-events', conflicts: '/coordination/conflicts',
   }
   return `/studies/${encodeURIComponent(scope.studyId)}/ctms${view === 'overview' ? '' : suffix[view]}`
 }
@@ -243,7 +225,7 @@ function hasCapability(state: CTMSCapabilityState, view: CTMSView): boolean {
   return isLegacyManifest
 }
 
-function titleFor(view: CTMSView) { return ({ overview: 'Study operations', 'site-dashboard': 'Site dashboard', profile: 'Operational study profile', plans: 'Study plans', activation: 'Site activation', enrollment: 'Enrollment planning', milestones: 'Operational milestones', 'monitoring-plans': 'Monitoring plans', 'monitoring-activities': 'Monitoring activities', tasks: 'Operational tasks', contacts: 'Operational contacts', projections: 'Clinical projections', reports: 'Reports & dashboards', exports: 'Operational exports', health: 'CTMS health', 'failed-events': 'Failed events', conflicts: 'Coordination conflicts' })[view] }
+function titleFor(view: CTMSView) { return ({ overview: 'Overview', 'site-dashboard': 'Site dashboard', profile: 'Study Details', plans: 'Master Activities', activation: 'Site activation', enrollment: 'Enrollment planning', milestones: 'Milestones', 'monitoring-plans': 'Monitoring Plan', 'monitoring-activities': 'Monitoring Visit', tasks: 'Operational tasks', contacts: 'Operational contacts', projections: 'Clinical projections', reports: 'Reports & dashboards', exports: 'Operational exports', health: 'CTMS health', 'failed-events': 'Failed events', conflicts: 'Coordination conflicts' })[view] }
 
 function DirectRouteState({ kind, title, message }: { kind: 'disabled' | 'unavailable'; title: string; message: string }) {
   return (
@@ -260,66 +242,52 @@ function DirectRouteState({ kind, title, message }: { kind: 'disabled' | 'unavai
   )
 }
 
-function searchSuffix(search: CTMSSearchState): string {
-  const params = new URLSearchParams()
-  Object.entries(serializeCTMSSearch(search)).forEach(([key, value]) => {
-    if (value !== undefined) params.set(key, value)
-  })
-  const query = params.toString()
-  return query ? `?${query}` : ''
-}
-
-function WorkspaceNavigation({ view, scope, reportType, state, search }: { view: CTMSView; scope: Scope; reportType: string; state: CTMSCapabilityState; search: CTMSSearchState }) {
-  const items = NAV_SECTIONS.map((section) => ({ ...section, items: section.items.filter((item) => item.scope === 'study' ? Boolean(scope.studyId) && hasCapability(state, item.view) : Boolean(scope.siteId) && hasCapability(state, item.view)) })).filter((section) => section.items.length)
-  return <nav aria-label="CTMS workspace sections" className="flex flex-wrap gap-2">{items.flatMap((section) => section.items.map((item) => { const href = item.view === view ? routePath(view, scope, reportType) : routePath(item.view, scope, reportType); return href ? <Button key={`${section.id}-${item.view}`} asChild variant={item.view === view ? 'default' : 'outline'} size="sm"><a href={`${href}${searchSuffix(search)}`} aria-current={item.view === view ? 'page' : undefined}>{item.label}</a></Button> : null }))}</nav>
-}
-
-function CTMSWorkspaceLayout({ view, scope, reportType, state, children, search, onFilterChange, onClearFilters }: { view: CTMSView; scope: Scope; reportType: string; state: CTMSCapabilityState; children: React.ReactNode; search: CTMSSearchState; onFilterChange: (change: Partial<CTMSSearchState>) => void; onClearFilters: () => void }) {
+function CTMSWorkspaceLayout({ view, scope, children }: { view: CTMSView; scope: Scope; children: React.ReactNode }) {
   const canManageStudy = usePermission(PERMISSIONS.CTMS_OPERATIONAL_STUDY_MANAGEMENT, scope.studyId)
   const canManageSite = usePermission(PERMISSIONS.CTMS_OPERATIONAL_SITE_MANAGEMENT, scope.studyId, scope.siteId)
-  const filters = filtersFromSearch(search)
   const readOnly = !canManageStudy && !canManageSite
+  if (view === 'plans' || view === 'milestones') {
+    return <PageContainer wide data-testid="ctms-workspace">{children}</PageContainer>
+  }
   return (
     <PageContainer wide data-testid="ctms-workspace">
       <PageHeader
         title={titleFor(view)}
-        description={<span><span className="block text-xs font-semibold uppercase tracking-wide text-primary">CTMS operational workspace</span><span className="block">Canonical EDC identifiers remain read-only; CTMS owns operational records.</span></span>}
+        description={<span><span className="block text-xs font-semibold uppercase tracking-wide text-primary">CTMS operational workspace</span><span className="block">The platform Study identity and EDC clinical identifiers remain read-only; CTMS owns operational records.</span></span>}
         status={<ModuleBadge module="CTMS" state="authoritative" />}
         ownership={readOnly ? <ReadOnlyIndicator reason="Your CTMS permissions provide read access only; the API remains authoritative." /> : undefined}
       />
-      <DetailCard title="Canonical scope" description="Scope from the route is authoritative for this workspace. Global selectors provide context only.">
-        <CanonicalIdentifierList identifiers={{ studyId: scope.studyId, siteId: scope.siteId }} />
-      </DetailCard>
-      <PageToolbar label="CTMS workspace sections">
-        <WorkspaceNavigation view={view} scope={scope} reportType={reportType} state={state} search={search} />
-      </PageToolbar>
-      {supportsFilters(view) && <CTMSFilterBar filters={filters} onChange={(change) => onFilterChange(change)} onClear={onClearFilters} showReportType={view === 'reports'} />}
       {children}
     </PageContainer>
   )
 }
 
-function ViewContent({ view, scope, reportType, search, onPageChange }: { view: CTMSView; scope: Scope; reportType: string; search: CTMSSearchState; onPageChange: (page: number) => void }) {
+function CreateDrawer({ open, onOpenChange, title, description, children }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; description: string; children: React.ReactNode }) {
+  return <Sheet open={open} onOpenChange={onOpenChange}><SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl"><SheetHeader className="pr-8"><SheetTitle>{title}</SheetTitle><SheetDescription>{description}</SheetDescription></SheetHeader><div className="mt-2 pt-4">{children}</div></SheetContent></Sheet>
+}
+
+function ViewContent({ view, scope, reportType, search, onPageChange, onFilterChange, onClearFilters }: { view: CTMSView; scope: Scope; reportType: string; search: CTMSSearchState; onPageChange: (page: number) => void; onFilterChange: (change: Partial<CTMSSearchState>) => void; onClearFilters: () => void }) {
   const filters = filtersFromSearch(search)
   const pagination = paginationFromSearch(search)
   const context: CTMSQueryContext = { routeScope: scope.siteId ? `site:${scope.siteId}` : `study:${scope.studyId ?? 'none'}`, studyId: scope.studyId, siteId: scope.siteId, filters, pagination }
-  if (view === 'health') return <HealthView context={context} />
-  if (view === 'site-dashboard') return <SiteDashboardView studyId={scope.studyId} siteId={scope.siteId ?? ''} context={context} />
-  if (view === 'activation') return <ActivationView studyId={scope.studyId} siteId={scope.siteId ?? ''} context={context} />
-  if (view === 'profile') return <ProfileView studyId={scope.studyId ?? ''} context={context} />
-  if (view === 'plans') return <ListView label="study plans" empty="Study plans" actionHref={routePath('profile', scope)} actionLabel="Configure operational profile" queryHook="plans" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />
-  if (view === 'overview') return <OverviewView studyId={scope.studyId ?? ''} context={context} />
-  if (view === 'enrollment') return <ListView label="enrollment targets" empty="Enrollment targets" actionHref={routePath('profile', scope)} actionLabel="Configure operational study data" queryHook="targets" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />
-  if (view === 'milestones') return <ListView label="operational milestones" empty="Operational milestones" actionHref={routePath('profile', scope)} actionLabel="Configure operational study data" queryHook="milestones" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />
-  if (view === 'monitoring-plans') return <ListView label="monitoring plans" empty="Monitoring plans" actionHref={routePath('profile', scope)} actionLabel="Configure monitoring setup" queryHook="monitoringPlans" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />
-  if (view === 'monitoring-activities') return <ActivitiesView studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />
-  if (view === 'tasks') return <TasksView studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />
-  if (view === 'contacts') return <ListView label="operational contacts" empty="Operational contacts" actionHref={routePath('profile', scope)} actionLabel="Configure operational contacts" queryHook="contacts" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />
-  if (view === 'projections') return <ProjectionsView studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />
-  if (view === 'reports') return <ReportView studyId={scope.studyId ?? ''} reportType={reportType} context={context} filters={filters} onPageChange={onPageChange} />
-  if (view === 'exports') return <ListView label="operational exports" empty="Operational exports" actionHref={routePath('overview', scope)} actionLabel="Open study operations" queryHook="exports" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />
-  if (view === 'failed-events') return <RemediationView kind="failed" studyId={scope.studyId ?? ''} context={context} />
-  return <RemediationView kind="conflict" studyId={scope.studyId ?? ''} context={context} />
+  const filtered = (content: React.ReactNode) => supportsFilters(view) ? <section aria-label={`${titleFor(view)} list and filters`} className="overflow-hidden rounded-lg border bg-card"><CTMSFilterBar embedded filters={filters} onChange={(change) => onFilterChange(change)} onClear={onClearFilters} showReportType={view === 'reports'} /><div className="p-4">{content}</div></section> : content
+  if (view === 'health') return filtered(<HealthView context={context} />)
+  if (view === 'site-dashboard') return filtered(<SiteDashboardView studyId={scope.studyId} siteId={scope.siteId ?? ''} context={context} />)
+  if (view === 'activation') return filtered(<ActivationView studyId={scope.studyId} siteId={scope.siteId ?? ''} context={context} />)
+  if (view === 'profile') return filtered(<ProfileView studyId={scope.studyId ?? ''} context={context} />)
+  if (view === 'plans') return filtered(<ListView label="master activities" empty="Master Activities" actionHref={routePath('profile', scope)} actionLabel="Configure study details" queryHook="plans" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />)
+  if (view === 'overview') return filtered(<OverviewView studyId={scope.studyId ?? ''} context={context} />)
+  if (view === 'enrollment') return filtered(<ListView label="enrollment targets" empty="Enrollment targets" actionHref={routePath('profile', scope)} actionLabel="Configure operational study data" queryHook="targets" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />)
+  if (view === 'milestones') return filtered(<ListView label="operational milestones" empty="Operational milestones" actionHref={routePath('profile', scope)} actionLabel="Configure operational study data" queryHook="milestones" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />)
+  if (view === 'monitoring-plans') return filtered(<ListView label="monitoring plan" empty="Monitoring Plan" actionHref={routePath('profile', scope)} actionLabel="Configure monitoring setup" queryHook="monitoringPlans" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />)
+  if (view === 'monitoring-activities') return filtered(<ActivitiesView studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />)
+  if (view === 'tasks') return filtered(<TasksView studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />)
+  if (view === 'contacts') return filtered(<ListView label="operational contacts" empty="Operational contacts" actionHref={routePath('profile', scope)} actionLabel="Configure operational contacts" queryHook="contacts" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />)
+  if (view === 'projections') return filtered(<ProjectionsView studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />)
+  if (view === 'reports') return filtered(<ReportView studyId={scope.studyId ?? ''} reportType={reportType} context={context} filters={filters} onPageChange={onPageChange} />)
+  if (view === 'exports') return filtered(<ListView label="operational exports" empty="Operational exports" actionHref={routePath('overview', scope)} actionLabel="Open study operations" queryHook="exports" studyId={scope.studyId ?? ''} context={context} filters={filters} onPageChange={onPageChange} />)
+  if (view === 'failed-events') return filtered(<RemediationView kind="failed" studyId={scope.studyId ?? ''} context={context} />)
+  return filtered(<RemediationView kind="conflict" studyId={scope.studyId ?? ''} context={context} />)
 }
 
 function HealthView({ context }: { context: CTMSQueryContext }) {
@@ -331,12 +299,17 @@ function ActivationView({ studyId, siteId, context }: { studyId?: string; siteId
   const activation = useCTMSActivation(siteId, context)
   const canManage = usePermission(PERMISSIONS.CTMS_OPERATIONAL_SITE_MANAGEMENT, studyId, siteId)
   const statusOptions = activation.data?.status_options ?? []
-  return <QueryState query={siteProfile} label="site profile"><div className="space-y-4"><OwnershipCard title="Canonical site reference" identifiers={{ studyId, siteId }}><p className="text-sm text-muted-foreground">The EDC Site identity is canonical; CTMS owns only activation and readiness operations.</p><ModuleBadge module="EDC" state="authoritative" /></OwnershipCard>{canManage ? <OperationalSiteForm siteId={siteId} studyId={studyId} initialValue={siteProfile.data} onSaved={() => void siteProfile.refetch()} /> : null}<Card title="Site operational profile"><DefinitionList value={siteProfile.data ?? {}} />{siteProfile.data?.status && <div className="mt-4"><StatusPresentation kind="operational" status={String(siteProfile.data.status)} owner="CTMS" readOnly={false} /></div>}</Card><QueryState query={activation} label="activation actions"><div className="space-y-4">{canManage ? <ActivationActionForm siteId={siteId} studyId={studyId} statusOptions={statusOptions} onSaved={() => void activation.refetch()} /> : null}<RecordTable rows={activation.data?.items ?? []} empty="Activation" actionHref={`/sites/${encodeURIComponent(siteId)}/ctms/activation`} actionLabel="Review site activation" /></div></QueryState></div></QueryState>
+  const [drawer, setDrawer] = useState<'profile' | 'activation' | null>(null)
+  return <QueryState query={siteProfile} label="site profile"><div className="space-y-4"><OwnershipCard title="Canonical site reference" identifiers={{ studyId, siteId }}><p className="text-sm text-muted-foreground">CTMS creates the Site identity and synchronizes the same ID to the shared platform for EDC use.</p><ModuleBadge module="CTMS" state="authoritative" /></OwnershipCard><div className="flex flex-wrap justify-end gap-2">{canManage ? <><Button type="button" variant="outline" onClick={() => setDrawer('profile')}>{siteProfile.data ? 'Edit site profile' : 'Create site profile'}</Button><Button type="button" onClick={() => setDrawer('activation')}>Add activation action</Button></> : null}</div><Card title="Site operational profile"><DefinitionList value={siteProfile.data ?? {}} />{siteProfile.data?.status && <div className="mt-4"><StatusPresentation kind="operational" status={String(siteProfile.data.status)} owner="CTMS" readOnly={false} /></div>}</Card><QueryState query={activation} label="activation actions"><RecordTable rows={activation.data?.items ?? []} empty="Activation" actionHref={`/sites/${encodeURIComponent(siteId)}/ctms/activation`} actionLabel="Review site activation" /></QueryState><CreateDrawer open={drawer === 'profile'} onOpenChange={(open) => setDrawer(open ? 'profile' : null)} title={siteProfile.data ? 'Edit site profile' : 'Create site profile'} description="Configure the CTMS-owned operational profile for this site."><OperationalSiteForm siteId={siteId} studyId={studyId} initialValue={siteProfile.data} onSaved={() => { setDrawer(null); void siteProfile.refetch() }} onCancel={() => setDrawer(null)} /></CreateDrawer><CreateDrawer open={drawer === 'activation'} onOpenChange={(open) => setDrawer(open ? 'activation' : null)} title="Add activation action" description="Create an operational activation action for this site."><ActivationActionForm siteId={siteId} studyId={studyId} statusOptions={statusOptions} onSaved={() => { setDrawer(null); void activation.refetch() }} onCancel={() => setDrawer(null)} /></CreateDrawer></div></QueryState>
 }
 function ProfileView({ studyId, context }: { studyId: string; context: CTMSQueryContext }) {
   const profile = useCTMSStudyProfile(studyId, context)
   const canManage = usePermission(PERMISSIONS.CTMS_OPERATIONAL_STUDY_MANAGEMENT, studyId)
-  return <QueryState query={profile} label="operational profile"><div className="space-y-4"><OwnershipCard title="Canonical study reference" identifiers={{ studyId }}><p className="text-sm text-muted-foreground">The EDC Study identity is canonical and cannot be changed by CTMS.</p><ModuleBadge module="EDC" state="authoritative" /></OwnershipCard>{canManage ? <OperationalStudyForm studyId={studyId} initialValue={profile.data} onSaved={() => void profile.refetch()} /> : null}<Card title="Operational profile"><DefinitionList value={profile.data ?? {}} />{profile.data?.status && <div className="mt-4"><StatusPresentation kind="operational" status={String(profile.data.status)} owner="CTMS" readOnly={false} /></div>} {!profile.data && <EmptyState label="Operational profile" actionHref={routePath('profile', { studyId }) ?? undefined} actionLabel="Create operational profile" />}</Card></div></QueryState>
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  if (profile.error && normalizeCTMSError(profile.error).category === 'not-found') {
+    return <div className="space-y-4"><OwnershipCard title="Platform study reference" identifiers={{ studyId }}><p className="text-sm text-muted-foreground">Study name and sponsor are synchronized from Aurinara Platform and cannot be changed by CTMS.</p><ModuleBadge module="Shared" state="authoritative" /></OwnershipCard>{canManage ? <div className="flex justify-end"><Button type="button" onClick={() => setDrawerOpen(true)}>Create study details</Button></div> : null}<EmptyState label="Study Details" /><CreateDrawer open={drawerOpen} onOpenChange={setDrawerOpen} title="Create study details" description="Configure CTMS-owned study details for this study."><OperationalStudyForm studyId={studyId} onSaved={() => { setDrawerOpen(false); void profile.refetch() }} onCancel={() => setDrawerOpen(false)} /></CreateDrawer></div>
+  }
+  return <QueryState query={profile} label="study details"><div className="space-y-4"><OwnershipCard title="Platform study reference" identifiers={{ studyId }}><p className="text-sm text-muted-foreground">Study name and sponsor are synchronized from Aurinara Platform and cannot be changed by CTMS.</p><ModuleBadge module="Shared" state="authoritative" /></OwnershipCard>{canManage ? <div className="flex justify-end"><Button type="button" onClick={() => setDrawerOpen(true)}>{profile.data ? 'Edit study details' : 'Create study details'}</Button></div> : null}<Card title="Study Details"><DefinitionList value={profile.data ?? {}} />{profile.data?.status && <div className="mt-4"><StatusPresentation kind="operational" status={String(profile.data.status)} owner="CTMS" readOnly={false} /></div>} {!profile.data && <EmptyState label="Study Details" />}</Card><CreateDrawer open={drawerOpen} onOpenChange={setDrawerOpen} title={profile.data ? 'Edit study details' : 'Create study details'} description="Configure CTMS-owned study details while preserving the shared study identity."><OperationalStudyForm studyId={studyId} initialValue={profile.data} onSaved={() => { setDrawerOpen(false); void profile.refetch() }} onCancel={() => setDrawerOpen(false)} /></CreateDrawer></div></QueryState>
 }
 function DashboardMetricSection({ title, value }: { title: string; value?: Record<string, unknown> }) {
   if (!value || Object.keys(value).length === 0) return null
@@ -365,35 +338,78 @@ type ListViewProps = { label: string; empty: string; actionHref?: string | null;
 function ListView(props: ListViewProps & { queryHook: ListHook }) {
   if (props.queryHook === 'plans') return <PlansList {...props} />
   if (props.queryHook === 'targets') return <TargetsList {...props} />
-  if (props.queryHook === 'milestones') return <MilestonesList {...props} />
+  if (props.queryHook === 'milestones') return <PlansList {...props} />
   if (props.queryHook === 'monitoringPlans') return <MonitoringPlansList {...props} />
   if (props.queryHook === 'contacts') return <ContactsList {...props} />
   return <ExportsList {...props} />
 }
 function PlansList(props: ListViewProps) {
-  const query = useCTMSPlans(props.studyId, props.context)
+  const projectContext = { ...props.context, filters: {}, pagination: { page: 1, pageSize: 100 } }
+  const query = useCTMSPlans(props.studyId, projectContext)
+  const milestones = useCTMSProjectMilestones(props.studyId, projectContext)
+  const options = useCTMSProjectOptions(props.studyId)
+  const statuses = useCTMSReferenceValues('project_status')
   const canManage = usePermission(PERMISSIONS.CTMS_OPERATIONAL_STUDY_MANAGEMENT, props.studyId)
-  const initialValue = query.data?.items?.[0]
-  return <ListQuery {...props} query={query}>{canManage ? <StudyPlanForm studyId={props.studyId} initialValue={initialValue} statusOptions={query.data?.status_options ?? []} /> : null}</ListQuery>
+  const [activityDrawerOpen, setActivityDrawerOpen] = useState(false)
+  const [milestoneDrawerOpen, setMilestoneDrawerOpen] = useState(false)
+  const [editingActivity, setEditingActivity] = useState<CTMSStudyPlan | undefined>()
+  const [editingMilestone, setEditingMilestone] = useState<CTMSProjectMilestone | undefined>()
+  const [view, setView] = useState<'board' | 'timeline' | 'list' | 'milestones'>('board')
+  const [searchText, setSearchText] = useState('')
+  const [scopeFilter, setScopeFilter] = useState('all')
+  const [assigneeFilter, setAssigneeFilter] = useState('all')
+  const move = useCTMSMutation<CTMSStudyPlan, unknown, { activity: CTMSStudyPlan; status: string }>({
+    method: 'PATCH',
+    mutationFn: ({ activity, status }) => ctmsApi.updatePlan(activity.id, { status, reason: `Moved from ${activity.status ?? 'DRAFT'} to ${status} on the Kanban board` }),
+    onSuccess: () => void query.refetch(),
+  })
+  const activities = query.data?.items ?? []
+  const milestoneItems = milestones.data?.items ?? []
+  const workflowStatuses = (statuses.data?.items ?? []).map((status) => ({ code: status.code, label: status.label }))
+  const normalizedSearch = searchText.trim().toLowerCase()
+  const visibleActivities = activities.filter((activity) => {
+    const matchesSearch = !normalizedSearch || [activity.title, activity.objective].some((value) => value?.toLowerCase().includes(normalizedSearch))
+    const matchesScope = scopeFilter === 'all' || activity.scope_level === scopeFilter
+    const matchesAssignee = assigneeFilter === 'all'
+      || (assigneeFilter === 'unassigned' && !activity.assignee_role_id && !activity.assignee_user_id)
+      || (assigneeFilter.startsWith('role:') && activity.assignee_role_id === assigneeFilter.slice(5))
+      || (assigneeFilter.startsWith('user:') && activity.assignee_user_id === assigneeFilter.slice(5))
+    return matchesSearch && matchesScope && matchesAssignee
+  })
+  const visibleMilestones = milestoneItems.filter((milestone) => {
+    const matchesSearch = !normalizedSearch || [milestone.title, milestone.description, milestone.milestone_type].some((value) => value?.toLowerCase().includes(normalizedSearch))
+    return matchesSearch && (scopeFilter === 'all' || milestone.scope_level === scopeFilter)
+  })
+  const visibleMilestoneIds = new Set(visibleMilestones.map((milestone) => milestone.id))
+  const timelineActivities = visibleActivities.filter((activity) => !activity.milestone_id || visibleMilestoneIds.has(activity.milestone_id))
+  const openCreateActivity = () => { setEditingActivity(undefined); setActivityDrawerOpen(true) }
+  const openCreateMilestone = () => { setEditingMilestone(undefined); setMilestoneDrawerOpen(true) }
+  const completedCodes = new Set(['COMPLETED', 'COMPLETE', 'DONE'])
+  const workspaceQuery = { isLoading: query.isLoading || milestones.isLoading || options.isLoading || statuses.isLoading, isFetching: query.isFetching || milestones.isFetching || options.isFetching || statuses.isFetching, error: query.error ?? milestones.error ?? options.error ?? statuses.error, data: query.data, refetch: async () => { await Promise.all([query.refetch(), milestones.refetch(), options.refetch(), statuses.refetch()]) } }
+  return <QueryState query={workspaceQuery} label={props.label} unframed><div className="space-y-5">
+    <ProjectWorkspaceHeader activityCount={activities.length} milestoneCount={milestoneItems.length} completedCount={activities.filter((activity) => completedCodes.has(activity.status ?? '')).length} canManage={canManage} onCreateActivity={openCreateActivity} onCreateMilestone={openCreateMilestone} />
+    <ProjectToolbar search={searchText} onSearchChange={setSearchText} scope={scopeFilter} onScopeChange={setScopeFilter} assignee={assigneeFilter} onAssigneeChange={setAssigneeFilter} options={options.data} view={view} onViewChange={setView} resultCount={view === 'milestones' ? visibleMilestones.length : visibleActivities.length} showAssignee={view !== 'milestones'} />
+    {move.error ? <Alert variant="destructive"><AlertTitle>Activity could not be moved</AlertTitle><AlertDescription>{getCTMSErrorMessage(move.error)}</AlertDescription></Alert> : null}
+    {view === 'milestones'
+      ? !milestoneItems.length ? <EmptyState label="Milestones" actionHref={props.actionHref ?? undefined} actionLabel={props.actionLabel} /> : !visibleMilestones.length ? <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">No milestones match the current filters.</div> : <MilestoneHierarchy milestones={visibleMilestones} activities={activities} options={options.data} workflowStatuses={workflowStatuses} canManage={canManage} onEdit={(milestone) => { setEditingMilestone(milestone); setMilestoneDrawerOpen(true) }} />
+      : !activities.length ? <EmptyState label="Master Activities" actionHref={props.actionHref ?? undefined} actionLabel={props.actionLabel} /> : !visibleActivities.length ? <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">No work items match the current filters.</div> : view === 'board' ? <ProjectKanban activities={visibleActivities} milestones={milestoneItems} options={options.data} workflowStatuses={workflowStatuses} canManage={canManage} movingId={move.isPending ? move.variables?.activity.id : undefined} onMove={(activity, status) => move.mutate({ activity, status })} onEdit={(activity) => { setEditingActivity(activity); setActivityDrawerOpen(true) }} onCreate={openCreateActivity} /> : view === 'timeline' ? <ProjectGantt activities={timelineActivities} milestones={visibleMilestones} options={options.data} /> : <ProjectIssueList activities={visibleActivities} options={options.data} workflowStatuses={workflowStatuses} canManage={canManage} onEdit={(activity) => { setEditingActivity(activity); setActivityDrawerOpen(true) }} />}
+    <CreateDrawer open={activityDrawerOpen} onOpenChange={setActivityDrawerOpen} title={editingActivity ? 'Edit master activity' : 'Add master activity'} description="Create or update a scoped Jira-style work item for this study."><StudyPlanForm studyId={props.studyId} initialValue={editingActivity} onSaved={() => { setActivityDrawerOpen(false); setEditingActivity(undefined); void query.refetch() }} onCancel={() => { setActivityDrawerOpen(false); setEditingActivity(undefined) }} /></CreateDrawer>
+    <CreateDrawer open={milestoneDrawerOpen} onOpenChange={setMilestoneDrawerOpen} title={editingMilestone ? 'Edit milestone' : 'Add milestone'} description="Milestones group master activities at the same study, country, or site level."><ProjectMilestoneForm studyId={props.studyId} initialValue={editingMilestone} onSaved={() => { setMilestoneDrawerOpen(false); setEditingMilestone(undefined); void Promise.all([milestones.refetch(), query.refetch()]) }} onCancel={() => { setMilestoneDrawerOpen(false); setEditingMilestone(undefined) }} /></CreateDrawer>
+  </div></QueryState>
 }
 function TargetsList(props: ListViewProps) {
   const query = useCTMSTargets(props.studyId, props.context)
   const canManage = usePermission(PERMISSIONS.CTMS_ENROLLMENT_MANAGEMENT, props.studyId)
-  const initialValue = query.data?.items?.[0]
-  return <ListQuery {...props} query={query}>{canManage ? <EnrollmentTargetForm studyId={props.studyId} siteId={initialValue?.site_id ?? undefined} initialValue={initialValue} statusOptions={query.data?.status_options ?? []} /> : null}</ListQuery>
-}
-function MilestonesList(props: ListViewProps) {
-  const query = useCTMSMilestones(props.studyId, props.context)
-  const canManage = usePermission(PERMISSIONS.CTMS_ENROLLMENT_MANAGEMENT, props.studyId)
-  const initialValue = query.data?.items?.[0]
-  return <ListQuery {...props} query={query}>{canManage && initialValue?.subject_id ? <OperationalMilestoneForm studyId={props.studyId} subjectId={initialValue.subject_id} siteId={initialValue.site_id ?? undefined} statusOptions={query.data?.status_options ?? []} /> : null}</ListQuery>
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  return <ListQuery {...props} query={query}>{canManage ? <div className="flex justify-end"><Button type="button" onClick={() => setDrawerOpen(true)}>Add enrollment target</Button></div> : null}<CreateDrawer open={drawerOpen} onOpenChange={setDrawerOpen} title="Add enrollment target" description="Create a study- or site-scoped operational enrollment target."><EnrollmentTargetForm studyId={props.studyId} statusOptions={query.data?.status_options ?? []} onSaved={() => { setDrawerOpen(false); void query.refetch() }} onCancel={() => setDrawerOpen(false)} /></CreateDrawer></ListQuery>
 }
 function MonitoringPlansList(props: ListViewProps) {
   const query = useCTMSMonitoringPlans(props.studyId, props.context)
   const canManage = usePermission(PERMISSIONS.CTMS_MONITORING_ACTIVITY_MANAGEMENT, props.studyId)
   const [showCreate, setShowCreate] = useState(false)
   return <ListQuery {...props} query={query} hideTable>
-    {canManage ? <div className="flex flex-wrap justify-end gap-2"><button type="button" className="rounded bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" onClick={() => setShowCreate((value) => !value)}>{showCreate ? 'Close plan form' : 'Create monitoring plan'}</button>{showCreate ? <div className="basis-full"><MonitoringPlanForm studyId={props.studyId} onSaved={() => { setShowCreate(false); void query.refetch() }} onCancel={() => setShowCreate(false)} /></div> : null}</div> : null}
+    {canManage ? <div className="flex justify-end"><Button type="button" onClick={() => setShowCreate(true)}>Create monitoring plan</Button></div> : null}
+    <CreateDrawer open={showCreate} onOpenChange={setShowCreate} title="Create monitoring plan" description="Configure a CTMS-owned monitoring plan for this study."><MonitoringPlanForm studyId={props.studyId} onSaved={() => { setShowCreate(false); void query.refetch() }} onCancel={() => setShowCreate(false)} /></CreateDrawer>
     <div className="space-y-3">{query.data?.items?.map((raw) => { const plan = raw as CTMSMonitoringPlan; return <MonitoringPlanDetail key={plan.id} plan={plan} studyId={props.studyId} canManage={canManage} onChanged={() => void query.refetch()} /> })}</div>
   </ListQuery>
 }
@@ -411,7 +427,8 @@ function ContactsList(props: ListViewProps) {
   const [editingContactId, setEditingContactId] = useState<string | null>(null)
   const [transitionContactId, setTransitionContactId] = useState<string | null>(null)
   return <ListQuery {...props} query={query} hideTable>
-    {canManage ? <div className="flex flex-wrap justify-end gap-2"><button type="button" className="rounded bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" onClick={() => setShowCreate((value) => !value)}>{showCreate ? 'Close contact form' : 'Create operational contact'}</button>{showCreate ? <div className="basis-full"><OperationalContactForm studyId={props.studyId} onSaved={() => { setShowCreate(false); void query.refetch() }} onCancel={() => setShowCreate(false)} /></div> : null}</div> : null}
+    {canManage ? <div className="flex justify-end"><Button type="button" onClick={() => setShowCreate(true)}>Create operational contact</Button></div> : null}
+    <CreateDrawer open={showCreate} onOpenChange={setShowCreate} title="Create operational contact" description="Add a CTMS operational contact for this study."><OperationalContactForm studyId={props.studyId} onSaved={() => { setShowCreate(false); void query.refetch() }} onCancel={() => setShowCreate(false)} /></CreateDrawer>
     <div className="space-y-3">{query.data?.items?.map((raw) => { const contact = raw as import('./api').CTMSContact; const transitionOptions = contact.allowed_transitions ?? []; return <OwnershipCard key={contact.id} title={contact.name} identifiers={{ studyId: contact.study_id, siteId: contact.site_id }}><DefinitionList value={Object.fromEntries(Object.entries(contact).filter(([key]) => key !== 'name'))} /><StatusPresentation kind="operational" status={contact.status} owner="CTMS" readOnly={!canManage} />{contact.correlation_id ? <p className="font-mono text-xs text-muted-foreground">Correlation ID: {contact.correlation_id}</p> : null}{canManage ? <div className="flex flex-wrap gap-2"><button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setEditingContactId(editingContactId === contact.id ? null : contact.id)}>{editingContactId === contact.id ? 'Close contact editor' : 'Edit contact'}</button>{transitionOptions.length ? <button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setTransitionContactId(transitionContactId === contact.id ? null : contact.id)}>{transitionContactId === contact.id ? 'Close status form' : 'Change contact status'}</button> : null}</div> : null}{editingContactId === contact.id ? <OperationalContactForm studyId={props.studyId} initial={contact} onSaved={() => { setEditingContactId(null); void query.refetch() }} onCancel={() => setEditingContactId(null)} /> : null}{transitionContactId === contact.id ? <OperationalContactStatusForm contact={contact} transitionOptions={transitionOptions} onSaved={() => void query.refetch()} onCancel={() => setTransitionContactId(null)} /> : null}</OwnershipCard> })}</div>
   </ListQuery>
 }
@@ -429,7 +446,7 @@ function ActivitiesView({ studyId, context, filters, onPageChange }: { studyId: 
   const canManage = usePermission(PERMISSIONS.CTMS_MONITORING_ACTIVITY_MANAGEMENT, studyId)
   const [showCreate, setShowCreate] = useState(false)
   const pagination = activities.data?.page !== undefined && activities.data.page_size !== undefined && activities.data.total !== undefined ? { page: activities.data.page, pageSize: activities.data.page_size, total: activities.data.total, onPageChange, isLoading: activities.isFetching } : undefined
-  return <QueryState query={activities} label="monitoring activities"><div className="space-y-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm text-muted-foreground">Monitoring activities are CTMS operational records and never protocol Visit_Instances.</p>{canManage ? <button type="button" className="rounded bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" onClick={() => setShowCreate((value) => !value)}>{showCreate ? 'Close activity form' : 'Schedule monitoring activity'}</button> : null}</div>{showCreate ? <MonitoringActivityForm studyId={studyId} onSaved={() => { setShowCreate(false); void activities.refetch() }} onCancel={() => setShowCreate(false)} /> : null}{activities.data?.items?.length ? activities.data.items.map((raw) => { const activity = raw as CTMSMonitoringActivity; return <OwnershipCard key={activity.id} title={activity.activity_type} identifiers={{ studyId: activity.study_id, siteId: activity.site_id, visitInstanceId: activity.edc_visit_instance_id }}><MonitoringActivitySummary activityType={activity.activity_type} operationalStatus={activity.status} assignedCra={activity.assigned_cra_id} plannedDate={activity.planned_date} completionEvidence={activity.completion_evidence ? JSON.stringify(activity.completion_evidence) : null} lastChangedAt={activity.updated_at} edcVisitInstanceId={activity.edc_visit_instance_id} />{activity.correlation_id ? <p className="font-mono text-xs text-muted-foreground">Correlation ID: {activity.correlation_id}</p> : null}{canManage ? <MonitoringActivityActions activity={activity} onChanged={() => void activities.refetch()} /> : null}{activity.attachment_constraints ? <OperationalAttachmentPanel studyId={studyId} siteId={activity.site_id} objectType="monitoring_activity" objectId={activity.id} parentLabel="monitoring activity" attachments={activity.attachments} constraints={activity.attachment_constraints} /> : null}</OwnershipCard> }) : <RecordTable rows={[]} empty="Monitoring activities" actionHref={routePath('monitoring-plans', { studyId }) ?? undefined} actionLabel="Configure monitoring plans" filters={filters} pagination={pagination} />}{pagination && <ServerPagination label="monitoring activities" pagination={pagination} />}</div></QueryState>
+  return <QueryState query={activities} label="monitoring visits"><div className="space-y-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm text-muted-foreground">Monitoring visits are CTMS operational records and never protocol Visit_Instances.</p>{canManage ? <Button type="button" onClick={() => setShowCreate(true)}>Schedule monitoring visit</Button> : null}</div><CreateDrawer open={showCreate} onOpenChange={setShowCreate} title="Schedule monitoring visit" description="Create a CTMS operational monitoring visit."><MonitoringActivityForm studyId={studyId} onSaved={() => { setShowCreate(false); void activities.refetch() }} onCancel={() => setShowCreate(false)} /></CreateDrawer>{activities.data?.items?.length ? activities.data.items.map((raw) => { const activity = raw as CTMSMonitoringActivity; return <OwnershipCard key={activity.id} title={activity.visit_code ? `${activity.visit_code} · ${activity.activity_type}` : activity.activity_type} identifiers={{ studyId: activity.study_id, siteId: activity.site_id, visitInstanceId: activity.edc_visit_instance_id }}><p className="text-sm font-medium">{activity.modality}</p><MonitoringActivitySummary activityType={activity.activity_type} operationalStatus={activity.status} assignedCra={activity.assigned_cra_id} plannedDate={activity.planned_date} completionEvidence={activity.completion_evidence ? JSON.stringify(activity.completion_evidence) : null} lastChangedAt={activity.updated_at} edcVisitInstanceId={activity.edc_visit_instance_id} />{activity.correlation_id ? <p className="font-mono text-xs text-muted-foreground">Correlation ID: {activity.correlation_id}</p> : null}<MonitoringVisitWorkspace visit={activity} canManage={canManage} onVisitChanged={() => void activities.refetch()} />{canManage ? <MonitoringActivityActions activity={activity} onChanged={() => void activities.refetch()} /> : null}{activity.attachment_constraints ? <OperationalAttachmentPanel studyId={studyId} siteId={activity.site_id} objectType="monitoring_activity" objectId={activity.id} parentLabel="monitoring visit" attachments={activity.attachments} constraints={activity.attachment_constraints} /> : null}</OwnershipCard> }) : <RecordTable rows={[]} empty="Monitoring Visits" actionHref={routePath('monitoring-plans', { studyId }) ?? undefined} actionLabel="Configure monitoring plan" filters={filters} pagination={pagination} />}{pagination && <ServerPagination label="monitoring visits" pagination={pagination} />}</div></QueryState>
 }
 function TasksView({ studyId, context, filters, onPageChange }: { studyId: string; context: CTMSQueryContext; filters: CTMSQueryContext['filters']; onPageChange: (page: number) => void }) {
   const tasks = useCTMSTasks(studyId, context)
@@ -439,7 +456,7 @@ function TasksView({ studyId, context, filters, onPageChange }: { studyId: strin
   const [followUpQueryId, setFollowUpQueryId] = useState<string | null>(null)
   const [transitionTaskId, setTransitionTaskId] = useState<string | null>(null)
   const pagination = tasks.data?.page !== undefined && tasks.data.page_size !== undefined && tasks.data.total !== undefined ? { page: tasks.data.page, pageSize: tasks.data.page_size, total: tasks.data.total, onPageChange, isLoading: tasks.isFetching } : undefined
-  return <QueryState query={tasks} label="operational tasks"><div className="space-y-3">{canManage ? <div className="flex justify-end"><button type="button" className="rounded bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" onClick={() => setShowCreate((value) => !value)}>{showCreate ? 'Close task form' : 'Create operational task'}</button></div> : null}{showCreate ? <OperationalTaskForm studyId={studyId} onSaved={() => { setShowCreate(false); void tasks.refetch() }} onCancel={() => setShowCreate(false)} /> : null}{tasks.data?.items?.length ? tasks.data.items.map((raw) => { const task = raw as import('./api').CTMSTask; const transitionOptions = task.allowed_transitions ?? []; return <OwnershipCard key={task.id} title={task.title} identifiers={{ studyId: task.study_id, siteId: task.site_id }}><DefinitionList value={task} />{task.query_id ? <QueryFollowUpSummary queryId={task.query_id} taskStatus={task.status} queryStatus="EDC query lifecycle remains EDC-owned" /> : <StatusPresentation kind="operational" status={task.status} owner="CTMS" readOnly={!canManage} />}{task.correlation_id ? <p className="font-mono text-xs text-muted-foreground">Correlation ID: {task.correlation_id}</p> : null}{canManage ? <div className="flex flex-wrap gap-2"><button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setEditingTaskId(editingTaskId === task.id ? null : task.id)}>{editingTaskId === task.id ? 'Close task editor' : 'Edit task'}</button>{transitionOptions.length ? <button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setTransitionTaskId(transitionTaskId === task.id ? null : task.id)}>{transitionTaskId === task.id ? 'Close status form' : 'Change task status'}</button> : null}{task.query_id ? <button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setFollowUpQueryId(followUpQueryId === task.query_id ? null : task.query_id ?? null)}>{followUpQueryId === task.query_id ? 'Close follow-up form' : 'Create query follow-up'}</button> : null}</div> : null}{editingTaskId === task.id ? <OperationalTaskForm studyId={studyId} initial={task} onSaved={() => { setEditingTaskId(null); void tasks.refetch() }} onCancel={() => setEditingTaskId(null)} /> : null}{transitionTaskId === task.id ? <OperationalTaskStatusForm task={task} transitionOptions={transitionOptions} onSaved={() => void tasks.refetch()} onCancel={() => setTransitionTaskId(null)} /> : null}{followUpQueryId === task.query_id && task.query_id ? <QueryFollowUpForm queryId={task.query_id} studyId={studyId} onSaved={() => { setFollowUpQueryId(null); void tasks.refetch() }} onCancel={() => setFollowUpQueryId(null)} /> : null}{task.attachment_constraints ? <OperationalAttachmentPanel studyId={studyId} siteId={task.site_id} objectType="operational_task" objectId={task.id} parentLabel="operational task" attachments={task.attachments} constraints={task.attachment_constraints} /> : null}</OwnershipCard> }) : <RecordTable rows={[]} empty="Operational tasks" actionHref={routePath('overview', { studyId }) ?? undefined} actionLabel="Open study operations" filters={filters} pagination={pagination} />}{pagination && <ServerPagination label="operational tasks" pagination={pagination} />}</div></QueryState>
+  return <QueryState query={tasks} label="operational tasks"><div className="space-y-3">{canManage ? <div className="flex justify-end"><Button type="button" onClick={() => setShowCreate(true)}>Create operational task</Button></div> : null}<CreateDrawer open={showCreate} onOpenChange={setShowCreate} title="Create operational task" description="Add a CTMS-owned operational task for this study."><OperationalTaskForm studyId={studyId} onSaved={() => { setShowCreate(false); void tasks.refetch() }} onCancel={() => setShowCreate(false)} /></CreateDrawer>{tasks.data?.items?.length ? tasks.data.items.map((raw) => { const task = raw as import('./api').CTMSTask; const transitionOptions = task.allowed_transitions ?? []; return <OwnershipCard key={task.id} title={task.title} identifiers={{ studyId: task.study_id, siteId: task.site_id }}><DefinitionList value={task} />{task.query_id ? <QueryFollowUpSummary queryId={task.query_id} taskStatus={task.status} queryStatus="EDC query lifecycle remains EDC-owned" /> : <StatusPresentation kind="operational" status={task.status} owner="CTMS" readOnly={!canManage} />}{task.correlation_id ? <p className="font-mono text-xs text-muted-foreground">Correlation ID: {task.correlation_id}</p> : null}{canManage ? <div className="flex flex-wrap gap-2"><button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setEditingTaskId(editingTaskId === task.id ? null : task.id)}>{editingTaskId === task.id ? 'Close task editor' : 'Edit task'}</button>{transitionOptions.length ? <button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setTransitionTaskId(transitionTaskId === task.id ? null : task.id)}>{transitionTaskId === task.id ? 'Close status form' : 'Change task status'}</button> : null}{task.query_id ? <button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setFollowUpQueryId(followUpQueryId === task.query_id ? null : task.query_id ?? null)}>{followUpQueryId === task.query_id ? 'Close follow-up form' : 'Create query follow-up'}</button> : null}</div> : null}{editingTaskId === task.id ? <OperationalTaskForm studyId={studyId} initial={task} onSaved={() => { setEditingTaskId(null); void tasks.refetch() }} onCancel={() => setEditingTaskId(null)} /> : null}{transitionTaskId === task.id ? <OperationalTaskStatusForm task={task} transitionOptions={transitionOptions} onSaved={() => void tasks.refetch()} onCancel={() => setTransitionTaskId(null)} /> : null}{followUpQueryId === task.query_id && task.query_id ? <QueryFollowUpForm queryId={task.query_id} studyId={studyId} onSaved={() => { setFollowUpQueryId(null); void tasks.refetch() }} onCancel={() => setFollowUpQueryId(null)} /> : null}{task.attachment_constraints ? <OperationalAttachmentPanel studyId={studyId} siteId={task.site_id} objectType="operational_task" objectId={task.id} parentLabel="operational task" attachments={task.attachments} constraints={task.attachment_constraints} /> : null}</OwnershipCard> }) : <RecordTable rows={[]} empty="Operational tasks" actionHref={routePath('overview', { studyId }) ?? undefined} actionLabel="Open study operations" filters={filters} pagination={pagination} />}{pagination && <ServerPagination label="operational tasks" pagination={pagination} />}</div></QueryState>
 }
 function ProjectionsView({ studyId, context, filters, onPageChange }: { studyId: string; context: CTMSQueryContext; filters: CTMSQueryContext['filters']; onPageChange: (page: number) => void }) {
   const projections = useCTMSProjections(studyId, context)
@@ -515,7 +532,7 @@ export function CTMSWorkspacePage({ view, studyId: requestedStudyId, siteId: req
   if (view !== 'health' && view !== 'activation' && view !== 'site-dashboard' && !studyId) return <section className="space-y-3 rounded-lg border bg-background p-6"><h1 className="text-2xl font-bold text-foreground">CTMS workspace</h1><p className="text-muted-foreground">Select a study to open its operational workspace.</p><a className="inline-flex rounded border border-info/40 bg-info/10 px-3 py-1.5 text-sm font-medium text-info-foreground hover:bg-info/20" href="/studies">Choose a study</a></section>
 
   const scope = { studyId, siteId }
-  return <CTMSWorkspaceLayout view={view} scope={scope} reportType={reportType} state={state} search={search} onFilterChange={onFilterChange} onClearFilters={onClearFilters}><ViewContent view={view} scope={scope} reportType={reportType} search={search} onPageChange={onPageChange} /></CTMSWorkspaceLayout>
+  return <CTMSWorkspaceLayout view={view} scope={scope}><ViewContent view={view} scope={scope} reportType={reportType} search={search} onPageChange={onPageChange} onFilterChange={onFilterChange} onClearFilters={onClearFilters} /></CTMSWorkspaceLayout>
 }
 
 function DefinitionList({ value }: { value: object }) { const entries = Object.entries(value).filter(([key]) => !['payload', 'readiness_criteria'].includes(key)); if (!entries.length) return <EmptyState label="Operational data" actionHref="/studies" actionLabel="Choose an operational workspace" />; return <dl className="grid gap-3 sm:grid-cols-2">{entries.map(([key, item]) => <div key={key}><dt className="text-xs uppercase tracking-wide text-muted-foreground">{key.replaceAll('_', ' ')}</dt><dd className="mt-1 break-words text-sm text-foreground">{typeof item === 'object' ? JSON.stringify(item) : String(item ?? '—')}</dd></div>)}</dl> }

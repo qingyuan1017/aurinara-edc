@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
+import { useAuthStore } from '@/lib/auth'
 import { AssignRolesDialog } from './AssignRolesDialog'
 
 interface User { id: string; email: string; first_name: string; last_name: string; status: string; created_at: string }
@@ -24,9 +25,10 @@ const columns = [
 
 export function UserListPage() {
   const queryClient = useQueryClient()
-  const canCreate = usePermission(PERMISSIONS.USER_CREATE)
-  const canDeactivate = usePermission(PERMISSIONS.USER_DEACTIVATE)
-  const canAssign = usePermission(PERMISSIONS.USER_ASSIGN)
+  const platformManaged = useAuthStore((state) => state.user?.authorization_source === 'platform')
+  const canCreate = usePermission(PERMISSIONS.USER_CREATE) && !platformManaged
+  const canDeactivate = usePermission(PERMISSIONS.USER_DEACTIVATE) && !platformManaged
+  const canAssign = usePermission(PERMISSIONS.USER_ASSIGN) && !platformManaged
   const [page, setPage] = useState(1)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [assignUser, setAssignUser] = useState<User | null>(null)
@@ -50,6 +52,8 @@ export function UserListPage() {
   return (
     <PageContainer wide>
       <PageHeader title="Users" description="Manage users within the current EDC workspace." actions={canCreate ? <Button type="button" onClick={() => setShowInviteModal(true)}>Invite User</Button> : null} />
+
+      {platformManaged ? <Alert><AlertDescription>User identities and role assignments are managed centrally in <a className="underline" href={`${import.meta.env.VITE_PLATFORM_CONSOLE_URL || 'http://localhost:5174'}/#access`}>Aurinara Platform</a>. EDC displays the projected access state here.</AlertDescription></Alert> : null}
 
       <DataTableShell label="Users" loading={isLoading} error={Boolean(queryError)} errorMessage="Users could not be loaded." empty={data?.items.length === 0} emptyTitle="No users found.">
         <Table>

@@ -29,7 +29,7 @@ class PlatformMembershipProjection(Base):
     __tablename__ = "platform_membership_projections"
 
     scope_key: Mapped[str] = mapped_column(String(160), primary_key=True)
-    study_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    study_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     site_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)

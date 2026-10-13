@@ -42,6 +42,7 @@ from app.models.ctms import (
     ReadinessCriterion,
     ReportQuery,
     StudyOperationalMilestone,
+    StudyOperationRecord,
     StudyPlan,
     TaskEscalation,
 )
@@ -94,6 +95,7 @@ _OPERATIONAL_MODELS: tuple[tuple[str, type[Any]], ...] = (
     ("enrollment_plan", EnrollmentPlan),
     ("readiness_criterion", ReadinessCriterion),
     ("study_milestone", StudyOperationalMilestone),
+    ("study_operation", StudyOperationRecord),
     ("report_query", ReportQuery),
     ("dashboard_query", DashboardQuery),
     ("operational_site", OperationalSite),

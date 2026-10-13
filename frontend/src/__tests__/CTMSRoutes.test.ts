@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { router } from '@/lib/router'
+import { CTMS_REPORT_DEFINITIONS } from '@/features/ctms/reportCatalog'
 
 const studyParams = { studyId: 'study-1' }
 const siteParams = { siteId: 'site-1' }
@@ -36,6 +37,8 @@ describe('route registration and deep-link preservation', () => {
       router.buildLocation({ to: '/studies/$studyId/edit-checks', params: studyParams }).pathname,
       router.buildLocation({ to: '/studies/$studyId/designer/forms', params: studyParams }).pathname,
       router.buildLocation({ to: '/designer/forms' }).pathname,
+      router.buildLocation({ to: '/studies/$studyId/designer/versions', params: studyParams }).pathname,
+      router.buildLocation({ to: '/designer/versions' }).pathname,
       router.buildLocation({ to: '/studies/$studyId/designer/edit-checks', params: studyParams }).pathname,
       router.buildLocation({ to: '/designer/edit-checks' }).pathname,
       router.buildLocation({ to: '/data-cleaning' }).pathname,
@@ -73,6 +76,8 @@ describe('route registration and deep-link preservation', () => {
       '/studies/study-1/edit-checks',
       '/studies/study-1/designer/forms',
       '/designer/forms',
+      '/studies/study-1/designer/versions',
+      '/designer/versions',
       '/studies/study-1/designer/edit-checks',
       '/designer/edit-checks',
       '/data-cleaning',
@@ -98,6 +103,8 @@ describe('route registration and deep-link preservation', () => {
   it('registers every CTMS study, site, reporting, coordination, and health route', () => {
     const paths = [
       router.buildLocation({ to: '/ctms' }).pathname,
+      router.buildLocation({ to: '/ctms/references' }).pathname,
+      router.buildLocation({ to: '/ctms/entities' }).pathname,
       router.buildLocation({ to: '/studies/$studyId/ctms', params: studyParams }).pathname,
       router.buildLocation({ to: '/studies/$studyId/ctms/profile', params: studyParams }).pathname,
       router.buildLocation({ to: '/studies/$studyId/ctms/plans', params: studyParams }).pathname,
@@ -119,6 +126,8 @@ describe('route registration and deep-link preservation', () => {
 
     expect(paths).toEqual([
       '/ctms',
+      '/ctms/references',
+      '/ctms/entities',
       '/studies/study-1/ctms',
       '/studies/study-1/ctms/profile',
       '/studies/study-1/ctms/plans',
@@ -137,6 +146,61 @@ describe('route registration and deep-link preservation', () => {
       '/sites/site-1/ctms',
       '/sites/site-1/ctms/activation',
     ])
+  })
+
+  it('registers the CTMS study operations hierarchy', () => {
+    const routes = [
+      '/studies/$studyId/ctms/details',
+      '/studies/$studyId/ctms/project-management',
+      '/studies/$studyId/ctms/project-management/milestones',
+      '/studies/$studyId/ctms/project-management/master-activities',
+      '/studies/$studyId/ctms/financial-management',
+      '/studies/$studyId/ctms/financial-management/contracts',
+      '/studies/$studyId/ctms/financial-management/pricing-templates',
+      '/studies/$studyId/ctms/financial-management/budgets',
+      '/studies/$studyId/ctms/financial-management/payments',
+      '/studies/$studyId/ctms/financial-management/invoices',
+      '/studies/$studyId/ctms/financial-management/reports',
+      '/studies/$studyId/ctms/rbm/ract',
+      '/studies/$studyId/ctms/rbm/kri',
+      '/studies/$studyId/ctms/monitoring/plans',
+      '/studies/$studyId/ctms/monitoring/visits',
+      '/studies/$studyId/ctms/monitoring/issues',
+      '/studies/$studyId/ctms/protocol-deviations',
+      '/studies/$studyId/ctms/icf',
+      '/studies/$studyId/ctms/track-logs',
+    ] as const
+
+    expect(routes.map((to) => router.buildLocation({ to, params: studyParams }).pathname)).toEqual([
+      '/studies/study-1/ctms/details',
+      '/studies/study-1/ctms/project-management',
+      '/studies/study-1/ctms/project-management/milestones',
+      '/studies/study-1/ctms/project-management/master-activities',
+      '/studies/study-1/ctms/financial-management',
+      '/studies/study-1/ctms/financial-management/contracts',
+      '/studies/study-1/ctms/financial-management/pricing-templates',
+      '/studies/study-1/ctms/financial-management/budgets',
+      '/studies/study-1/ctms/financial-management/payments',
+      '/studies/study-1/ctms/financial-management/invoices',
+      '/studies/study-1/ctms/financial-management/reports',
+      '/studies/study-1/ctms/rbm/ract',
+      '/studies/study-1/ctms/rbm/kri',
+      '/studies/study-1/ctms/monitoring/plans',
+      '/studies/study-1/ctms/monitoring/visits',
+      '/studies/study-1/ctms/monitoring/issues',
+      '/studies/study-1/ctms/protocol-deviations',
+      '/studies/study-1/ctms/icf',
+      '/studies/study-1/ctms/track-logs',
+    ])
+  })
+
+  it('registers every CTMS report catalog route', () => {
+    expect(CTMS_REPORT_DEFINITIONS.map((report) => router.buildLocation({
+      to: '/studies/$studyId/ctms/reports/$category/$report',
+      params: { ...studyParams, category: report.category, report: report.slug },
+    }).pathname)).toEqual(CTMS_REPORT_DEFINITIONS.map((report) => (
+      `/studies/study-1/ctms/reports/${report.category}/${report.slug}`
+    )))
   })
 
   it('preserves search parameters on representative CTMS deep links', () => {

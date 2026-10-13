@@ -10,7 +10,8 @@ import { AcceptInvitationPage } from '@/features/auth/AcceptInvitationPage'
 import { AccessDeniedPage } from '@/features/auth/AccessDeniedPage'
 import { AuditViewerPage, UserListPage } from '@/features/admin'
 import { AIAssistantPage } from '@/features/ai'
-import { CTMSHomePage, CTMSWorkspacePage, type CTMSView } from '@/features/ctms'
+import { CTMSCatalogReportPage, CTMSHomePage, CTMSStudyAreaPage, CTMSWorkspacePage, EntityManagementPage, FinancialManagementPage, MonitoringModulePage, ReferenceDataPage, type CTMSStudyOperationResource, type CTMSView, type MonitoringModuleView } from '@/features/ctms'
+import { findCTMSReportDefinition } from '@/features/ctms/reportCatalog'
 import { PVHomePage, PVWorkspacePage, type PVView } from '@/features/pv'
 import { ExportCenterPage } from '@/features/exports'
 import { SiteListPage } from '@/features/sites'
@@ -360,8 +361,35 @@ const ctmsRoute = createRoute({
   path: '/ctms',
   component: () => createElement(CTMSHomePage),
 })
+const ctmsEntitiesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/entities', component: () => createElement(EntityManagementPage) })
+const ctmsReferencesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/references', component: () => createElement(ReferenceDataPage) })
 
 const ctmsStudyWorkspaceRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'overview' }) })
+const ctmsStudyDetailsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/details', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'profile' }) })
+const ctmsProjectManagementRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/project-management', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'plans' }) })
+const ctmsProjectMilestonesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/project-management/milestones', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'milestones' }) })
+const ctmsMasterActivitiesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/project-management/master-activities', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'plans' }) })
+const ctmsFinancialOverviewRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/financial-management', component: () => createElement(CTMSFinancialRoute, { initialTab: 'overview' }) })
+const ctmsContractsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/financial-management/contracts', component: () => createElement(CTMSFinancialRoute, { initialTab: 'contracts' }) })
+const ctmsPricingTemplatesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/financial-management/pricing-templates', component: () => createElement(CTMSStudyAreaRoute, { resource: 'pricing_template', title: 'Pricing Template', description: 'Define reusable study pricing schedules.' }) })
+const ctmsBudgetsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/financial-management/budgets', component: () => createElement(CTMSFinancialRoute, { initialTab: 'budgets' }) })
+const ctmsPaymentsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/financial-management/payments', component: () => createElement(CTMSFinancialRoute, { initialTab: 'payments' }) })
+const ctmsInvoicesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/financial-management/invoices', component: () => createElement(CTMSFinancialRoute, { initialTab: 'invoices' }) })
+const ctmsFinancialReportsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/financial-management/reports', component: () => createElement(CTMSFinancialRoute, { initialTab: 'reporting' }) })
+const ctmsRactRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/rbm/ract', component: () => createElement(CTMSStudyAreaRoute, { resource: 'ract', title: 'RACT', description: 'Capture Risk Assessment and Categorization Tool decisions.' }) })
+const ctmsKriRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/rbm/kri', component: () => createElement(CTMSStudyAreaRoute, { resource: 'kri', title: 'KRI', description: 'Define and monitor key risk indicators.' }) })
+const ctmsMonitoringOverviewRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/monitoring', component: () => createElement(CTMSMonitoringRoute, { view: 'overview' }) })
+const ctmsMonitoringPlanRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/monitoring/plans', component: () => createElement(CTMSMonitoringRoute, { view: 'plans' }) })
+const ctmsMonitoringVisitRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/monitoring/visits', component: () => createElement(CTMSMonitoringRoute, { view: 'visits' }) })
+const ctmsMonitoringFindingsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/monitoring/findings', component: () => createElement(CTMSMonitoringRoute, { view: 'findings' }) })
+const ctmsMonitoringRiskRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/monitoring/risk', component: () => createElement(CTMSMonitoringRoute, { view: 'risk' }) })
+const ctmsMonitoringReportsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/monitoring/reports', component: () => createElement(CTMSMonitoringRoute, { view: 'reports' }) })
+const ctmsMonitoringIssuesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/monitoring/issues', component: () => createElement(CTMSMonitoringRoute, { view: 'findings' }) })
+const ctmsProtocolDeviationsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/protocol-deviations', component: () => createElement(CTMSStudyAreaRoute, { resource: 'protocol_deviation', title: 'Protocol Deviation', description: 'Track protocol deviations, review, and resolution.' }) })
+const ctmsIcfRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/icf', component: () => createElement(CTMSStudyAreaRoute, { resource: 'icf', title: 'ICF', description: 'Manage informed consent form tracking and versions.' }) })
+const ctmsTrackLogsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/track-logs', component: () => createElement(CTMSStudyAreaRoute, { resource: 'tracking_log', title: 'Track Logs', description: 'Maintain study-level operational tracking logs.' }) })
+
+// Legacy CTMS paths remain registered so saved links and bookmarks keep working.
 const ctmsProfileRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/profile', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'profile' }) })
 const ctmsPlansRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/plans', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'plans' }) })
 const ctmsEnrollmentRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/enrollment', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'enrollment' }) })
@@ -373,6 +401,7 @@ const ctmsMonitoringActivitiesRoute = createRoute({ getParentRoute: () => appShe
 const ctmsProjectionsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/projections', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'projections' }) })
 const ctmsFailedEventsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/coordination/failed-events', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'failed-events' }) })
 const ctmsConflictsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/coordination/conflicts', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'conflicts' }) })
+const ctmsCatalogReportRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/reports/$category/$report', component: () => createElement(CTMSCatalogReportRoute) })
 const ctmsReportsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/reports/$type', component: () => createElement(CTMSReportRoute) })
 const ctmsExportsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/exports', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'exports' }) })
 const ctmsHealthRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/health', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'health' }) })
@@ -413,9 +442,36 @@ function CTMSStudyWorkspaceRoute({ view }: { view: CTMSView }) {
   return createElement(CTMSWorkspacePage, { view, studyId: params.studyId })
 }
 
+function CTMSStudyAreaRoute({ title, description, resource }: { title: string; description: string; resource: CTMSStudyOperationResource }) {
+  const params = useParams({ strict: false })
+  return createElement(CTMSStudyAreaPage, { studyId: params.studyId, title, description, resource })
+}
+
+function CTMSFinancialRoute({ initialTab }: { initialTab: 'overview' | 'contracts' | 'budgets' | 'payments' | 'invoices' | 'reporting' }) {
+  const params = useParams({ strict: false })
+  return createElement(FinancialManagementPage, { studyId: params.studyId, initialTab })
+}
+
+function CTMSMonitoringRoute({ view }: { view: MonitoringModuleView }) {
+  const params = useParams({ strict: false })
+  return createElement(MonitoringModulePage, { studyId: params.studyId, view })
+}
+
 function CTMSReportRoute() {
   const params = useParams({ strict: false })
   return createElement(CTMSWorkspacePage, { view: 'reports', studyId: params.studyId, reportType: params.type })
+}
+
+function CTMSCatalogReportRoute() {
+  const params = useParams({ strict: false })
+  const report = findCTMSReportDefinition(params.category, params.report)
+  return createElement(CTMSCatalogReportPage, {
+    studyId: params.studyId,
+    category: params.category,
+    reportType: params.report,
+    title: report?.label ?? 'Report',
+    description: report?.description ?? 'The requested CTMS report is not configured.',
+  })
 }
 
 function CTMSSiteWorkspaceRoute() {
@@ -439,6 +495,7 @@ const designerArmsRoute = createRoute({ getParentRoute: () => appShellLayout, pa
 const designerCrfAccessRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/crf-access', component: () => createElement(DesignerResourceRoute, { Component: CrfAccessPage }) })
 const designerRawDataVariablesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/raw-data-variables', component: () => createElement(DesignerResourceRoute, { Component: RawDataVariablesPage }) })
 const designerCodingSettingsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/coding-settings', component: () => createElement(DesignerResourceRoute, { Component: CodingSettingsPage }) })
+const designerVersionsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/designer/versions', component: () => createElement(DesignerResourceRoute, { Component: StudyVersioningPage }) })
 // Study-context-scoped designer routes (sidebar entry points, mirroring the
 // edit-checks pattern). studyId is resolved from the active study context.
 const designerCodelistsCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/codelists', component: () => createElement(DesignerResourceRoute, { Component: CodelistsPage }) })
@@ -449,6 +506,7 @@ const designerArmsCtxRoute = createRoute({ getParentRoute: () => appShellLayout,
 const designerCrfAccessCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/crf-access', component: () => createElement(DesignerResourceRoute, { Component: CrfAccessPage }) })
 const designerRawDataVariablesCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/raw-data-variables', component: () => createElement(DesignerResourceRoute, { Component: RawDataVariablesPage }) })
 const designerCodingSettingsCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/coding-settings', component: () => createElement(DesignerResourceRoute, { Component: CodingSettingsPage }) })
+const designerVersionsCtxRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/designer/versions', component: () => createElement(DesignerResourceRoute, { Component: StudyVersioningPage }) })
 // Form Builder (CRF design) and Edit Checks (CRF design) now live under the
 // Designer area, mirroring the designer resource pattern: a study-scoped route
 // and a study-context-scoped sidebar entry point. The legacy /forms,
@@ -520,6 +578,7 @@ const routeTree = rootRoute.addChildren([
       designerCrfAccessRoute,
       designerRawDataVariablesRoute,
       designerCodingSettingsRoute,
+      designerVersionsRoute,
       designerCodelistsCtxRoute,
       designerSubjectPhasesCtxRoute,
       designerVisitsCtxRoute,
@@ -528,6 +587,7 @@ const routeTree = rootRoute.addChildren([
       designerCrfAccessCtxRoute,
       designerRawDataVariablesCtxRoute,
       designerCodingSettingsCtxRoute,
+      designerVersionsCtxRoute,
       designerFormsRoute,
       designerFormsCtxRoute,
       designerEditChecksRoute,
@@ -539,7 +599,32 @@ const routeTree = rootRoute.addChildren([
       notificationsRoute,
       exportsRoute,
       ctmsRoute,
+      ctmsEntitiesRoute,
+      ctmsReferencesRoute,
       ctmsStudyWorkspaceRoute,
+      ctmsStudyDetailsRoute,
+      ctmsProjectManagementRoute,
+      ctmsProjectMilestonesRoute,
+      ctmsMasterActivitiesRoute,
+      ctmsFinancialOverviewRoute,
+      ctmsContractsRoute,
+      ctmsPricingTemplatesRoute,
+      ctmsBudgetsRoute,
+      ctmsPaymentsRoute,
+      ctmsInvoicesRoute,
+      ctmsFinancialReportsRoute,
+      ctmsRactRoute,
+      ctmsKriRoute,
+      ctmsMonitoringOverviewRoute,
+      ctmsMonitoringPlanRoute,
+      ctmsMonitoringVisitRoute,
+      ctmsMonitoringFindingsRoute,
+      ctmsMonitoringRiskRoute,
+      ctmsMonitoringReportsRoute,
+      ctmsMonitoringIssuesRoute,
+      ctmsProtocolDeviationsRoute,
+      ctmsIcfRoute,
+      ctmsTrackLogsRoute,
       ctmsProfileRoute,
       ctmsPlansRoute,
       ctmsEnrollmentRoute,
@@ -551,6 +636,7 @@ const routeTree = rootRoute.addChildren([
       ctmsProjectionsRoute,
       ctmsFailedEventsRoute,
       ctmsConflictsRoute,
+      ctmsCatalogReportRoute,
       ctmsReportsRoute,
       ctmsExportsRoute,
       ctmsHealthRoute,

@@ -11,6 +11,7 @@ import {
 import { cn } from '@/lib/utils'
 import type {
   CTMSNavigationViewSection,
+  DesignerNavigationViewSection,
   EDCNavigationItem,
   NavigationSection,
   PVNavigationViewSection,
@@ -22,10 +23,13 @@ export interface AppSidebarProps {
   collapsed: boolean
   onCollapsedChange: (collapsed: boolean) => void
   edcSections: readonly NavigationSection[]
+  designerSections: readonly DesignerNavigationViewSection[]
   ctmsSections: readonly CTMSNavigationViewSection[]
   pvSections: readonly PVNavigationViewSection[]
   /** Keeps the existing capability gate visible even when no CTMS item is resolved. */
   showCTMS: boolean
+  /** Whether the signed-in user has at least one Designer permission. */
+  showDesigner: boolean
   /** Keeps the PV capability gate visible even when no PV item is resolved. */
   showPV: boolean
   /** The module whose navigation hierarchy should be displayed. */
@@ -53,9 +57,9 @@ function NavigationLink({
   activeOptions,
   onNavigate,
 }: {
-  item: EDCNavigationItem | CTMSNavigationViewSection['items'][number] | PVNavigationViewSection['items'][number]
+  item: EDCNavigationItem | DesignerNavigationViewSection['items'][number] | CTMSNavigationViewSection['items'][number] | PVNavigationViewSection['items'][number]
   collapsed: boolean
-  activeOptions?: { readonly exact: false }
+  activeOptions?: { readonly exact: boolean }
   onNavigate?: () => void
 }) {
   return (
@@ -121,11 +125,61 @@ function CTMSSection({
   const headingId = sectionHeadingId('ctms', section.id)
 
   return (
+    <section aria-labelledby={section.label ? headingId : undefined}>
+      {section.label ? (
+        <h2
+          id={headingId}
+          className={cn(
+            'px-3 pb-1 pt-3 text-[0.6875rem] font-medium text-muted-foreground',
+            collapsed && 'sr-only',
+          )}
+        >
+          {section.label}
+        </h2>
+      ) : null}
+      <div className="space-y-0.5">
+        {section.items.map((item, index) => {
+          const startsGroup = Boolean(item.group && item.group !== section.items[index - 1]?.group)
+          return (
+            <div key={item.id}>
+              {startsGroup ? (
+                <h3 className={cn('px-3 pb-1 pt-2 text-[0.6875rem] font-medium text-muted-foreground', collapsed && 'sr-only')}>
+                  {item.group}
+                </h3>
+              ) : null}
+              <div className={cn(item.group && !collapsed && 'pl-2')}>
+                <NavigationLink
+                  item={item}
+                  collapsed={collapsed}
+                  activeOptions={item.activeOptions}
+                  onNavigate={onNavigate}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function DesignerSection({
+  section,
+  collapsed,
+  onNavigate,
+}: {
+  section: DesignerNavigationViewSection
+  collapsed: boolean
+  onNavigate?: () => void
+}) {
+  const headingId = sectionHeadingId('designer', section.id)
+
+  return (
     <section aria-labelledby={headingId}>
       <h2
         id={headingId}
         className={cn(
-          'px-3 pb-1 pt-3 text-[0.6875rem] font-medium text-muted-foreground',
+          'px-3 pb-1 pt-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground',
           collapsed && 'sr-only',
         )}
       >
@@ -186,18 +240,22 @@ function PVSection({
 function NavigationSections({
   collapsed,
   edcSections,
+  designerSections,
   ctmsSections,
   pvSections,
   showCTMS,
+  showDesigner,
   showPV,
   activeModule,
   onNavigate,
 }: {
   collapsed: boolean
   edcSections: readonly NavigationSection[]
+  designerSections: readonly DesignerNavigationViewSection[]
   ctmsSections: readonly CTMSNavigationViewSection[]
   pvSections: readonly PVNavigationViewSection[]
   showCTMS: boolean
+  showDesigner: boolean
   showPV: boolean
   activeModule?: AppModule
   onNavigate?: () => void
@@ -208,6 +266,14 @@ function NavigationSections({
         <div className="space-y-1">
           {edcSections.map((section) => (
             <EDCSection key={section.id} section={section} collapsed={collapsed} onNavigate={onNavigate} />
+          ))}
+        </div>
+      )}
+
+      {showDesigner && (activeModule === undefined || activeModule === 'designer') && (
+        <div className="space-y-1" aria-label="Designer navigation">
+          {designerSections.map((section) => (
+            <DesignerSection key={section.id} section={section} collapsed={collapsed} onNavigate={onNavigate} />
           ))}
         </div>
       )}
@@ -259,16 +325,24 @@ export function AppSidebar({
   collapsed,
   onCollapsedChange,
   edcSections,
+  designerSections,
   ctmsSections,
   pvSections,
   showCTMS,
+  showDesigner,
   showPV,
   activeModule,
   onModuleChange = () => undefined,
   mobileOpen = false,
   onMobileOpenChange = () => undefined,
 }: AppSidebarProps) {
-  const moduleLabel = activeModule === 'ctms' ? 'CTMS' : activeModule === 'pv' ? 'PV' : 'EDC'
+  const moduleLabel = activeModule === 'designer'
+    ? 'Designer'
+    : activeModule === 'ctms'
+      ? 'CTMS'
+      : activeModule === 'pv'
+        ? 'PV'
+        : 'EDC'
 
   const moduleSwitcher = (mobile = false) => (
     <div className={cn('border-b border-sidebar-border px-3 py-2', mobile && 'px-0')}>
@@ -294,6 +368,7 @@ export function AppSidebar({
             className="h-9 w-full rounded-md border border-sidebar-border bg-sidebar-accent px-2 text-sm font-medium text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           >
             <option value="edc">EDC</option>
+            <option value="designer" disabled={!showDesigner}>Designer{!showDesigner ? ' (Unavailable)' : ''}</option>
             <option value="ctms" disabled={!showCTMS}>CTMS{!showCTMS ? ' (Unavailable)' : ''}</option>
             <option value="pv" disabled={!showPV}>PV{!showPV ? ' (Unavailable)' : ''}</option>
           </select>
@@ -346,9 +421,11 @@ export function AppSidebar({
           <NavigationSections
             collapsed={collapsed}
             edcSections={edcSections}
+            designerSections={designerSections}
             ctmsSections={ctmsSections}
             pvSections={pvSections}
             showCTMS={showCTMS}
+            showDesigner={showDesigner}
             showPV={showPV}
             activeModule={activeModule}
           />
@@ -376,9 +453,11 @@ export function AppSidebar({
             <NavigationSections
               collapsed={false}
               edcSections={edcSections}
+              designerSections={designerSections}
               ctmsSections={ctmsSections}
               pvSections={pvSections}
               showCTMS={showCTMS}
+              showDesigner={showDesigner}
               showPV={showPV}
               activeModule={activeModule}
               onNavigate={() => onMobileOpenChange(false)}

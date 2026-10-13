@@ -145,11 +145,11 @@ async def phase1_data(phase1_session: AsyncSession) -> dict[str, Any]:
 
     study = Study(
         id=uuid4(), study_code=f"PHASE1-{uuid4()}", title="Phase 1 qualification study",
-        status=StudyStatus.active, created_by=admin.id, created_at=now,
+        sponsor="Platform sponsor", status=StudyStatus.active, created_by=admin.id, created_at=now,
     )
     other_study = Study(
         id=uuid4(), study_code=f"PHASE1-OTHER-{uuid4()}", title="Out of scope study",
-        status=StudyStatus.active, created_by=admin.id, created_at=now,
+        sponsor="Other platform sponsor", status=StudyStatus.active, created_by=admin.id, created_at=now,
     )
     phase1_session.add_all([study, other_study])
     await phase1_session.flush()
@@ -274,6 +274,25 @@ def _headers(user: User) -> dict[str, str]:
     return {"Authorization": f"Bearer {create_access_token(user.id)}"}
 
 
+def _operational_profile_payload(**overrides: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "phase": "Phase II",
+        "study_type": "Interventional",
+        "main_purpose": "Treatment",
+        "blind_method": "Double blind",
+        "randomized": True,
+        "expected_subject_count": 100,
+        "language": "English",
+        "expected_site_count": 10,
+        "construction_period": "24 months",
+        "planned_start_date": "2026-01-15",
+        "planned_end_date": "2027-12-31",
+        "study_currency": "USD",
+    }
+    payload.update(overrides)
+    return payload
+
+
 _EDC_BOUNDARY_MODELS = (
     StudyVersion,
     Subject,
@@ -357,20 +376,19 @@ async def test_phase1_api_workflow_and_all_edc_boundary_snapshots_remain_unchang
 
     profile_response = await phase1_client.post(
         f"/api/v1/ctms/studies/{study_id}/operational-profile",
-        json={
-            "sponsor": "Operational sponsor",
-            "phase": "Phase II",
-            "therapeutic_area": "Oncology",
-            "indication": "Qualification indication",
-            "planning_metadata": {"region": "Global"},
-            "readiness_criteria": {"minimum_sites": 1},
-            "correlation_id": "phase1-profile",
-        },
+        json=_operational_profile_payload(
+            therapeutic_area="Oncology",
+            indication="Qualification indication",
+            planning_metadata={"region": "Global"},
+            readiness_criteria={"minimum_sites": 1},
+            correlation_id="phase1-profile",
+        ),
         headers=admin_headers,
     )
     assert profile_response.status_code == 201, profile_response.text
     profile = profile_response.json()
     assert UUID(profile["study_id"]) == study_id
+    assert profile["sponsor"] == "Platform sponsor"
     assert profile["status"] == "Draft"
     profile_id = profile["id"]
 
@@ -478,7 +496,7 @@ async def test_phase1_roles_scope_and_viewer_denials_are_side_effect_free(
     study_id = phase1_data["study"].id
     profile = await phase1_client.post(
         f"/api/v1/ctms/studies/{study_id}/operational-profile",
-        json={"sponsor": "Scoped test"}, headers=_headers(phase1_data["admin"]),
+        json=_operational_profile_payload(), headers=_headers(phase1_data["admin"]),
     )
     assert profile.status_code == 201, profile.text
 
@@ -516,7 +534,7 @@ async def test_phase1_audit_failure_rolls_back_ctms_mutation_without_touching_ed
             phase1_session,
             study_id=other_study_id,
             actor_id=phase1_data["admin"].id,
-            payload={"sponsor": "Must roll back"},
+            payload=_operational_profile_payload(),
             correlation_id="phase1-audit-failure",
         )
     await phase1_session.rollback()

@@ -121,7 +121,7 @@ The following matrix is the required disposition of the existing EDC capabilitie
 | Audit_Service | EDC Requirement 18 and cross-cutting audit criteria | Shared Platform with module-owned event content | Shared immutable append-only primitive; EDC owns clinical audit events and CTMS owns operational audit events. |
 | Request context and API conventions | EDC Requirements 21, 23 | Shared Platform | Shared request ID, correlation context, error envelope, pagination, validation, and route-to-service conventions. |
 | Study_Service | EDC Requirement 4 | Split: Shared Platform, CTMS, EDC | Shared canonical Study identity; Operational_Study_Service owns operational profile/planning/readiness; EDC owns Study_Version and clinical configuration references. |
-| Site_Service | EDC Requirement 6 | Split: Shared Platform, CTMS, EDC | Shared canonical Site identity; Operational_Site_Service owns operational profile/activation/contacts/readiness; EDC owns clinical site references and clinical configuration use. |
+| Site_Service | EDC Requirement 6 | Split: Shared Platform, CTMS, EDC | CTMS creates Sites and registers the generated identifier as the shared canonical Site identity; Operational_Site_Service owns operational profile/activation/contacts/readiness; EDC consumes the shared Site reference for clinical configuration use. |
 | Subject_Service | EDC Requirement 7 | Split: CTMS and EDC | Clinical_Subject_Registry owns identity, identifiers, site/study-version binding, clinical data, and EDC access state; Enrollment_Service owns operational recruitment/enrollment status and milestones, exposed to EDC as approved projections or explicit coordinated transitions. |
 | Visit_Service | EDC Requirement 8 | Split: CTMS and EDC | Protocol_Visit_Service remains EDC-owned for protocol definitions, Visit_Instances, dates, windows, and casebooks; Monitoring_Service owns separate operational monitoring visits linked by reference only. |
 | Form_Metadata_Service | EDC Requirement 9 | EDC | EDC owns eCRF metadata, forms, fields, code lists, and clinical configuration. |
@@ -188,16 +188,30 @@ The following matrix is the required disposition of the existing EDC capabilitie
 
 #### Acceptance Criteria
 
-1. WHEN an authorized User creates an operational study profile, THE Operational_Study_Service SHALL persist the canonical Study reference and the CTMS-owned sponsor, phase, therapeutic area, indication, operational owner, and planning metadata.
+1. WHEN an authorized User creates an operational study profile, THE Operational_Study_Service SHALL persist the canonical Study reference and the CTMS-owned phase, study type, main purpose, therapeutic area, program, indication, description, investigational product, blinding, randomization, expected subject/site counts, language, construction period, planned/actual dates, currency/exchange date, query expected days, operational owner, and planning metadata.
 2. THE Operational_Study_Service SHALL persist study plans, enrollment plans, operational milestones, readiness criteria, and operational status separately from Study_Version and clinical configuration.
 3. THE Operational_Study_Service SHALL support the operational study statuses Draft, Planning, Ready, Active, Enrollment Closed, Suspended, and Closed.
 4. WHILE an operational study is Active, THE Operational_Study_Service SHALL retain each operational status change with actor, UTC timestamp, and reason.
 5. WHEN an authorized User updates operational study metadata, THE Audit_Service SHALL record a CTMS operational Audit_Event without changing EDC Study_Version or clinical metadata.
-6. THE Operational_Study_Service SHALL preserve the canonical EDC Study identifier as a read-only reference.
+6. THE Operational_Study_Service SHALL preserve the platform-managed canonical Study identifier as a read-only reference.
 7. THE EDC_System SHALL expose a read-only projection of approved CTMS operational study status when the configured Status_Ownership_Rule permits that projection.
 8. THE Operational_Study_Service SHALL not change protocol visit definitions, eCRF metadata, clinical edit checks, Clinical_Subject_Registry records, or Clinical_Data.
 9. IF an authorized User requests an operational study outside the User's Authorization_Scope, THEN THE Operational_Study_Service SHALL reject the request.
 10. WHEN an operational study is archived, THE Operational_Study_Service SHALL retain its operational records and linked canonical identity.
+11. THE Shared Platform SHALL be the only authority that creates canonical Studies and changes canonical Study name or sponsor; Aurinara EDC and CTMS SHALL consume those fields as read-only projections.
+12. THE Entity_Management_Service SHALL configure reusable Country, Site, Depot, Staff, Participating Organization, and Investigational Product entities independently of a Study.
+13. WHEN an authorized User adds an entity to a Study, THE Entity_Management_Service SHALL require an active configured entity, preserve its stable identifier, enforce study scope, reject duplicate assignments, and audit the assignment atomically.
+14. THE CTMS_System SHALL maintain configurable Country, Participating Organization Type, Therapeutic Area, and Indication reference values, supply only active values to linked dropdown fields, and audit reference-value changes.
+15. WHEN an authorized User creates a Site in CTMS, THE Entity_Management_Service SHALL generate the Site identifier, create the shared canonical Site with that same identifier, associate it with the selected Study, and SHALL not require the User to enter an identifier manually.
+16. THE Operational_Study_Service SHALL persist study-scoped Contract, Pricing Template, Payment Trigger/Request, RACT, KRI, Monitoring Issue, Protocol Deviation, ICF, and Tracking Log records with owner, status, dates, optional canonical references, retention metadata, and immutable audit/outbox traceability.
+17. THE Operational_Study_Service SHALL validate Site and Subject references against the requested Study and SHALL treat Subject and other clinical identifiers as reference-only values that cannot mutate EDC clinical records.
+18. THE Operational_Study_Service SHALL manage project Milestones and Master Activities at exactly one of Study, Country, or Site level, where an omitted Country or Site represents all countries or all sites in the Study.
+19. WHEN a User links a Master Activity to a Milestone, THE Operational_Study_Service SHALL require the activity and milestone to have the same level and the same selected Country or Site scope.
+20. A project Milestone SHALL include name, description, configured Milestone Type, target date, and lifecycle status; Milestone Type SHALL be supplied by active Reference Data rather than free text.
+21. A Master Activity SHALL include name, description, optional linked Milestone, start/due dates, lifecycle status, and optional assignments to an existing Role and an active User available in the Study scope.
+22. THE Frontend_Application SHALL present Master Activities as a Jira-style Kanban board whose ordered columns come from active Project Status reference values, SHALL preserve stable status codes when administrators edit display labels or order, and SHALL persist authorized status movement through the CTMS API.
+23. THE Frontend_Application SHALL expose one Project Management navigation destination that combines the activity board, list, Gantt-style timeline, and milestone-to-activity hierarchy in one native workspace with right-drawer create/edit flows.
+24. WHEN a Milestone has linked Master Activities, THE Operational_Study_Service SHALL reject a Milestone scope change that would make those activities inconsistent.
 
 ### Requirement 4: Operational site management
 
@@ -211,7 +225,7 @@ The following matrix is the required disposition of the existing EDC capabilitie
 4. WHEN a site activation action is completed, THE Operational_Site_Service SHALL record the completion actor, UTC timestamp, and evidence reference.
 5. WHEN operational site status changes, THE Coordination_Service SHALL publish only the approved CTMS_Operational_Projection fields to EDC.
 6. THE EDC_System SHALL expose a read-only projection of CTMS-owned operational site status when the configured Status_Ownership_Rule permits that projection.
-7. THE Operational_Site_Service SHALL preserve the canonical EDC Site identifier as a read-only reference.
+7. THE Operational_Site_Service SHALL preserve the CTMS-generated canonical Site identifier as the stable shared reference consumed by EDC and the platform.
 8. THE Operational_Site_Service SHALL not change EDC clinical site configuration, study-version binding, subject records, Visit_Instances, or Clinical_Data.
 9. WHEN an EDC Site is archived, THE Operational_Site_Service SHALL mark linked operational records Archived or Site Archived according to the configured rule.
 10. IF an authorized User requests a site operation outside the User's Authorization_Scope, THEN THE Operational_Site_Service SHALL reject the request without changing operational or clinical state.
@@ -417,6 +431,9 @@ The following matrix is the required disposition of the existing EDC capabilitie
 14. IF a CTMS worker is unavailable, THEN THE Coordination_Service SHALL retain accepted events and SHALL not block EDC clinical capture, clinical audit, authentication, clinical export, or clinical workflow operations.
 15. IF coordination volume exceeds configured capacity, THEN THE Coordination_Service SHALL apply bounded backpressure or queueing while preserving accepted event ordering and idempotency.
 16. THE CTMS_Module SHALL continue core EDC operations when no CTMS operational records have been configured.
+17. THE Dashboard_Service SHALL expose the canonical Project Management, CRF, and Query report catalog requested by the CTMS frontend.
+18. Project Management reports SHALL use scope-limited CTMS operational records; CRF and Query reports SHALL use only current, approved, minimized read-only projections and SHALL not query or mutate EDC clinical tables directly.
+19. THE Dashboard_Service SHALL return projection provenance and read-only ownership labels for every projected CRF or Query report row.
 
 ### Requirement 14: Phased delivery and verification
 
@@ -434,6 +451,31 @@ The following matrix is the required disposition of the existing EDC capabilitie
 8. THE Unified_Clinical_Platform SHALL independently verify idempotency, ordering, projection rebuild safety, retries, Failed_Events, and Coordination_Conflicts.
 9. THE Unified_Clinical_Platform SHALL provide automated backend, frontend, permission, audit, security, coordination, report, and export tests for every delivered CTMS phase.
 10. THE Frontend_Application SHALL preserve all baseline EDC clinical workflows when CTMS functionality is disabled or has no configured operational records.
+
+### Requirement 15: Contract-driven financial operations
+
+**User Story:** As a CTMS finance user, I want executed contract terms to drive traceable payables, invoice matching, and settlement reconciliation, so that financial obligations are calculated consistently without turning CTMS into the bank or general ledger.
+
+#### Acceptance Criteria
+
+1. THE Financial_Service SHALL store sponsor, site, and vendor contracts with accounts-receivable or accounts-payable direction, party, Study/Site scope, currency, lifecycle status, owner, and immutable audit/outbox traceability.
+2. WHEN a contract is executed, THE Financial_Service SHALL lock its effective-dated version and structured payment terms; subsequent changes SHALL create an amendment version rather than overwrite executed terms.
+3. THE Financial_Service SHALL support fixed, visit-based, procedure-based, milestone-based, recurring, pass-through, and manual-adjustment payment methods with configured rates, holdbacks, quantity caps, and amount caps.
+4. WHEN a verified financial event matches an executed effective contract term, THE Financial_Service SHALL create an idempotent payable item containing gross, holdback, net, currency, source evidence, term identifier, contract-version identifier, and an immutable calculation snapshot.
+5. THE Financial_Service SHALL validate canonical Site, Subject, and Visit_Instance references against the requested Study and SHALL consume EDC Visit_Instance data by reference only.
+6. THE Financial_Service SHALL require an explicit approval before a payable can be matched to an invoice and SHALL retain approval actor, UTC timestamp, reason, and audit context.
+7. THE Financial_Service SHALL support partial invoice matching without allowing matched lines to exceed the approved net payable or cross contract, direction, Study, or currency boundaries.
+8. THE Financial_Service SHALL support partial settlement allocations, reject over-allocation, and reconcile invoice status while treating an ERP or payment provider as authoritative for bank settlement and general-ledger posting.
+9. THE Financial_Service SHALL derive contracted, earned, held, approved, invoiced, paid, outstanding, and overdue values from the shared financial ledger rather than store independent mutable totals.
+10. THE Frontend_Application SHALL expose one Study Financials workspace with Overview, Contracts, Budgets, Payments, Invoices, and Reporting tabs while server-side authorization remains authoritative; the study navigation SHALL NOT duplicate those tabs as separate left-navigation destinations.
+11. THE Financial_Service SHALL store versioned study, site, or vendor budgets with decimal quantity, unit cost, planned amount, currency, effective date, approval actor/time/reason, and exactly one current approved baseline per budget.
+12. WHEN a budget version is approved, THE Financial_Service SHALL preserve prior versions as superseded and SHALL derive approved-budget and budget-variance values from approved budget lines rather than independent mutable totals.
+13. THE Contract_Management interface SHALL expose Details, Documents, Budget, Payment Terms, Amendments, and Audit Trail views; executed contract documents SHALL use CTMS-owned operational attachments and executed terms SHALL remain immutable.
+14. THE Financial_Service SHALL expose contract lifecycle transitions, immutable audit history, payment reversal records, invoice-aging buckets, and invoice-due-date cash-flow forecasts without deleting the original regulated financial records.
+15. THE Financial_Service SHALL model each contract version as a multi-item rate card and SHALL support fixed-amount, visit-based, CRF-based, invoice-based, lab-based, and quantity-based charge items in addition to procedure, milestone, recurring, pass-through, and adjustment items.
+16. EACH contract charge item SHALL support a trigger code, decimal unit rate, cost category, billing unit, frequency, quantity cap, amount cap, holdback, and optional reporting dimensions without requiring separate pricing-template or payment-trigger records.
+17. THE Financial_Service SHALL link a contract to an active Participating_Organization assigned to the Study and SHALL reject inactive, deleted, unassigned, or non-organization master-data references.
+18. WHEN a charge item references an EDC visit or CRF definition, THE Financial_Service SHALL validate that the definition belongs to a published Study_Version for the requested Study, SHALL consume EDC instances by reference only, and SHALL include the matched organization, definition, and dimensions in the immutable payable calculation snapshot.
 
 ## Correctness Properties
 
@@ -581,7 +623,7 @@ The API_Layer SHALL return `X-Request-ID` for every response. Asynchronous CTMS 
 
 Property-based tests SHALL use Hypothesis for canonical identity, ownership rules, authorization, projection minimization, idempotency, ordering, operational state machines, retry classification, conflict policies, report scoping, attachment boundaries, export separation, pagination, and serialization logic, with a minimum of 100 generated examples per property. Internal workers, repositories, file stores, notification providers, and export stores SHALL be deterministic fakes. Tests SHALL not call external services.
 
-Each acceptance criterion in Requirements 1–14 SHALL map to at least one automated example, unit, module, security, UI, API-contract, or property-based test. A test SHALL verify each atomic response independently when a criterion contains multiple response obligations.
+Each acceptance criterion in Requirements 1–15 SHALL map to at least one automated example, unit, module, security, UI, API-contract, or property-based test. A test SHALL verify each atomic response independently when a criterion contains multiple response obligations.
 
 Example and module tests SHALL cover:
 
@@ -597,6 +639,7 @@ Example and module tests SHALL cover:
 - Operational_Attachment versus Clinical_Attachment access and retention;
 - CTMS operational exports versus EDC clinical exports using shared export job infrastructure;
 - operational dashboards, reports, notifications, health responses, worker outage, backpressure, retention, and frontend fallback behavior.
+- contract rate-card methods, organization and published EDC definition links, dimension matching, immutable calculation snapshots, budgets, invoice matching, settlement, reversal, and financial reporting.
 
 Qualification tests SHALL cover the ownership matrix, canonical identity, CTMS non-modification of EDC Study_Version and Clinical_Subject_Registry records, protocol visit and monitoring visit separation, subject enrollment projection rules, authorization scope, audit immutability, data minimization, idempotency, ordering, retries, Failed_Events, Coordination_Conflicts, operational export content, attachment separation, backup/restore, retention, worker outage behavior, and production rollout controls.
 
@@ -616,6 +659,7 @@ Frontend tests SHALL cover CTMS workspaces, operational status ownership labels,
 - Requirement 12 defines audit, attachment, export, privacy, and retention boundaries.
 - Requirement 13 defines operational dashboards, reports, notifications, health, resilience, and optional-module behavior.
 - Requirement 14 defines phased delivery and independent verification of the ownership boundary.
+- Requirement 15 defines the contract-driven financial ledger, configurable multi-item rate cards, organization/EDC links, budgets, payables, invoices, settlements, and reporting.
 - Properties 1–4 verify canonical identity, ownership, shared authorization, and operational lifecycle behavior.
 - Properties 5–8 verify enrollment, monitoring, work management, and clinical-state protection.
 - Properties 9–15 verify projection minimization, coordination correctness, audit, and traceability.

@@ -46,6 +46,10 @@ _PERMISSION_ALIASES: dict[str, str] = {
 
 def normalize_permission_code(permission: str) -> str:
     """Normalize human-readable CTMS/PV permission names to stored codes."""
+    if permission.startswith("ctms."):
+        return CTMS_PERMISSION_ALIASES.get(permission.removeprefix("ctms."), permission)
+    if permission.startswith("pv."):
+        return PV_PERMISSION_ALIASES.get(permission.removeprefix("pv."), permission)
     return _PERMISSION_ALIASES.get(permission, permission)
 
 

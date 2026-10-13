@@ -16,8 +16,11 @@ The maximum positive cache window is 60 seconds. User and membership events inva
 cached decisions early. Applied event IDs and aggregate sequences make canonical user,
 study, and membership projections idempotent and safe under replay or reordering.
 
-Canonical study events update identity and registry fields only. EDC continues to own
-protocol metadata, clinical status, sites, versions, subjects, and clinical data.
+Canonical study events update identity and registry fields only. CTMS creates shared
+Site identities and registers their stable IDs and display metadata with Platform so
+site-scoped memberships select a Site instead of accepting a manually entered UUID. EDC
+continues
+to own protocol metadata, clinical status, versions, subjects, and clinical data.
 Authorization decision IDs and policy versions are copied into immutable EDC audit
 events. Attachments carrying `platform_object_id` are downloaded through the gateway;
 storage keys and credentials never reach the frontend.
@@ -61,6 +64,7 @@ After Cognito enrollment and shadow reconciliation are complete, set
 endpoints. Keep it enabled during shadow rollout so existing authorization behavior is
 unchanged.
 
-The service account needs `platform.authorization.decide` and the applicable
-`aurinara-edc.object.*` permissions. End-user tokens are validated locally against JWKS;
-no per-request authentication callback is made to the identity provider.
+The service account needs `platform.authorization.decide`, `edc.role.sync`,
+`edc.site.sync`, and the applicable `aurinara-edc.object.*` permissions. End-user tokens
+are validated locally against JWKS; no per-request authentication callback is made to the
+identity provider.
