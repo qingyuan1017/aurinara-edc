@@ -10,7 +10,7 @@ import { AcceptInvitationPage } from '@/features/auth/AcceptInvitationPage'
 import { AccessDeniedPage } from '@/features/auth/AccessDeniedPage'
 import { AuditViewerPage, UserListPage } from '@/features/admin'
 import { AIAssistantPage } from '@/features/ai'
-import { CTMSCatalogReportPage, CTMSHomePage, CTMSStudyAreaPage, CTMSWorkspacePage, EntityManagementPage, FinancialManagementPage, MonitoringModulePage, ReferenceDataPage, type CTMSStudyOperationResource, type CTMSView, type MonitoringModuleView } from '@/features/ctms'
+import { CTMSCatalogReportPage, CTMSHomePage, CTMSPlannedWorkspacePage, CTMSPortfolioWorkspacePage, CTMSStudyAreaPage, CTMSWorkspacePage, EntityManagementPage, FinancialManagementPage, MonitoringModulePage, PortfolioOperationsPage, ReferenceDataPage, type CTMSStudyOperationResource, type CTMSView, type MonitoringModuleView } from '@/features/ctms'
 import { findCTMSReportDefinition } from '@/features/ctms/reportCatalog'
 import { PVHomePage, PVWorkspacePage, type PVView } from '@/features/pv'
 import { ExportCenterPage } from '@/features/exports'
@@ -27,6 +27,7 @@ import { FormEntryPage } from '@/features/forms'
 import { QueryListPage, QueryDetailPage } from '@/features/queries'
 import { SubjectSignaturesPage } from '@/features/signatures'
 import { VisitListPage } from '@/features/visits'
+import { EDCWorkspacePage, type EDCWorkspaceView } from '@/features/edc'
 import { useStudyContext } from './study-context'
 
 /**
@@ -344,6 +345,62 @@ const reviewRoute = createRoute({
 })
 function StudyScopedReviewRoute() { const studyId = useStudyContext((state) => state.selectedStudyId); return studyId ? createElement(ReviewWorklistPage, { studyId }) : createElement('p', { className: 'text-muted-foreground' }, 'Select a study to view the review worklist.') }
 
+function StudyEDCWorkspaceRoute({ view }: { view: EDCWorkspaceView }) {
+  const params = useParams({ strict: false })
+  return createElement(EDCWorkspacePage, { studyId: String(params.studyId), view })
+}
+
+function StudyEDCSubjectRoute() {
+  const params = useParams({ strict: false })
+  return createElement(SubjectCasebookPage, { subjectId: String(params.subjectId), studyId: String(params.studyId) })
+}
+
+function StudyEDCSubjectVisitsRoute() {
+  const params = useParams({ strict: false })
+  return createElement(VisitListPage, { subjectId: String(params.subjectId) })
+}
+
+function StudyEDCFormRoute() {
+  const params = useParams({ strict: false })
+  return createElement(FormEntryPage, { formInstanceId: String(params.formId) })
+}
+
+function StudyEDCQueryDetailRoute() {
+  const params = useParams({ strict: false })
+  return createElement(QueryDetailPage, { queryId: String(params.queryId), studyId: String(params.studyId) })
+}
+
+const edcOverviewRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/overview', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'overview-dashboard' }) })
+const edcCollectionProgressRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/overview/data-collection-progress', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'overview-progress' }) })
+const edcOutstandingActivitiesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/overview/outstanding-activities', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'overview-activities' }) })
+const edcSubjectsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/subjects', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'subject-list' }) })
+const edcSubjectProfileDirectoryRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/subjects/profile', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'subject-profile' }) })
+const edcSubjectVisitsFormsDirectoryRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/subjects/visits-forms', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'subject-visits-forms' }) })
+const edcSubjectRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/subjects/$subjectId', component: StudyEDCSubjectRoute })
+const edcSubjectVisitsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/subjects/$subjectId/visits', component: StudyEDCSubjectVisitsRoute })
+const edcFormRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/subjects/$subjectId/visits/$visitId/forms/$formId', component: StudyEDCFormRoute })
+const edcDataEntryRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/data-entry', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'data-entry' }) })
+const edcIncompleteFormsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/data-entry/incomplete-forms', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'incomplete-forms' }) })
+const edcChangeHistoryRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/data-entry/change-history', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'change-history' }) })
+const edcReviewDashboardRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/data-review', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'review-dashboard' }) })
+const edcFormsReviewRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/data-review/forms', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'forms-review' }) })
+const edcSDVSDRRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/data-review/sdv-sdr', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'sdv-sdr' }) })
+const edcDataListingsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/data-review/listings', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'data-listings' }) })
+const edcQueriesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/queries', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'query-dashboard' }) })
+const edcOpenQueriesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/queries/open', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'open-queries' }) })
+const edcQueryHistoryRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/queries/history', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'query-history' }) })
+const edcQueryDetailRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/queries/$queryId', component: StudyEDCQueryDetailRoute })
+const edcCodingDashboardRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/medical-coding', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'coding-dashboard' }) })
+const edcMedDRARoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/medical-coding/meddra', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'meddra-coding' }) })
+const edcWHODrugRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/medical-coding/whodrug', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'whodrug-coding' }) })
+const edcCodingReviewRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/medical-coding/review', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'coding-review' }) })
+const edcExportsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/exports', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'dataset-exports' }) })
+const edcExportHistoryRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/exports/history', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'export-history' }) })
+const edcLockReadinessRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/database-lock', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'lock-readiness' }) })
+const edcDataFreezeRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/database-lock/freeze', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'data-freeze' }) })
+const edcDatabaseLockRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/database-lock/manage', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'database-lock' }) })
+const edcLockHistoryRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/database-lock/history', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'lock-history' }) })
+
 const aiAssistantRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/ai',
@@ -361,8 +418,30 @@ const ctmsRoute = createRoute({
   path: '/ctms',
   component: () => createElement(CTMSHomePage),
 })
-const ctmsEntitiesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/entities', component: () => createElement(EntityManagementPage) })
+const ctmsSitesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/sites', component: () => createElement(EntityManagementPage, { view: 'site-directory' }) })
+const ctmsEntitiesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/entities', component: () => createElement(EntityManagementPage, { view: 'entity-directory' }) })
+const ctmsDepotsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/entities/depots', component: () => createElement(EntityManagementPage, { view: 'entity-directory', entityType: 'depot' }) })
+const ctmsStaffRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/entities/staff', component: () => createElement(EntityManagementPage, { view: 'entity-directory', entityType: 'staff' }) })
+const ctmsOrganizationsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/entities/organizations', component: () => createElement(EntityManagementPage, { view: 'entity-directory', entityType: 'participating_organization' }) })
+const ctmsInvestigationalProductsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/entities/investigational-products', component: () => createElement(EntityManagementPage, { view: 'entity-directory', entityType: 'investigational_product' }) })
 const ctmsReferencesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/references', component: () => createElement(ReferenceDataPage) })
+const ctmsPortfolioStudiesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/studies', component: () => createElement(CTMSPortfolioWorkspacePage, { portfolioOnly: true }) })
+const ctmsAlertsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/alerts', component: () => createElement(NotificationsPage) })
+const ctmsPortfolioMonitoringVisitsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/monitoring/visits', component: () => createElement(PortfolioOperationsPage, { view: 'monitoring-visits' }) })
+const ctmsPortfolioMonitoringCalendarRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/monitoring/calendar', component: () => createElement(PortfolioOperationsPage, { view: 'monitoring-calendar' }) })
+const ctmsPortfolioMonitoringOverdueRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/monitoring/overdue', component: () => createElement(PortfolioOperationsPage, { view: 'monitoring-overdue' }) })
+const ctmsPortfolioMonitoringFindingsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/monitoring/findings', component: () => createElement(PortfolioOperationsPage, { view: 'monitoring-findings' }) })
+const ctmsPortfolioContractsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/contracts', component: () => createElement(PortfolioOperationsPage, { view: 'contracts' }) })
+const ctmsPortfolioContractApprovalsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/contracts/approvals', component: () => createElement(PortfolioOperationsPage, { view: 'contract-approvals' }) })
+const ctmsPortfolioContractExpiringRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/contracts/expiring', component: () => createElement(PortfolioOperationsPage, { view: 'contract-expiring' }) })
+const ctmsPortfolioFinancialsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/financials', component: () => createElement(PortfolioOperationsPage, { view: 'financial-dashboard' }) })
+const ctmsPortfolioPaymentsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/financials/payments', component: () => createElement(PortfolioOperationsPage, { view: 'financial-payments' }) })
+const ctmsPortfolioInvoicesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/financials/invoices', component: () => createElement(PortfolioOperationsPage, { view: 'financial-invoices' }) })
+const ctmsPortfolioFinancialReportsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/financials/reports', component: () => createElement(PortfolioOperationsPage, { view: 'financial-reports' }) })
+const ctmsAdminEntitiesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/admin/organizations-users', component: () => createElement(EntityManagementPage, { view: 'entity-directory' }) })
+const ctmsAdminReferencesRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/admin/reference-data', component: () => createElement(ReferenceDataPage) })
+const ctmsAdminAuditRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/admin/audit-trail', component: () => createElement(AuditViewerPage) })
+const ctmsGlobalPlannedRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/ctms/$', component: () => createElement(CTMSPlannedWorkspacePage) })
 
 const ctmsStudyWorkspaceRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'overview' }) })
 const ctmsStudyDetailsRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/details', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'profile' }) })
@@ -407,6 +486,7 @@ const ctmsExportsRoute = createRoute({ getParentRoute: () => appShellLayout, pat
 const ctmsHealthRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/health', component: () => createElement(CTMSStudyWorkspaceRoute, { view: 'health' }) })
 const ctmsSiteWorkspaceRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/sites/$siteId/ctms', component: () => createElement(CTMSSiteWorkspaceRoute) })
 const ctmsSiteActivationRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/sites/$siteId/ctms/activation', component: () => createElement(CTMSSiteActivationRoute) })
+const ctmsStudyPlannedRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/ctms/$', component: () => createElement(CTMSPlannedWorkspacePage) })
 
 // PV/Safety routes. These are additive and never alter EDC or CTMS routes.
 const pvRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/pv', component: () => createElement(PVHomePage) })
@@ -598,9 +678,61 @@ const routeTree = rootRoute.addChildren([
       aiAssistantRoute,
       notificationsRoute,
       exportsRoute,
+      edcOverviewRoute,
+      edcCollectionProgressRoute,
+      edcOutstandingActivitiesRoute,
+      edcSubjectsRoute,
+      edcSubjectProfileDirectoryRoute,
+      edcSubjectVisitsFormsDirectoryRoute,
+      edcSubjectRoute,
+      edcSubjectVisitsRoute,
+      edcFormRoute,
+      edcDataEntryRoute,
+      edcIncompleteFormsRoute,
+      edcChangeHistoryRoute,
+      edcReviewDashboardRoute,
+      edcFormsReviewRoute,
+      edcSDVSDRRoute,
+      edcDataListingsRoute,
+      edcQueriesRoute,
+      edcOpenQueriesRoute,
+      edcQueryHistoryRoute,
+      edcQueryDetailRoute,
+      edcCodingDashboardRoute,
+      edcMedDRARoute,
+      edcWHODrugRoute,
+      edcCodingReviewRoute,
+      edcExportsRoute,
+      edcExportHistoryRoute,
+      edcLockReadinessRoute,
+      edcDataFreezeRoute,
+      edcDatabaseLockRoute,
+      edcLockHistoryRoute,
       ctmsRoute,
+      ctmsSitesRoute,
       ctmsEntitiesRoute,
+      ctmsDepotsRoute,
+      ctmsStaffRoute,
+      ctmsOrganizationsRoute,
+      ctmsInvestigationalProductsRoute,
       ctmsReferencesRoute,
+      ctmsPortfolioStudiesRoute,
+      ctmsAlertsRoute,
+      ctmsPortfolioMonitoringVisitsRoute,
+      ctmsPortfolioMonitoringCalendarRoute,
+      ctmsPortfolioMonitoringOverdueRoute,
+      ctmsPortfolioMonitoringFindingsRoute,
+      ctmsPortfolioContractsRoute,
+      ctmsPortfolioContractApprovalsRoute,
+      ctmsPortfolioContractExpiringRoute,
+      ctmsPortfolioFinancialsRoute,
+      ctmsPortfolioPaymentsRoute,
+      ctmsPortfolioInvoicesRoute,
+      ctmsPortfolioFinancialReportsRoute,
+      ctmsAdminEntitiesRoute,
+      ctmsAdminReferencesRoute,
+      ctmsAdminAuditRoute,
+      ctmsGlobalPlannedRoute,
       ctmsStudyWorkspaceRoute,
       ctmsStudyDetailsRoute,
       ctmsProjectManagementRoute,
@@ -642,6 +774,7 @@ const routeTree = rootRoute.addChildren([
       ctmsHealthRoute,
       ctmsSiteWorkspaceRoute,
       ctmsSiteActivationRoute,
+      ctmsStudyPlannedRoute,
       pvRoute,
       pvDashboardRoute,
       pvCasesRoute,

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppShell } from '@/components/layout/AppShell'
@@ -117,7 +117,7 @@ function renderResolvedSidebar(
 ) {
   const model = resolveNavigationModel(state, pvState, permissions, scope)
   return render(
-    <AppSidebar
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><AppSidebar
       collapsed={false}
       onCollapsedChange={vi.fn()}
       edcSections={model.edcSections}
@@ -128,7 +128,7 @@ function renderResolvedSidebar(
       showDesigner={model.designerSections.length > 0}
       showPV={pvState.status === 'ready' && permissions.includes(PERMISSIONS.PV_SAFETY_CASE_READ)}
       activeModule={activeModule}
-    />,
+    /></QueryClientProvider>,
   )
 }
 
@@ -151,24 +151,24 @@ describe('AppSidebar', () => {
     }
     expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument()
     expect(screen.getByText('CTMS')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Overview' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Health' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Study Dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Study Health' })).toBeInTheDocument()
   })
 
   it('does not expose CTMS navigation when the permission affordance denies it', () => {
     renderResolvedSidebar(readyState, [])
 
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'EDC Dashboard' })).toBeInTheDocument()
     expect(screen.queryByText('CTMS')).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument()
   })
 
   it('shows only the selected module hierarchy', () => {
     renderResolvedSidebar(readyState, allPermissions, undefined, 'edc')
 
     expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('edc')
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'EDC Dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument()
     expect(screen.queryByLabelText('CTMS navigation')).not.toBeInTheDocument()
   })
 
@@ -176,22 +176,21 @@ describe('AppSidebar', () => {
     renderResolvedSidebar(readyState, allPermissions, undefined, 'ctms')
 
     expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('ctms')
-    expect(screen.getByRole('link', { name: 'Overview' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument()
-    expect(screen.queryByText('Workspace')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Study Dashboard' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'EDC Dashboard' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('workspace-switcher')).toBeInTheDocument()
   })
 
-  it('groups the CTMS report catalog under Project Management, CRF, and Query', () => {
+  it('groups CTMS destinations into collapsible workspace modules', async () => {
+    const user = userEvent.setup()
     renderResolvedSidebar(readyState, allPermissions, undefined, 'ctms')
 
-    const reportSection = screen.getByRole('heading', { name: 'Report' }).closest('section')
-    expect(reportSection).not.toBeNull()
-    const reportNavigation = within(reportSection as HTMLElement)
-    expect(reportNavigation.getByRole('heading', { name: 'Project Management' })).toBeInTheDocument()
-    expect(reportNavigation.getByRole('heading', { name: 'CRF' })).toBeInTheDocument()
-    expect(reportNavigation.getByRole('heading', { name: 'Query' })).toBeInTheDocument()
-    expect(reportNavigation.getByRole('link', { name: 'Gantt' })).toHaveAttribute('href', '/studies/study-1/ctms/reports/project-management/gantt')
-    expect(reportNavigation.getByRole('link', { name: 'Action Item Queries' })).toBeInTheDocument()
+    const monitoring = screen.getByRole('button', { name: 'Monitoring' })
+    expect(screen.getByRole('link', { name: 'Monitoring Visits' })).toHaveAttribute('href', '/studies/study-1/ctms/monitoring/visits')
+    await user.click(monitoring)
+    expect(screen.queryByRole('link', { name: 'Monitoring Visits' })).not.toBeInTheDocument()
+    await user.click(monitoring)
+    expect(screen.getByRole('link', { name: 'Monitoring Visits' })).toBeInTheDocument()
   })
 
   it('shows Designer as a separate module without EDC navigation', () => {
@@ -236,8 +235,8 @@ describe('AppSidebar', () => {
   ] as const)('keeps EDC navigation while CTMS is %s', (_name, state) => {
     renderResolvedSidebar(state, [PERMISSIONS.CTMS_OPERATIONAL_DATA_READ])
 
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Audit Trail' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'EDC Dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Database Lock' })).toBeInTheDocument()
     expect(screen.queryByText('CTMS')).not.toBeInTheDocument()
   })
 
@@ -259,7 +258,7 @@ describe('AppSidebar', () => {
   ] as const)('keeps the PV affordance hidden and disabled while PV is %s', (_name, pvState) => {
     renderResolvedSidebar(readyState, allPermissions, undefined, 'edc', pvState)
 
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'EDC Dashboard' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('edc')
     expect(screen.queryByLabelText('PV navigation')).not.toBeInTheDocument()
 
@@ -284,10 +283,10 @@ describe('AppSidebar', () => {
       />,
     )
 
-    const dashboard = screen.getByRole('link', { name: 'Dashboard' })
+    const dashboard = screen.getByRole('link', { name: 'Overview' })
     expect(dashboard.querySelector('svg')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByText('Dashboard')).toHaveClass('sr-only')
+    expect(dashboard.querySelector('span')).toHaveClass('sr-only')
   })
 })
 

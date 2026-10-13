@@ -1,6 +1,9 @@
 /** CTMS first-party frontend feature boundary. */
 
 export { CTMSHomePage } from './CTMSHomePage'
+export { CTMSPortfolioWorkspacePage, CTMSPlannedWorkspacePage } from './PortfolioWorkspacePage'
+export { PortfolioOperationsPage } from './PortfolioOperationsPage'
+export type { PortfolioOperationsView } from './PortfolioOperationsPage'
 export { CTMSWorkspacePage } from './WorkspacePage'
 export { CTMSCatalogReportPage, CTMSStudyAreaPage } from './StudyAreaPage'
 export { FinancialManagementPage } from './FinancialManagementPage'
@@ -41,6 +44,7 @@ export type {
   OwnershipState,
 } from './capabilities'
 export * from './api'
+export * from './portfolio-api'
 export * from './cache'
 export * from './forms'
 export * from './hooks'

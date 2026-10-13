@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,17 +17,28 @@ import {
   type CTMSManagedSitePayload,
   type CTMSManagedEntityType,
 } from '../api'
+import { useWorkspaceStudies } from '../workspace-studies'
 
 type EntityTab = Exclude<CTMSManagedEntityType, 'country'>
+export type PortfolioEntityType = Exclude<EntityTab, 'site'>
 type EntityDraft = Record<string, string>
 
-const ENTITY_TABS: readonly { value: EntityTab; label: string }[] = [
-  { value: 'site', label: 'Site' },
-  { value: 'depot', label: 'Depot' },
-  { value: 'staff', label: 'Staff' },
-  { value: 'participating_organization', label: 'Participating Organization' },
-  { value: 'investigational_product', label: 'Investigational Product' },
+const ENTITY_TABS: readonly { value: EntityTab; label: string; pluralLabel: string }[] = [
+  { value: 'site', label: 'Site', pluralLabel: 'Sites' },
+  { value: 'depot', label: 'Depot', pluralLabel: 'Depots' },
+  { value: 'staff', label: 'Staff', pluralLabel: 'Staff' },
+  { value: 'participating_organization', label: 'Participating Organization', pluralLabel: 'Organizations' },
+  { value: 'investigational_product', label: 'Investigational Product', pluralLabel: 'Investigational Products' },
 ]
+
+const PORTFOLIO_ENTITY_CONTEXT = { pagination: { pageSize: 100 } } as const
+
+export type EntityManagementView = 'study' | 'site-directory' | 'entity-directory'
+
+export interface EntityManagementPageProps {
+  view?: EntityManagementView
+  entityType?: PortfolioEntityType
+}
 
 function emptyDraft(): EntityDraft {
   return {}
@@ -88,6 +99,25 @@ function sitePayload(draft: EntityDraft): CTMSManagedSitePayload {
     city: draft.city.trim(),
     ...compact(draft, ['country', 'phone', 'fax', 'zip_code', 'email', 'address']),
   }
+}
+
+function updatePayloadFor(entityType: EntityTab, draft: EntityDraft) {
+  if (entityType === 'site') {
+    return {
+      name: draft.name.trim(),
+      attributes: compact(draft, ['country', 'state', 'city', 'phone', 'fax', 'zip_code', 'email', 'address']),
+    }
+  }
+  const payload = payloadFor(entityType, draft)
+  return { name: payload.name, attributes: payload.attributes }
+}
+
+function draftFor(entity: CTMSManagedEntity): EntityDraft {
+  if (entity.entity_type === 'staff') return { ...(entity.attributes as EntityDraft) }
+  if (entity.entity_type === 'investigational_product') {
+    return { compound_name: entity.name, ...(entity.attributes as EntityDraft) }
+  }
+  return { name: entity.name, ...(entity.attributes as EntityDraft) }
 }
 
 function attribute(entity: CTMSManagedEntity, name: string) {
@@ -154,7 +184,11 @@ interface EntityFormProps {
   draft: EntityDraft
   staff: readonly CTMSManagedEntity[]
   organizations: readonly CTMSManagedEntity[]
-  studySelected: boolean
+  creationEnabled: boolean
+  creationHelp?: string
+  studyOptions?: readonly { value: string; label: string }[]
+  showStudySelector?: boolean
+  submitLabel: string
   countryOptions: readonly { value: string; label: string }[]
   organizationTypeOptions: readonly { value: string; label: string }[]
   onChange: (name: string, value: string) => void
@@ -163,12 +197,13 @@ interface EntityFormProps {
   error: boolean
 }
 
-function EntityForm({ entityType, draft, staff, organizations, studySelected, countryOptions, organizationTypeOptions, onChange, onSubmit, pending, error }: EntityFormProps) {
+function EntityForm({ entityType, draft, staff, organizations, creationEnabled, creationHelp, studyOptions = [], showStudySelector, submitLabel, countryOptions, organizationTypeOptions, onChange, onSubmit, pending, error }: EntityFormProps) {
   const field = (name: string) => draft[name] ?? ''
   const common = { entityType, onChange }
 
   return <form className="grid gap-4 sm:grid-cols-2" onSubmit={onSubmit}>
     {entityType === 'site' ? <>
+      {showStudySelector ? <EntitySelect {...common} name="study_id" label="Study" value={field('study_id')} required placeholder="Select the owning study" options={studyOptions} className="sm:col-span-2" /> : null}
       <EntityField {...common} name="name" label="Name" value={field('name')} required />
       <EntitySelect {...common} name="country" label="Country" value={field('country')} placeholder="Select a country" options={countryOptions} />
       <EntityField {...common} name="state" label="State" value={field('state')} required />
@@ -220,37 +255,62 @@ function EntityForm({ entityType, draft, staff, organizations, studySelected, co
     </> : null}
 
     <div className="sm:col-span-2">
-      <Button type="submit" pending={pending} disabled={!studySelected}>Create {ENTITY_TABS.find((tab) => tab.value === entityType)?.label}</Button>
-      {!studySelected ? <p className="mt-2 text-sm text-muted-foreground">Select a study before creating an entity.</p> : null}
-      {error ? <p className="mt-2 text-sm text-destructive" role="alert">Unable to create and add the entity to this study. Check the required fields or use a unique name.</p> : null}
+      <Button type="submit" pending={pending} disabled={!creationEnabled}>{submitLabel}</Button>
+      {!creationEnabled && creationHelp ? <p className="mt-2 text-sm text-muted-foreground">{creationHelp}</p> : null}
+      {error ? <p className="mt-2 text-sm text-destructive" role="alert">Unable to save this entity. Check the required fields or use a unique name.</p> : null}
     </div>
   </form>
 }
 
-export function EntityManagementPage() {
+export function EntityManagementPage({ view = 'study', entityType: requestedEntityType }: EntityManagementPageProps) {
   const studyId = useStudyContext((state) => state.selectedStudyId) ?? ''
+  const portfolioView = view !== 'study'
+  const visibleTabs = view === 'site-directory'
+    ? ENTITY_TABS.filter((tab) => tab.value === 'site')
+    : view === 'entity-directory'
+      ? ENTITY_TABS.filter((tab) => requestedEntityType ? tab.value === requestedEntityType : tab.value !== 'site')
+      : ENTITY_TABS
+  const [entityType, setEntityType] = useState<EntityTab>(() => visibleTabs[0]?.value ?? 'site')
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [editingEntity, setEditingEntity] = useState<CTMSManagedEntity | null>(null)
+  const [drafts, setDrafts] = useState<Record<EntityTab, EntityDraft>>(() => Object.fromEntries(ENTITY_TABS.map((tab) => [tab.value, emptyDraft()])) as Record<EntityTab, EntityDraft>)
+  const targetStudyId = drafts.site.study_id ?? ''
   const canManageCatalog = usePermission(PERMISSIONS.CTMS_OPERATIONAL_STUDY_MANAGEMENT)
-  const canManageSites = usePermission(PERMISSIONS.CTMS_OPERATIONAL_SITE_MANAGEMENT, studyId || undefined)
+  const canManageSites = usePermission(PERMISSIONS.CTMS_OPERATIONAL_SITE_MANAGEMENT, (portfolioView ? targetStudyId : studyId) || undefined)
   const canAssign = usePermission(PERMISSIONS.CTMS_OPERATIONAL_STUDY_MANAGEMENT, studyId || undefined)
   const references = useCTMSReferenceValues()
-  const assignments = useCTMSStudyEntities(studyId)
+  const assignments = useCTMSStudyEntities(portfolioView ? '' : studyId)
+  const catalog = useQuery({
+    queryKey: ctmsKeys.entities(undefined, PORTFOLIO_ENTITY_CONTEXT),
+    queryFn: () => ctmsApi.entities(undefined, PORTFOLIO_ENTITY_CONTEXT),
+    enabled: portfolioView,
+  })
+  const studies = useWorkspaceStudies(view === 'site-directory')
   const client = useQueryClient()
-  const [entityType, setEntityType] = useState<EntityTab>('site')
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drafts, setDrafts] = useState<Record<EntityTab, EntityDraft>>(() => Object.fromEntries(ENTITY_TABS.map((tab) => [tab.value, emptyDraft()])) as Record<EntityTab, EntityDraft>)
 
-  const studyAssignments = assignments.data?.items ?? []
-  const studyEntities = studyAssignments.map((assignment) => assignment.entity)
-  const staff = studyEntities.filter((entity) => entity.entity_type === 'staff')
-  const organizations = studyEntities.filter((entity) => entity.entity_type === 'participating_organization')
+  const studyEntities = (assignments.data?.items ?? []).map((assignment) => assignment.entity)
+  const entities = portfolioView ? (catalog.data?.items ?? []) : studyEntities
+  const staff = entities.filter((entity) => entity.entity_type === 'staff')
+  const organizations = entities.filter((entity) => entity.entity_type === 'participating_organization')
   const countryOptions = (references.data?.items ?? []).filter((value) => value.category === 'country').map((value) => ({ value: value.code, label: value.label }))
   const organizationTypeOptions = (references.data?.items ?? []).filter((value) => value.category === 'participating_organization_type').map((value) => ({ value: value.code, label: value.label }))
-  const visibleAssignments = studyAssignments.filter((assignment) => assignment.entity.entity_type === entityType)
-  const canCreateCurrentType = entityType === 'site' ? canManageSites : canManageCatalog && canAssign
-  const selectedEntityLabel = ENTITY_TABS.find((tab) => tab.value === entityType)?.label ?? 'entity'
+  const visibleEntities = entities.filter((entity) => entity.entity_type === entityType)
+  const canCreateCurrentType = portfolioView
+    ? view === 'site-directory' ? canManageSites && Boolean(targetStudyId) : canManageCatalog
+    : entityType === 'site' ? canManageSites : canManageCatalog && canAssign
+  const canEditCurrentType = entityType === 'site'
+    ? canManageCatalog || (!portfolioView && canManageSites)
+    : canManageCatalog
+  const selectedEntity = ENTITY_TABS.find((tab) => tab.value === entityType)
+  const selectedEntityLabel = selectedEntity?.label ?? 'entity'
+  const selectedEntityPluralLabel = selectedEntity?.pluralLabel ?? 'Entities'
+  const studyOptions = (studies.data?.items ?? []).map((study) => ({ value: study.id, label: `${study.study_code} — ${study.title}` }))
 
-  const create = useMutation({
+  const save = useMutation({
     mutationFn: async () => {
+      if (editingEntity) return ctmsApi.updateEntity(editingEntity.id, updatePayloadFor(entityType, drafts[entityType]))
+      if (view === 'site-directory') return ctmsApi.createStudySite(targetStudyId, sitePayload(drafts.site))
+      if (portfolioView) return ctmsApi.createEntity(payloadFor(entityType, drafts[entityType]))
       if (entityType === 'site') return ctmsApi.createStudySite(studyId, sitePayload(drafts.site))
       const entity = await ctmsApi.createEntity(payloadFor(entityType, drafts[entityType]))
       await ctmsApi.assignStudyEntity(studyId, entity.id)
@@ -259,6 +319,7 @@ export function EntityManagementPage() {
     onSuccess: async () => {
       setDrafts((current) => ({ ...current, [entityType]: emptyDraft() }))
       await client.invalidateQueries({ queryKey: ctmsKeys.all })
+      setEditingEntity(null)
       setDrawerOpen(false)
     },
   })
@@ -268,38 +329,62 @@ export function EntityManagementPage() {
   }
   const switchTab = (value: string) => {
     setEntityType(value as EntityTab)
-    create.reset()
+    save.reset()
   }
+  const openCreate = () => {
+    setEditingEntity(null)
+    setDrafts((current) => ({ ...current, [entityType]: emptyDraft() }))
+    save.reset()
+    setDrawerOpen(true)
+  }
+  const openEdit = (entity: CTMSManagedEntity) => {
+    setEditingEntity(entity)
+    setDrafts((current) => ({ ...current, [entityType]: draftFor(entity) }))
+    save.reset()
+    setDrawerOpen(true)
+  }
+  const pageTitle = view === 'site-directory' ? 'Site directory' : view === 'entity-directory' ? requestedEntityType ? selectedEntityPluralLabel : 'Entity directory' : 'Entity management'
+  const pageDescription = view === 'site-directory'
+    ? 'Review CTMS Site identities across accessible studies. Sites are created and assigned through study-scoped CTMS workflows.'
+    : view === 'entity-directory'
+      ? requestedEntityType
+        ? `Manage ${selectedEntityPluralLabel.toLowerCase()} independently of platform-owned user identities.`
+        : 'Manage Depots, Staff, Participating Organizations, and Investigational Products independently of platform-owned user identities.'
+      : 'Review the Sites, Depots, Staff, Participating Organizations, and Investigational Products assigned to the selected study.'
+  const query = portfolioView ? catalog : assignments
+  const emptyTitle = portfolioView
+    ? `No ${selectedEntityLabel.toLowerCase()} entities are available.`
+    : studyId ? `No ${selectedEntityLabel.toLowerCase()} entities have been added to this study.` : 'Select a study to view its entities.'
 
   return <PageContainer wide>
     <PageHeader
-      title="Entity management"
-      description="Review the Sites, Depots, Staff, Participating Organizations, and Investigational Products assigned to the selected study."
-      actions={<Button type="button" onClick={() => setDrawerOpen(true)} disabled={!studyId || !canCreateCurrentType}>Create entity</Button>}
+      title={pageTitle}
+      description={pageDescription}
+      actions={<Button type="button" onClick={openCreate} disabled={view === 'site-directory' ? !canManageSites : !canCreateCurrentType || (!portfolioView && !studyId)}>{portfolioView ? `Create ${selectedEntityLabel}` : 'Create entity'}</Button>}
     />
     <Tabs value={entityType} onValueChange={switchTab}>
       <div className="overflow-x-auto pb-1">
         <TabsList className="h-auto min-w-max" aria-label="Entity types">
-          {ENTITY_TABS.map((tab) => <TabsTrigger key={tab.value} value={tab.value}>{tab.label}</TabsTrigger>)}
+          {visibleTabs.map((tab) => <TabsTrigger key={tab.value} value={tab.value}>{tab.label}</TabsTrigger>)}
         </TabsList>
       </div>
 
-      {ENTITY_TABS.map((tab) => <TabsContent key={tab.value} value={tab.value}>
-        <DataTableShell label={`${tab.label} entities in selected study`} loading={assignments.isLoading} error={Boolean(assignments.error)} errorMessage="Study entities could not be loaded." empty={visibleAssignments.length === 0} emptyTitle={studyId ? `No ${tab.label.toLowerCase()} entities have been added to this study.` : 'Select a study to view its entities.'}>
+      {visibleTabs.map((tab) => <TabsContent key={tab.value} value={tab.value}>
+        <DataTableShell label={`${tab.label} entities`} loading={query.isLoading} error={Boolean(query.error)} errorMessage="Entities could not be loaded." empty={visibleEntities.length === 0} emptyTitle={emptyTitle}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {visibleAssignments.map((assignment) => <DetailCard key={assignment.id} title={assignment.entity.name} description={entitySummary(assignment.entity) || assignment.entity.code}>
-              <p className="text-xs text-muted-foreground">{assignment.entity.active ? 'Active' : 'Inactive'} · {assignment.entity.code}</p>
+            {visibleEntities.map((entity) => <DetailCard key={entity.id} title={entity.name} description={entitySummary(entity) || entity.code} footer={canEditCurrentType ? <Button type="button" variant="outline" size="sm" onClick={() => openEdit(entity)}>Edit {selectedEntityLabel}</Button> : undefined}>
+              <p className="text-xs text-muted-foreground">{entity.active ? 'Active' : 'Inactive'} · {entity.code}</p>
             </DetailCard>)}
           </div>
         </DataTableShell>
       </TabsContent>)}
     </Tabs>
 
-    <Sheet open={drawerOpen} onOpenChange={(open) => { setDrawerOpen(open); if (!open) create.reset() }}>
+    <Sheet open={drawerOpen} onOpenChange={(open) => { setDrawerOpen(open); if (!open) { save.reset(); setEditingEntity(null) } }}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
         <SheetHeader className="pr-8">
-          <SheetTitle>{`Create ${selectedEntityLabel}`}</SheetTitle>
-          <SheetDescription>{entityType === 'site' ? 'Create a Site in the selected study. CTMS generates and synchronizes its Site ID automatically.' : `Create a ${selectedEntityLabel.toLowerCase()} and add it to the selected study.`}</SheetDescription>
+          <SheetTitle>{`${editingEntity ? 'Edit' : 'Create'} ${selectedEntityLabel}`}</SheetTitle>
+          <SheetDescription>{editingEntity ? `Update this ${selectedEntityLabel.toLowerCase()} without changing its stable identity.` : view === 'site-directory' ? 'Select the owning study, then create and synchronize the Site identity.' : portfolioView ? `Create a ${selectedEntityLabel.toLowerCase()} in the CTMS entity catalog.` : entityType === 'site' ? 'Create a Site in the selected study. CTMS generates and synchronizes its Site ID automatically.' : `Create a ${selectedEntityLabel.toLowerCase()} and add it to the selected study.`}</SheetDescription>
         </SheetHeader>
         <div className="mt-2 pt-4">
           <EntityForm
@@ -307,13 +392,17 @@ export function EntityManagementPage() {
             draft={drafts[entityType]}
             staff={staff}
             organizations={organizations}
-            studySelected={Boolean(studyId)}
+            creationEnabled={editingEntity ? canEditCurrentType : canCreateCurrentType && (portfolioView || Boolean(studyId))}
+            creationHelp={view === 'site-directory' && !editingEntity ? 'Select the owning study before creating the Site.' : portfolioView ? undefined : 'Select a study before creating an entity.'}
+            studyOptions={studyOptions}
+            showStudySelector={view === 'site-directory' && !editingEntity}
+            submitLabel={`${editingEntity ? 'Save' : 'Create'} ${selectedEntityLabel}`}
             countryOptions={countryOptions}
             organizationTypeOptions={organizationTypeOptions}
             onChange={updateDraft}
-            onSubmit={(event) => { event.preventDefault(); create.mutate() }}
-            pending={create.isPending}
-            error={Boolean(create.error)}
+            onSubmit={(event) => { event.preventDefault(); save.mutate() }}
+            pending={save.isPending}
+            error={Boolean(save.error)}
           />
         </div>
       </SheetContent>

@@ -174,6 +174,30 @@ async def test_ctms_site_creation_generates_and_syncs_one_canonical_id():
         assert synchronization_audit.source_record_id == entity.id
         assert synchronization_audit.target_record_id == entity.id
 
+        updated = await service.update_entity(
+            session,
+            entity.id,
+            {
+                "name": "General Hospital Research Center",
+                "attributes": {
+                    "country": "US",
+                    "state": "New Jersey",
+                    "city": "Newark",
+                    "address": "2 Research Way",
+                },
+            },
+            actor_id=actor.id,
+            correlation_id="site-update",
+        )
+        await session.refresh(canonical_site)
+
+        assert updated.id == entity.id
+        assert updated.name == "General Hospital Research Center"
+        assert canonical_site.name == "General Hospital Research Center"
+        assert canonical_site.country == "US"
+        assert canonical_site.region == "New Jersey"
+        assert canonical_site.address == "2 Research Way"
+
     await engine.dispose()
 
 

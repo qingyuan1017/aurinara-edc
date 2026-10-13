@@ -50,7 +50,7 @@ describe('PV route registration and deep-link preservation', () => {
       expect(model.pvSections).toEqual([])
     }
 
-    expect(baseline.edcSections.flatMap((section) => section.items).map((item) => item.to)).toContain('/')
+    expect(baseline.edcSections.flatMap((section) => section.items).map((item) => item.to)).toContain('/studies/study-1/edc/overview')
     expect(baseline.ctmsSections.flatMap((section) => section.items).map((item) => item.to)).toContain('/studies/study-1/ctms')
   })
 

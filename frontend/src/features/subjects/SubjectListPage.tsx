@@ -31,11 +31,11 @@ interface SubjectListPageProps {
 
 const columnHelper = createColumnHelper<Subject>()
 
-const columns = [
+function createColumns(studyId: string) { return [
   columnHelper.accessor('subject_number', {
     header: 'Subject #',
     cell: (info) => (
-      <Link to="/subjects/$subjectId/casebook" params={{ subjectId: info.row.original.id }} className="font-medium text-primary hover:underline">
+      <Link to="/studies/$studyId/edc/subjects/$subjectId" params={{ studyId, subjectId: info.row.original.id }} className="font-medium text-primary hover:underline">
         {info.getValue()}
       </Link>
     ),
@@ -60,7 +60,7 @@ const columns = [
       })
     },
   }),
-]
+] }
 
 /**
  * SubjectListPage — Table view of subjects for a study.
@@ -138,7 +138,7 @@ export function SubjectListPage({ studyId }: SubjectListPageProps) {
         emptyDescription={globalFilter ? 'Try changing the subject search.' : 'No subjects are available for the selected study.'}
       >
         <ClinicalDataTable
-          columns={columns}
+          columns={createColumns(studyId)}
           data={data?.items ?? []}
           totalRows={data?.total}
           manualPagination

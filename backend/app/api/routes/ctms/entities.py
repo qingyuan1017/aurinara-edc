@@ -166,11 +166,30 @@ async def list_available_study_entities(
 async def update_entity(
     entity_id: UUID, body: ManagedEntityUpdate, session: DbSession, current_user: WriteGuard
 ):
-    return ManagedEntityResponse.model_validate(
-        await entity_management_service.update_entity(
-            session, entity_id, body, actor=current_user, correlation_id=get_correlation_id()
-        )
+    entity = await entity_management_service.update_entity(
+        session, entity_id, body, actor=current_user, correlation_id=get_correlation_id()
     )
+    if entity.entity_type == ManagedEntityType.SITE.value and entity.canonical_site_id is not None:
+        site = await session.get(Site, entity.canonical_site_id)
+        study = await session.get(Study, site.study_id) if site is not None else None
+        settings = get_settings()
+        should_sync = settings.platform_authorization_mode == "enforced" or (
+            settings.platform_authorization_mode == "shadow"
+            and study is not None
+            and study.platform_managed
+        )
+        if should_sync and site is not None:
+            await asyncio.to_thread(
+                get_platform_authorization().sync_site,
+                study_id=site.study_id,
+                site_id=site.id,
+                name=site.name,
+                country=entity.attributes.get("country"),
+                state=entity.attributes.get("state"),
+                city=entity.attributes.get("city"),
+                status=site.status.value if hasattr(site.status, "value") else str(site.status),
+            )
+    return ManagedEntityResponse.model_validate(entity)
 
 
 @router.get(

@@ -12,7 +12,7 @@ import { usePermission, PERMISSIONS } from '@/lib/permissions'
 interface QueryMessage { id: string; author_id: string; message: string; created_at: string }
 interface QueryDetail { id: string; target_type: string; target_id: string; text: string; query_type: string; assigned_role?: string | null; status: string; created_at: string; messages: QueryMessage[] }
 
-export function QueryDetailPage({ queryId }: { queryId: string }) {
+export function QueryDetailPage({ queryId, studyId }: { queryId: string; studyId?: string }) {
   const client = useQueryClient(); const [response, setResponse] = useState(''); const [error, setError] = useState('')
   const canRespond = usePermission(PERMISSIONS.QUERY_RESPOND); const canClose = usePermission(PERMISSIONS.QUERY_CLOSE); const canReopen = usePermission(PERMISSIONS.QUERY_REOPEN)
   const query = useQuery({ queryKey: ['query', queryId], queryFn: async () => (await api.get<QueryDetail>(`/queries/${queryId}`)).data })
@@ -23,7 +23,7 @@ export function QueryDetailPage({ queryId }: { queryId: string }) {
   const canRespondNow = canRespond && ['Open', 'Reopened'].includes(item.status)
 
   return <PageContainer wide>
-    <PageHeader title={`Query ${item.id.slice(0, 8)}`} description={<><a href="/queries" className="text-primary hover:underline">← Query inbox</a><span className="ml-2">{item.target_type} · {item.target_id} · {item.query_type}{item.assigned_role ? ` · Assigned to ${item.assigned_role}` : ''}</span></>} status={<StatusBadge label="query status" status={item.status} />} ownership={<OwnershipBadge owner="EDC" />} />
+    <PageHeader title={`Query ${item.id.slice(0, 8)}`} description={<><a href={studyId ? `/studies/${encodeURIComponent(studyId)}/edc/queries/open` : '/queries'} className="text-primary hover:underline">← Query inbox</a><span className="ml-2">{item.target_type} · {item.target_id} · {item.query_type}{item.assigned_role ? ` · Assigned to ${item.assigned_role}` : ''}</span></>} status={<StatusBadge label="query status" status={item.status} />} ownership={<OwnershipBadge owner="EDC" />} />
     {error ? <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert> : null}
     <div className="space-y-5">
       <Card><CardContent className="pt-6"><p className="whitespace-pre-wrap text-sm">{item.text}</p><p className="mt-3 text-xs text-muted-foreground">Opened {new Date(item.created_at).toLocaleString()}</p></CardContent></Card>

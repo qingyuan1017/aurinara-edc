@@ -13,10 +13,12 @@ import { AuditPanel } from './components/AuditPanel'
 import { LockControls } from './components/LockControls'
 import { FileUpload } from './components/FileUpload'
 import { SignatureDialog } from '@/features/signatures'
+import { FormStatusStrip } from '@/features/edc/components/FormStatusStrip'
+import { normalizeDataEntryStatus } from '@/features/edc/status'
 
 interface FormSection { id: string; title: string; order: number; fields: FieldDefinition[] }
 type FormInstanceStatus = string
-interface FormInstanceData { id: string; form_definition_id: string; form_name: string; subject_id: string; subject_number: string; visit_name: string; status: FormInstanceStatus; is_frozen: boolean; is_locked: boolean; sections: FormSection[]; data: Record<string, unknown>; validation_errors?: Record<string, string> }
+interface FormInstanceData { id: string; form_definition_id: string; form_name: string; subject_id: string; subject_number: string; visit_name: string; status: FormInstanceStatus; is_frozen: boolean; is_locked: boolean; is_reviewed?: boolean; sdv_status?: string; open_query_count?: number; signature_status?: string; sections: FormSection[]; data: Record<string, unknown>; validation_errors?: Record<string, string> }
 
 /** Builds the existing dynamic Zod schema without changing clinical validation rules. */
 function buildZodSchema(sections: FormSection[]) {
@@ -170,6 +172,15 @@ export function FormEntryPage({ formInstanceId }: FormEntryPageProps) {
           <Button type="button" variant="outline" onClick={() => setAuditPanelOpen(true)} aria-label="Open audit trail">View audit trail</Button>
         </div>}
       />
+
+      <FormStatusStrip status={{
+        dataEntry: normalizeDataEntryStatus(formInstance.status),
+        queries: formInstance.open_query_count === undefined ? undefined : formInstance.open_query_count > 0 ? 'Open' : 'Closed',
+        review: formInstance.is_reviewed === undefined ? undefined : formInstance.is_reviewed ? 'Reviewed' : 'Not Reviewed',
+        sdv: formInstance.sdv_status,
+        signature: formInstance.signature_status,
+        lock: formInstance.is_locked ? 'Locked' : formInstance.is_frozen ? 'Frozen' : 'Unlocked',
+      }} />
 
       {isDisabled ? <Alert variant="warning"><AlertDescription>{formInstance.is_locked ? 'This form is locked and cannot be edited.' : 'This form is frozen and cannot be edited.'}</AlertDescription></Alert> : null}
       <div className="mt-6 space-y-6">

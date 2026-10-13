@@ -39,10 +39,20 @@ const entities = {
       created_at: '2026-10-12T12:00:00Z',
       updated_at: '2026-10-12T12:00:00Z',
     },
+    {
+      id: '44444444-4444-4444-8444-444444444444',
+      entity_type: 'site',
+      code: 'GENERAL-HOSPITAL',
+      name: 'General Hospital',
+      attributes: { country: 'US', state: 'New York', city: 'New York' },
+      active: true,
+      created_at: '2026-10-12T12:00:00Z',
+      updated_at: '2026-10-12T12:00:00Z',
+    },
   ],
   page: 1,
   page_size: 20,
-  total: 3,
+  total: 4,
 }
 
 const referenceValues = {
@@ -69,9 +79,16 @@ const assignments = {
   total: 2,
 }
 
-function renderPage() {
+const workspaceStudies = {
+  items: [{ id: 'study-1', study_code: 'STUDY-001', title: 'Portfolio Study', status: 'active' }],
+  page: 1,
+  page_size: 100,
+  total: 1,
+}
+
+function renderPage(props: Parameters<typeof EntityManagementPage>[0] = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><EntityManagementPage /></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><EntityManagementPage {...props} /></QueryClientProvider>)
 }
 
 beforeEach(() => {
@@ -89,6 +106,7 @@ beforeEach(() => {
   useStudyContext.setState({ selectedStudyId: 'study-1', selectedSiteId: null })
   vi.spyOn(api, 'get').mockImplementation((url) => {
     const path = String(url)
+    if (path === '/studies') return Promise.resolve({ data: workspaceStudies }) as never
     if (path.startsWith('/ctms/reference-values')) return Promise.resolve({ data: referenceValues }) as never
     if (path.startsWith('/ctms/studies/study-1/entities')) return Promise.resolve({ data: assignments }) as never
     return Promise.resolve({ data: entities }) as never
@@ -102,6 +120,62 @@ afterEach(() => {
 })
 
 describe('CTMS entity management', () => {
+  it('separates the portfolio Site and Entity directories', async () => {
+    const sites = renderPage({ view: 'site-directory' })
+    expect(await screen.findByRole('heading', { name: 'Site directory' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Site' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Staff' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Create entity' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create Site' })).toBeInTheDocument()
+    expect(await screen.findByText('General Hospital')).toBeInTheDocument()
+    sites.unmount()
+
+    renderPage({ view: 'entity-directory' })
+    expect(await screen.findByRole('heading', { name: 'Entity directory' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Site' })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Staff' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Participating Organization' })).toBeInTheDocument()
+  })
+
+  it('filters dedicated portfolio entity pages to their requested type', async () => {
+    renderPage({ view: 'entity-directory', entityType: 'staff' })
+    expect(await screen.findByRole('heading', { name: 'Staff' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Staff' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Depot' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Participating Organization' })).not.toBeInTheDocument()
+  })
+
+  it('creates and edits Sites from the portfolio Site Directory', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {} } as never)
+    const patch = vi.spyOn(api, 'patch').mockResolvedValue({ data: {} } as never)
+    renderPage({ view: 'site-directory' })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create Site' }))
+    let drawer = screen.getByRole('dialog', { name: 'Create Site' })
+    fireEvent.change(within(drawer).getByRole('combobox', { name: 'Study *' }), { target: { value: 'study-1' } })
+    fireEvent.change(within(drawer).getByRole('textbox', { name: 'Name *' }), { target: { value: 'New Research Site' } })
+    fireEvent.change(within(drawer).getByRole('textbox', { name: 'State *' }), { target: { value: 'New York' } })
+    fireEvent.change(within(drawer).getByRole('textbox', { name: 'City *' }), { target: { value: 'Albany' } })
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Create Site' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/ctms/studies/study-1/sites', {
+      name: 'New Research Site',
+      state: 'New York',
+      city: 'Albany',
+    }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Site' }))
+    drawer = screen.getByRole('dialog', { name: 'Edit Site' })
+    expect(within(drawer).queryByRole('combobox', { name: 'Study *' })).not.toBeInTheDocument()
+    fireEvent.change(within(drawer).getByRole('textbox', { name: 'Name *' }), { target: { value: 'General Hospital Research Center' } })
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Save Site' }))
+
+    await waitFor(() => expect(patch).toHaveBeenCalledWith('/ctms/entities/44444444-4444-4444-8444-444444444444', expect.objectContaining({
+      name: 'General Hospital Research Center',
+      attributes: expect.objectContaining({ state: 'New York', city: 'New York' }),
+    })))
+  })
+
   it('provides a dedicated tab and required form fields for each entity type', async () => {
     renderPage()
 

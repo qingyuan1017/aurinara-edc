@@ -59,13 +59,14 @@ export interface Casebook {
 
 interface SubjectCasebookPageProps {
   subjectId: string
+  studyId?: string
 }
 
 /**
  * SubjectCasebookPage — Shows the subject's visit/form structure.
  * Visits are expandable accordion sections, each containing forms with their status.
  */
-export function SubjectCasebookPage({ subjectId }: SubjectCasebookPageProps) {
+export function SubjectCasebookPage({ subjectId, studyId }: SubjectCasebookPageProps) {
   const client = useQueryClient()
   const canUpdatePhase = usePermission(PERMISSIONS.SUBJECT_UPDATE)
   const [selectedPhaseId, setSelectedPhaseId] = useState('')
@@ -138,7 +139,11 @@ export function SubjectCasebookPage({ subjectId }: SubjectCasebookPageProps) {
           <div className="flex flex-wrap items-center gap-2">
             <SignatureDialog objectType="subject" objectId={subjectId} buttonLabel="Sign subject" />
             <Button asChild variant="outline" size="sm"><Link to="/subjects/$subjectId/signatures" params={{ subjectId }}>Signatures</Link></Button>
-            <Button asChild variant="outline" size="sm"><Link to="/subjects/$subjectId/visits" params={{ subjectId }}>Manage visits</Link></Button>
+            <Button asChild variant="outline" size="sm">
+              {studyId
+                ? <Link to="/studies/$studyId/edc/subjects/$subjectId/visits" params={{ studyId, subjectId }}>Manage visits</Link>
+                : <Link to="/subjects/$subjectId/visits" params={{ subjectId }}>Manage visits</Link>}
+            </Button>
           </div>
         }
       />
@@ -207,7 +212,7 @@ export function SubjectCasebookPage({ subjectId }: SubjectCasebookPageProps) {
       ) : (
         <section aria-label="Casebook visits" className="space-y-3">
           {casebook.visits.map((visit) => (
-            <VisitSection key={visit.visit_instance_id ?? visit.visit_definition_id} visit={visit} subjectId={subjectId} />
+            <VisitSection key={visit.visit_instance_id ?? visit.visit_definition_id} visit={visit} subjectId={subjectId} studyId={studyId} />
           ))}
         </section>
       )}
@@ -216,7 +221,7 @@ export function SubjectCasebookPage({ subjectId }: SubjectCasebookPageProps) {
 }
 
 /** Expandable visit section */
-function VisitSection({ visit, subjectId }: { visit: CasebookVisit; subjectId: string }) {
+function VisitSection({ visit, subjectId, studyId }: { visit: CasebookVisit; subjectId: string; studyId?: string }) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   const completedForms = visit.forms.filter(
@@ -252,15 +257,27 @@ function VisitSection({ visit, subjectId }: { visit: CasebookVisit; subjectId: s
           ) : (
             visit.forms.map((form) => (
               form.form_instance_id ? (
-                <Link
-                  key={form.form_instance_id}
-                  to="/subjects/$subjectId/forms/$formInstanceId"
-                  params={{ subjectId, formInstanceId: form.form_instance_id }}
-                  className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                >
-                  <span className="text-foreground">{form.name ?? 'Form'}</span>
-                  <StatusBadge status={form.status} label="Form status" />
-                </Link>
+                studyId ? (
+                  <Link
+                    key={form.form_instance_id}
+                    to="/studies/$studyId/edc/subjects/$subjectId/visits/$visitId/forms/$formId"
+                    params={{ studyId, subjectId, visitId, formId: form.form_instance_id }}
+                    className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  >
+                    <span className="text-foreground">{form.name ?? 'Form'}</span>
+                    <StatusBadge status={form.status} label="Data entry status" />
+                  </Link>
+                ) : (
+                  <Link
+                    key={form.form_instance_id}
+                    to="/subjects/$subjectId/forms/$formInstanceId"
+                    params={{ subjectId, formInstanceId: form.form_instance_id }}
+                    className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  >
+                    <span className="text-foreground">{form.name ?? 'Form'}</span>
+                    <StatusBadge status={form.status} label="Data entry status" />
+                  </Link>
+                )
               ) : (
                 <div key={form.form_definition_id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                   <span className="text-foreground">{form.name ?? 'Form'}</span>

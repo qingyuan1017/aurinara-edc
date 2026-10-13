@@ -18,6 +18,7 @@ from app.api.routes.ctms.financials import router as financials_router
 from app.api.routes.ctms.health import router as health_router
 from app.api.routes.ctms.milestones import router as milestones_router
 from app.api.routes.ctms.monitoring import router as monitoring_router
+from app.api.routes.ctms.portfolio import router as portfolio_router
 from app.api.routes.ctms.projections import router as projections_router
 from app.api.routes.ctms.reference_data import router as reference_data_router
 from app.api.routes.ctms.reports import router as reports_router
@@ -53,6 +54,7 @@ for resource_router in (
     enrollment_router,
     milestones_router,
     monitoring_router,
+    portfolio_router,
     tasks_router,
     contacts_router,
     projections_router,

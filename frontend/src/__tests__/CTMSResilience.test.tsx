@@ -8,6 +8,7 @@ import { SubjectCasebookPage } from '@/features/subjects/SubjectCasebookPage'
 import { StudyDashboardPage } from '@/features/dashboards/StudyDashboardPage'
 import { PERMISSIONS } from '@/lib/permissions'
 import { ThemeProvider } from '@/lib/theme'
+import { EDC_NAV_ITEMS } from '@/lib/navigation-model'
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
@@ -17,7 +18,7 @@ vi.mock('@tanstack/react-router', () => ({
   useLocation: () => ({ pathname: '/', search: {}, hash: '' }),
 }))
 
-const edcNavigation = ['Dashboard', 'Studies', 'Sites', 'Subjects', 'Queries', 'Data Cleaning', 'SDV Worklist', 'Clinical Review', 'AI Assistant', 'Notifications', 'Exports', 'Admin', 'Audit Trail']
+const edcNavigation = EDC_NAV_ITEMS.map((item) => item.label)
 
 function renderShell(capability: { enabled: boolean; phase: 0 | 1 | 2 | 3 }) {
   useAuthStore.setState({

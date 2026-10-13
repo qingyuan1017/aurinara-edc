@@ -132,6 +132,12 @@ export function StudyDashboardPage({ studyId, dataCleaning = false }: { studyId:
       <PageToolbar label="Dashboard scope">
         <span className="text-sm text-muted-foreground">Study scope: {studyId}</span>
         {siteId ? <StatusBadge status="Selected site" label="Study context" /> : null}
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm"><Link to="/studies/$studyId/edc/subjects" params={{ studyId }}>Subjects</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link to="/studies/$studyId/edc/queries/open" params={{ studyId }}>Query inbox</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link to="/studies/$studyId/edc/data-review" params={{ studyId }}>Data review</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link to="/studies/$studyId/edc/exports" params={{ studyId }}>Exports</Link></Button>
+        </div>
       </PageToolbar>
 
       <section aria-labelledby="study-progress-heading" className="space-y-3">

@@ -14,7 +14,6 @@ import {
 import { PV_DISABLED_MANIFEST, normalizePVCapabilities } from '@/features/pv'
 import { PERMISSIONS } from '@/lib/permissions'
 import { getDesignerLandingPath } from '@/features/designer/navigation'
-import { CTMS_REPORT_DEFINITIONS } from '@/features/ctms/reportCatalog'
 
 const allPermissions = Object.values(PERMISSIONS)
 const readyState = normalizeCTMSCapabilities({
@@ -27,18 +26,27 @@ const readyState = normalizeCTMSCapabilities({
 const disabledPVState = normalizePVCapabilities(PV_DISABLED_MANIFEST)
 
 describe('navigation model adapter', () => {
-  it('groups every existing EDC target without changing its route', () => {
+  it('groups the eight study-scoped EDC workspaces and their submenus', () => {
     const groupedItems = EDC_NAVIGATION_SECTIONS.flatMap((section) => section.items)
 
     expect(groupedItems).toHaveLength(EDC_NAV_ITEMS.length)
     expect(groupedItems.map((item) => item.to)).toEqual(EDC_NAV_ITEMS.map((item) => item.to))
     expect(new Set(EDC_NAVIGATION_SECTIONS.map((section) => section.id))).toEqual(new Set([
-      'workspace',
-      'study-data',
-      'data-quality',
-      'operations',
-      'administration',
+      'overview',
+      'subjects',
+      'data-entry',
+      'data-review',
+      'queries',
+      'medical-coding',
+      'exports',
+      'database-lock',
     ]))
+
+    const model = resolveNavigationModel(readyState, disabledPVState, allPermissions, { studyId: 'study/one' })
+    const edcItems = model.edcSections.flatMap((section) => section.items)
+    expect(edcItems.find((item) => item.id === 'edc-dashboard')?.to).toBe('/studies/study%2Fone/edc/overview')
+    expect(edcItems.find((item) => item.id === 'subject-list')?.to).toBe('/studies/study%2Fone/edc/subjects')
+    expect(edcItems.find((item) => item.id === 'database-lock-unlock')?.to).toBe('/studies/study%2Fone/edc/database-lock/manage')
   })
 
   it('keeps Designer navigation in its own permission-filtered module', () => {
@@ -70,43 +78,27 @@ describe('navigation model adapter', () => {
     const items = model.ctmsSections.flatMap((section) => section.items)
 
     expect(model.ctmsSections.map((section) => section.id)).toEqual([
-      'entity-management',
-      'study-operations',
-      'project-management',
-      'financial-management',
-      'rbm',
+      'overview',
+      'study-management',
+      'sites',
       'monitoring',
-      'study-records',
-      'site-operations',
+      'contracts',
+      'financials',
+      'tasks-issues',
+      'documents',
       'reports',
-      'reporting-exports',
-      'coordination-health',
     ])
-    expect(items.map((item) => item.id)).toEqual([
-      'referenceData', 'entityManagement',
-      'studyWorkspace', 'studyProfile',
-      'projectManagement',
-      'financialOverview',
-      'ract', 'kri',
-      'monitoringOverview',
-      'protocolDeviations', 'icf', 'trackLogs',
-      'siteActivation',
-      ...CTMS_REPORT_DEFINITIONS.map((report) => report.id),
-      'exports', 'failedEvents', 'conflicts', 'health',
-    ])
-    expect(items.find((item) => item.id === 'studyWorkspace')?.activeOptions.exact).toBe(true)
-    expect(items.filter((item) => item.id !== 'studyWorkspace').every((item) => item.activeOptions.exact === false)).toBe(true)
+    expect(items.map((item) => item.id)).toContain('studyDashboard')
+    expect(items.map((item) => item.id)).toContain('monitoringVisits')
+    expect(items.map((item) => item.id)).toContain('studyContracts')
+    expect(items.map((item) => item.id)).toContain('financialReports')
+    expect(items.find((item) => item.id === 'studyDashboard')?.activeOptions.exact).toBe(true)
     expect(items.every((item) => item.search === preserveCurrentSearch)).toBe(true)
-    expect(items.find((item) => item.id === 'studyWorkspace')?.to).toBe('/studies/study%2Fone/ctms')
-    expect(items.find((item) => item.id === 'studyProfile')?.to).toBe('/studies/study%2Fone/ctms/details')
-    expect(items.find((item) => item.id === 'projectManagement')?.to).toBe('/studies/study%2Fone/ctms/project-management')
-    expect(items.find((item) => item.id === 'financialOverview')?.to).toBe('/studies/study%2Fone/ctms/financial-management')
+    expect(items.find((item) => item.id === 'studyDashboard')?.to).toBe('/studies/study%2Fone/ctms')
+    expect(items.find((item) => item.id === 'studyInformation')?.to).toBe('/studies/study%2Fone/ctms/details')
+    expect(items.find((item) => item.id === 'studyPlans')?.to).toBe('/studies/study%2Fone/ctms/project-management')
+    expect(items.find((item) => item.id === 'studyFinancialOverview')?.to).toBe('/studies/study%2Fone/ctms/financial-management')
     expect(items.find((item) => item.id === 'monitoringOverview')?.to).toBe('/studies/study%2Fone/ctms/monitoring')
-    expect(items.find((item) => item.id === 'reportGantt')?.to).toBe('/studies/study%2Fone/ctms/reports/project-management/gantt')
-    expect(items.find((item) => item.id === 'reportGantt')?.group).toBe('Project Management')
-    expect(items.find((item) => item.id === 'reportCrfStatusSummary')?.group).toBe('CRF')
-    expect(items.find((item) => item.id === 'reportQueryAgingSummary')?.group).toBe('Query')
-    expect(items.find((item) => item.id === 'siteActivation')?.to).toBe('/sites/site%20one/ctms/activation')
   })
 
   it.each([
@@ -160,6 +152,6 @@ describe('navigation model adapter', () => {
     })
     const model = resolveNavigationModel(state, disabledPVState, [PERMISSIONS.CTMS_OPERATIONAL_DATA_READ], { studyId: 'study-1' })
 
-    expect(model.ctmsSections.flatMap((section) => section.items).map((item) => item.id)).toEqual(['studyWorkspace'])
+    expect(model.ctmsSections.flatMap((section) => section.items).map((item) => item.id)).toEqual(['studyDashboard'])
   })
 })

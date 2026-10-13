@@ -3,7 +3,10 @@ import { Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { useAuthStore } from '@/lib/auth'
 import { usePermission, PERMISSIONS } from '@/lib/permissions'
 import { useCTMSCapabilityState } from '@/features/ctms'
+import { getCTMSWorkspaceFromPath } from '@/features/ctms/navigation'
+import { getLastCTMSWorkspacePath } from '@/features/ctms/workspace-state'
 import { usePVCapabilityState } from '@/features/pv'
+import { getEDCLandingPath, getEDCStudyIdFromPath } from '@/features/edc'
 import { getDesignerLandingPath } from '@/features/designer/navigation'
 import { useStudyContext } from '@/lib/study-context'
 import { resolveAppModule, useModuleStore, type AppModule } from '@/lib/module-context'
@@ -38,11 +41,17 @@ export function AppShell() {
   // links and browser refreshes. The store remembers the user's last choice
   // for consumers that need it, while every module switch lands on its root.
   const activeModule = resolveAppModule(pathname)
+  const ctmsWorkspace = getCTMSWorkspaceFromPath(pathname)
+  const edcRouteStudyId = getEDCStudyIdFromPath(pathname)
 
   // Navigation is a convenience filter only; every CTMS and PV API route
   // remains server-authorized and direct navigation renders Access Denied.
   const navigationModel = resolveNavigationModel(ctmsState, pvState, user?.permissions ?? [], {
-    studyId: selectedStudyId,
+    studyId: ctmsWorkspace?.kind === 'study'
+      ? ctmsWorkspace.studyId
+      : activeModule === 'ctms'
+        ? null
+        : edcRouteStudyId ?? selectedStudyId,
     siteId: selectedSiteId,
   })
   const showCTMS = ctmsState.status === 'ready' && canReadCTMS
@@ -62,10 +71,10 @@ export function AppShell() {
       to: module === 'designer'
         ? (designerLandingPath ?? '/designer/forms')
         : module === 'ctms'
-          ? '/ctms'
+          ? getLastCTMSWorkspacePath()
           : module === 'pv'
             ? '/pv'
-            : '/',
+            : getEDCLandingPath(selectedStudyId),
     })
   }
 
@@ -99,6 +108,8 @@ export function AppShell() {
           displayName={displayName}
           onSignOut={handleLogout}
           onMobileMenuOpen={() => setMobileSidebarOpen(true)}
+          activeModule={activeModule}
+          ctmsStudyId={ctmsWorkspace?.studyId}
         />
 
         <PageContainer

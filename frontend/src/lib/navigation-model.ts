@@ -1,6 +1,7 @@
-import { Bell, BookOpen, Building2, CheckCircle2, CircleHelp, LayoutDashboard, ScrollText, Search, Settings, Sparkles, Stethoscope, Upload, Users, type LucideIcon } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { CTMSCapabilityState, CTMSNavigationSection, CTMSNavigationItem } from '@/features/ctms'
 import { resolveCTMSNavigation } from '@/features/ctms'
+import { resolveEDCNavigation } from '@/features/edc/navigation'
 import type { DesignerNavigationSection, DesignerNavigationItem } from '@/features/designer/navigation'
 import { resolveDesignerNavigation } from '@/features/designer/navigation'
 import type { PVCapabilityState, PVNavigationSection, PVNavigationItem } from '@/features/pv'
@@ -20,11 +21,13 @@ export interface EDCNavigationItem {
   readonly icon: LucideIcon
   readonly section: string
   readonly search: SearchPreserver
+  readonly activeOptions?: { readonly exact: boolean }
 }
 
 export interface NavigationSection {
   readonly id: string
   readonly label: string
+  readonly icon?: LucideIcon
   readonly items: readonly EDCNavigationItem[]
 }
 
@@ -68,44 +71,20 @@ export interface NavigationModel {
   readonly pvSections: readonly PVNavigationViewSection[]
 }
 
-/** The same EDC destinations previously defined in AppShell, grouped for presentation. */
-export const EDC_NAV_ITEMS: readonly EDCNavigationItem[] = [
-  { id: 'dashboard', label: 'Dashboard', to: '/', icon: LayoutDashboard, section: 'workspace', search: preserveCurrentSearch },
-  { id: 'studies', label: 'Studies', to: '/studies', icon: BookOpen, section: 'study-data', search: preserveCurrentSearch },
-  { id: 'sites', label: 'Sites', to: '/sites', icon: Building2, section: 'study-data', search: preserveCurrentSearch },
-  { id: 'subjects', label: 'Subjects', to: '/subjects', icon: Users, section: 'study-data', search: preserveCurrentSearch },
-  { id: 'queries', label: 'Queries', to: '/queries', icon: CircleHelp, section: 'data-quality', search: preserveCurrentSearch },
-  { id: 'data-cleaning', label: 'Data Cleaning', to: '/data-cleaning', icon: Search, section: 'data-quality', search: preserveCurrentSearch },
-  { id: 'sdv', label: 'SDV Worklist', to: '/sdv', icon: CheckCircle2, section: 'data-quality', search: preserveCurrentSearch },
-  { id: 'review', label: 'Clinical Review', to: '/review', icon: Stethoscope, section: 'data-quality', search: preserveCurrentSearch },
-  { id: 'ai', label: 'AI Assistant', to: '/ai', icon: Sparkles, section: 'operations', search: preserveCurrentSearch },
-  { id: 'notifications', label: 'Notifications', to: '/notifications', icon: Bell, section: 'operations', search: preserveCurrentSearch },
-  { id: 'exports', label: 'Exports', to: '/exports', icon: Upload, section: 'operations', search: preserveCurrentSearch },
-  { id: 'admin', label: 'Admin', to: '/admin', icon: Settings, section: 'administration', search: preserveCurrentSearch },
-  { id: 'audit', label: 'Audit Trail', to: '/audit', icon: ScrollText, section: 'administration', search: preserveCurrentSearch },
-] as const
-
-/** Backwards-friendly name for consumers migrating the old AppShell constant. */
-export const NAV_ITEMS = EDC_NAV_ITEMS
-
-const EDC_SECTION_LABELS: Readonly<Record<string, string>> = {
-  workspace: 'Workspace',
-  'study-data': 'Study data',
-  'data-quality': 'Data quality',
-  operations: 'Operations',
-  administration: 'Administration',
-}
-
-export const EDC_NAVIGATION_SECTIONS: readonly NavigationSection[] = Object.entries(EDC_SECTION_LABELS).map(([id, label]) => ({
-  id,
-  label,
-  items: EDC_NAV_ITEMS.filter((item) => item.section === id),
-}))
-
 /** Identity preservation matches the existing CTMS `search={(previous) => previous}` links. */
 export function preserveCurrentSearch(previous: SearchState): SearchState {
   return previous
 }
+
+/** Study-aware EDC navigation used by the authenticated shell. */
+export const EDC_NAVIGATION_SECTIONS: readonly NavigationSection[] = resolveEDCNavigation(null, preserveCurrentSearch)
+  .map((section) => ({
+    ...section,
+    items: section.items.map((item) => ({ ...item, icon: section.icon })),
+  }))
+
+export const EDC_NAV_ITEMS: readonly EDCNavigationItem[] = EDC_NAVIGATION_SECTIONS.flatMap((section) => section.items)
+export const NAV_ITEMS = EDC_NAV_ITEMS
 
 /**
  * Resolves the presentation navigation from existing authority metadata.
@@ -117,12 +96,16 @@ export function resolveNavigationModel(
   permissions: readonly string[],
   scope: { readonly studyId?: string | null; readonly siteId?: string | null } = {},
 ): NavigationModel {
+  const edcSections = resolveEDCNavigation(scope.studyId, preserveCurrentSearch).map((section) => ({
+    ...section,
+    items: section.items.map((item) => ({ ...item, icon: section.icon })),
+  }))
   const ctmsSections = resolveCTMSNavigation(state, permissions, scope).map((section) => ({
     ...section,
     items: section.items.map((item) => ({
       ...item,
       search: preserveCurrentSearch,
-      activeOptions: { exact: item.id === 'studyWorkspace' },
+      activeOptions: { exact: item.exact ?? false },
     })),
   }))
 
@@ -145,7 +128,7 @@ export function resolveNavigationModel(
   }))
 
   return {
-    edcSections: EDC_NAVIGATION_SECTIONS,
+    edcSections,
     designerSections,
     ctmsSections,
     pvSections,

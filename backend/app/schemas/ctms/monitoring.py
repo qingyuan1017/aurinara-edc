@@ -365,6 +365,15 @@ class MonitoringFindingTransition(BaseCreateSchema):
     _validate_reason = field_validator("reason")(_reason)
 
 
+class MonitoringFindingAssign(BaseCreateSchema):
+    model_config = ConfigDict(extra="forbid")
+
+    owner_id: UUID
+    reason: str
+
+    _validate_reason = field_validator("reason")(_reason)
+
+
 class MonitoringActionCreate(BaseCreateSchema):
     model_config = ConfigDict(extra="forbid")
 

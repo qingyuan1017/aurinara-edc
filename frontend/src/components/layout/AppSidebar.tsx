@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ChevronLeft, ChevronRight, Folder } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Folder } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -17,6 +18,7 @@ import type {
   PVNavigationViewSection,
 } from '@/lib/navigation-model'
 import type { AppModule } from '@/lib/module-context'
+import { WorkspaceSwitcher } from '@/features/ctms/components/WorkspaceSwitcher'
 
 export interface AppSidebarProps {
   /** Whether the desktop sidebar is in its compact presentation. */
@@ -92,23 +94,43 @@ function EDCSection({
   onNavigate?: () => void
 }) {
   const headingId = sectionHeadingId('edc', section.id)
+  const [expanded, setExpanded] = useState(true)
+  const SectionIcon = section.icon ?? Folder
+
+  if (collapsed) {
+    const landingItem = section.items[0]
+    return landingItem ? (
+      <section aria-label={section.label} className="mb-1">
+        <NavigationLink
+          item={{ ...landingItem, label: section.label, icon: SectionIcon }}
+          collapsed
+          activeOptions={{ exact: false }}
+          onNavigate={onNavigate}
+        />
+      </section>
+    ) : null
+  }
 
   return (
-    <section aria-labelledby={headingId}>
-      <h2
-        id={headingId}
-        className={cn(
-          'px-3 pb-1 pt-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground',
-          collapsed && 'sr-only',
-        )}
-      >
-        {section.label}
+    <section aria-labelledby={headingId} className="mb-1">
+      <h2 id={headingId}>
+        <button
+          type="button"
+          className={cn('flex min-h-9 w-full items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring', collapsed && 'justify-center px-2')}
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          aria-controls={`${headingId}-items`}
+        >
+          <SectionIcon className="size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate text-left">{section.label}</span>
+          <ChevronDown className={cn('size-3.5 shrink-0 transition-transform', expanded && 'rotate-180')} aria-hidden="true" />
+        </button>
       </h2>
-      <div className="space-y-0.5">
+      {!collapsed && expanded ? <div id={`${headingId}-items`} className="ml-4 mt-0.5 space-y-0.5 border-l border-sidebar-border/70 pl-2">
         {section.items.map((item) => (
-          <NavigationLink key={item.id} item={item} collapsed={collapsed} onNavigate={onNavigate} />
+          <NavigationLink key={item.id} item={item} collapsed={false} activeOptions={item.activeOptions} onNavigate={onNavigate} />
         ))}
-      </div>
+      </div> : null}
     </section>
   )
 }
@@ -117,48 +139,40 @@ function CTMSSection({
   section,
   collapsed,
   onNavigate,
+  onExpand,
 }: {
   section: CTMSNavigationViewSection
   collapsed: boolean
   onNavigate?: () => void
+  onExpand?: () => void
 }) {
   const headingId = sectionHeadingId('ctms', section.id)
+  const [expanded, setExpanded] = useState(true)
+  const SectionIcon = section.icon
 
   return (
-    <section aria-labelledby={section.label ? headingId : undefined}>
-      {section.label ? (
-        <h2
-          id={headingId}
-          className={cn(
-            'px-3 pb-1 pt-3 text-[0.6875rem] font-medium text-muted-foreground',
-            collapsed && 'sr-only',
-          )}
+    <section aria-labelledby={headingId} className="mb-1">
+      <h2 id={headingId}>
+        <button
+          type="button"
+          className={cn('flex min-h-9 w-full items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring', collapsed && 'justify-center px-2')}
+          onClick={() => collapsed ? onExpand?.() : setExpanded((value) => !value)}
+          aria-expanded={collapsed ? undefined : expanded}
+          aria-controls={`${headingId}-items`}
+          title={collapsed ? section.label : undefined}
         >
-          {section.label}
-        </h2>
+          <SectionIcon className="size-4 shrink-0" aria-hidden="true" />
+          <span className={cn('min-w-0 flex-1 truncate text-left', collapsed && 'sr-only')}>{section.label}</span>
+          {!collapsed ? <ChevronDown className={cn('size-3.5 shrink-0 transition-transform', expanded && 'rotate-180')} aria-hidden="true" /> : null}
+        </button>
+      </h2>
+      {!collapsed && expanded ? (
+        <div id={`${headingId}-items`} className="ml-4 mt-0.5 space-y-0.5 border-l border-sidebar-border/70 pl-2">
+          {section.items.map((item) => (
+            <NavigationLink key={item.id} item={item} collapsed={false} activeOptions={item.activeOptions} onNavigate={onNavigate} />
+          ))}
+        </div>
       ) : null}
-      <div className="space-y-0.5">
-        {section.items.map((item, index) => {
-          const startsGroup = Boolean(item.group && item.group !== section.items[index - 1]?.group)
-          return (
-            <div key={item.id}>
-              {startsGroup ? (
-                <h3 className={cn('px-3 pb-1 pt-2 text-[0.6875rem] font-medium text-muted-foreground', collapsed && 'sr-only')}>
-                  {item.group}
-                </h3>
-              ) : null}
-              <div className={cn(item.group && !collapsed && 'pl-2')}>
-                <NavigationLink
-                  item={item}
-                  collapsed={collapsed}
-                  activeOptions={item.activeOptions}
-                  onNavigate={onNavigate}
-                />
-              </div>
-            </div>
-          )
-        })}
-      </div>
     </section>
   )
 }
@@ -247,6 +261,7 @@ function NavigationSections({
   showDesigner,
   showPV,
   activeModule,
+  onCollapsedChange,
   onNavigate,
 }: {
   collapsed: boolean
@@ -258,6 +273,7 @@ function NavigationSections({
   showDesigner: boolean
   showPV: boolean
   activeModule?: AppModule
+  onCollapsedChange: (collapsed: boolean) => void
   onNavigate?: () => void
 }) {
   return (
@@ -290,7 +306,7 @@ function NavigationSections({
           </p>
           <div className="space-y-1">
             {ctmsSections.map((section) => (
-              <CTMSSection key={section.id} section={section} collapsed={collapsed} onNavigate={onNavigate} />
+              <CTMSSection key={section.id} section={section} collapsed={collapsed} onNavigate={onNavigate} onExpand={() => onCollapsedChange(false)} />
             ))}
           </div>
         </div>
@@ -412,6 +428,7 @@ export function AppSidebar({
         </div>
 
         {moduleSwitcher()}
+        {activeModule === 'ctms' ? <WorkspaceSwitcher collapsed={collapsed} /> : null}
 
         <nav
           id="authenticated-navigation"
@@ -428,6 +445,7 @@ export function AppSidebar({
             showDesigner={showDesigner}
             showPV={showPV}
             activeModule={activeModule}
+            onCollapsedChange={onCollapsedChange}
           />
         </nav>
       </aside>
@@ -445,6 +463,7 @@ export function AppSidebar({
             </SheetDescription>
           </SheetHeader>
           {moduleSwitcher(true)}
+          {activeModule === 'ctms' ? <WorkspaceSwitcher mobile onNavigate={() => onMobileOpenChange(false)} /> : null}
           <nav
             id="mobile-navigation-links"
             aria-label="Mobile primary navigation"
@@ -460,6 +479,7 @@ export function AppSidebar({
               showDesigner={showDesigner}
               showPV={showPV}
               activeModule={activeModule}
+              onCollapsedChange={onCollapsedChange}
               onNavigate={() => onMobileOpenChange(false)}
             />
           </nav>

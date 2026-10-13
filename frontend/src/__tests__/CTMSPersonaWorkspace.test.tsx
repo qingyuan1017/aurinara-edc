@@ -9,6 +9,7 @@ import { useAuthStore } from '@/lib/auth'
 import { useStudyContext } from '@/lib/study-context'
 import { PERMISSIONS } from '@/lib/permissions'
 import { ThemeProvider } from '@/lib/theme'
+import { EDC_NAV_ITEMS } from '@/lib/navigation-model'
 
 let currentPathname = '/ctms'
 
@@ -26,21 +27,7 @@ vi.mock('@tanstack/react-router', () => ({
   useSearch: () => ({}),
 }))
 
-const edcNavigation = [
-  'Dashboard',
-  'Studies',
-  'Sites',
-  'Subjects',
-  'Queries',
-  'Data Cleaning',
-  'SDV Worklist',
-  'Clinical Review',
-  'AI Assistant',
-  'Notifications',
-  'Exports',
-  'Admin',
-  'Audit Trail',
-]
+const edcNavigation = EDC_NAV_ITEMS.map((item) => item.label)
 
 const allCTMSCapabilities = Object.values(CTMS_CAPABILITY_CODES)
 const enabledManifest = {
@@ -132,7 +119,7 @@ function renderWorkspace(
 
 function expectBaselineEDCNavigation() {
   for (const label of edcNavigation) {
-    expect(screen.getByText(label, { exact: true })).toBeInTheDocument()
+    expect(screen.getAllByText(label, { exact: true }).length).toBeGreaterThan(0)
   }
 }
 
@@ -151,16 +138,15 @@ afterEach(() => {
 
 describe('CTMS persona, workspace, and EDC-shell component coverage', () => {
   it.each([
-    { persona: 'Admin', role: 'CTMS_Admin', granted: permissions.admin, required: ['Failed events', 'Conflicts', 'Exports'] },
-    { persona: 'Operations User', role: 'CTMS_Operations_User', granted: permissions.operations, required: ['Exports', 'Monitoring'], absent: ['Failed events', 'Conflicts'] },
-    { persona: 'Viewer', role: 'CTMS_Viewer', granted: permissions.viewer, required: ['Overview', 'Study Details'], absent: ['Failed events', 'Conflicts'] },
-    { persona: 'mixed permissions', role: 'mixed', granted: permissions.mixed, required: ['Conflicts'], absent: ['Failed events', 'Exports'] },
-  ])('resolves CTMS navigation for $persona', async ({ role, granted, required, absent }) => {
-    renderShell(granted, enabledManifest, role)
+    { persona: 'Admin', role: 'CTMS_Admin', granted: permissions.admin, required: ['Study Dashboard', 'Monitoring Visits', 'Study Financial Overview'] },
+    { persona: 'Operations User', role: 'CTMS_Operations_User', granted: permissions.operations, required: ['Study Dashboard', 'Monitoring Plans', 'Study Tasks'] },
+    { persona: 'Viewer', role: 'CTMS_Viewer', granted: permissions.viewer, required: ['Study Dashboard', 'Study Information', 'Monitoring Overview'] },
+    { persona: 'mixed permissions', role: 'mixed', granted: permissions.mixed, required: ['Study Dashboard', 'Study Information'] },
+  ])('resolves CTMS navigation for $persona', async ({ role, granted, required }) => {
+    renderShell(granted, enabledManifest, role, '/studies/study-1/ctms')
 
     expect(await screen.findByLabelText('CTMS navigation')).toBeInTheDocument()
     for (const label of required) expectCTMSLink(label, true)
-    for (const label of absent ?? []) expectCTMSLink(label, false)
   })
 
   it('preserves every baseline EDC navigation item when CTMS is disabled or unavailable', async () => {

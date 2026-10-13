@@ -31,6 +31,7 @@ from app.schemas.ctms.monitoring import (
     MonitoringActivityCreate,
     MonitoringActivityReschedule,
     MonitoringActivityResponse,
+    MonitoringFindingAssign,
     MonitoringFindingCreate,
     MonitoringFindingResponse,
     MonitoringFindingTransition,
@@ -541,6 +542,28 @@ async def transition_monitoring_finding(
             body.status,
             reason=body.reason,
             resolution=body.resolution,
+            actor=current_user,
+            user=current_user,
+            correlation_id=get_correlation_id(),
+        )
+    )
+
+
+@router.post(
+    "/monitoring-findings/{finding_id}/assign", response_model=MonitoringFindingResponse
+)
+async def assign_monitoring_finding(
+    finding_id: UUID,
+    body: MonitoringFindingAssign,
+    session: DbSession,
+    current_user: WriteGuard,
+):
+    return MonitoringFindingResponse.model_validate(
+        await monitoring_service.assign_finding(
+            session,
+            finding_id,
+            body.owner_id,
+            reason=body.reason,
             actor=current_user,
             user=current_user,
             correlation_id=get_correlation_id(),

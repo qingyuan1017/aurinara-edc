@@ -1805,6 +1805,56 @@ class MonitoringService:
         )
         return finding
 
+    async def assign_finding(
+        self,
+        session: AsyncSession,
+        finding_id: UUID | str,
+        owner_id: UUID | str,
+        *,
+        reason: str,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        user: Any | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> MonitoringFinding:
+        finding = await session.get(MonitoringFinding, _uuid(finding_id, "finding_id"))
+        if finding is None or finding.deleted_at is not None:
+            raise NotFoundError("Monitoring finding was not found")
+        self._check_scope(user, finding)
+        canonical_owner_id = await self._active_cra(
+            session,
+            owner_id,
+            study_id=finding.study_id,
+            site_id=finding.site_id,
+            user=user,
+        )
+        assignment_reason = _required_reason(reason)
+        actor_uuid = _actor_id(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        previous_status = finding.status
+        finding.owner_id = canonical_owner_id
+        if finding.status == MonitoringFindingStatus.OPEN.value:
+            finding.status = MonitoringFindingStatus.ACTION_ASSIGNED.value
+        finding.updated_by = actor_uuid
+        finding.updated_at = utc_now()
+        await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="monitoring_finding",
+            entity_id=finding.id,
+            study_id=finding.study_id,
+            site_id=finding.site_id,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action="assign",
+            changed_fields=["owner_id", "status"],
+            previous_status=previous_status,
+            status=finding.status,
+            reason=assignment_reason,
+            payload={"finding_code": finding.finding_code, "owner_id": canonical_owner_id},
+        )
+        return finding
+
     async def create_action_item(
         self,
         session: AsyncSession,

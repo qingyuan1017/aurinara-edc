@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit_service
-from app.core.ctms import Module
+from app.core.ctms import Module, utc_now
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.ctms.entity_management import (
     ManagedEntity,
@@ -237,6 +237,16 @@ class EntityManagementService:
         if entity is None or entity.deleted_at is not None:
             raise NotFoundError("Configured entity was not found", {"entity_id": str(entity_id)})
         values = _values(payload)
+        if (
+            entity.entity_type == ManagedEntityType.SITE.value
+            and "code" in values
+            and values["code"] is not None
+            and str(values["code"]).strip().upper() != entity.code
+        ):
+            raise ValidationError(
+                "A Site's generated code cannot be changed",
+                {"field": "code", "reason": "CANONICAL_IDENTITY_IMMUTABLE"},
+            )
         if "attributes" in values and values["attributes"] is not None:
             values["attributes"] = _validated_attributes(entity.entity_type, values["attributes"])
             await self._validate_attribute_references(
@@ -284,16 +294,47 @@ class EntityManagementService:
         actor_uuid = _actor(actor, actor_id)
         correlation = _correlation(correlation_id, actor)
         entity.updated_by = actor_uuid
-        from app.core.ctms import utc_now
-
         entity.updated_at = utc_now()
+        canonical_site: Site | None = None
+        if entity.entity_type == ManagedEntityType.SITE.value:
+            canonical_site = await session.get(Site, entity.canonical_site_id)
+            if canonical_site is None or canonical_site.deleted_at is not None:
+                raise NotFoundError(
+                    "Canonical Site identity was not found",
+                    {"site_id": str(entity.canonical_site_id)},
+                )
+            canonical_site.name = entity.name
+            canonical_site.country = entity.attributes.get("country")
+            canonical_site.region = entity.attributes.get("state")
+            canonical_site.address = entity.attributes.get("address")
+            canonical_site.status = SiteStatus.active if entity.active else SiteStatus.inactive
+            canonical_site.updated_at = utc_now()
         await session.flush()
+        if canonical_site is not None:
+            await audit_service.record(
+                session,
+                entity_type="site",
+                entity_id=canonical_site.id,
+                action="update",
+                module=Module.CTMS,
+                actor_id=actor_uuid,
+                correlation_id=correlation,
+                study_id=canonical_site.study_id,
+                site_id=canonical_site.id,
+                scope={"study_id": canonical_site.study_id, "site_id": canonical_site.id},
+                changed_fields=changed,
+                source_module=Module.CTMS,
+                target_module="PLATFORM",
+                source_record_id=canonical_site.id,
+                target_record_id=canonical_site.id,
+                new_value=f"site_id={canonical_site.id}, name={canonical_site.name}",
+            )
         await ctms_atomicity_service.record_mutation(
             session,
             entity_type="managed_entity",
             entity_id=entity.id,
-            study_id=None,
-            site_id=None,
+            study_id=canonical_site.study_id if canonical_site is not None else None,
+            site_id=canonical_site.id if canonical_site is not None else None,
             actor_id=actor_uuid,
             correlation_id=correlation,
             action="update",
