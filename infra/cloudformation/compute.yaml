@@ -106,9 +106,17 @@ Resources:
       RuntimePlatform: {CpuArchitecture: X86_64, OperatingSystemFamily: LINUX}
       Volumes: [{Name: scratch}]
       ContainerDefinitions:
+        - Name: scratch-init
+          Image: !Ref ApplicationImage
+          User: '0'
+          Command: [/bin/sh, -c, 'chmod 1777 /tmp']
+          Essential: false
+          ReadonlyRootFilesystem: true
+          MountPoints: [{SourceVolume: scratch, ContainerPath: /tmp, ReadOnly: false}]
         - Name: api
           Image: !Ref ApplicationImage
           Command: [python, scripts/aws_entrypoint.py, gunicorn, 'app.main:app', --bind, '0.0.0.0:8000', --workers, '2', --worker-class, uvicorn.workers.UvicornWorker, --access-logfile, '-']
+          DependsOn: [{ContainerName: scratch-init, Condition: SUCCESS}]
           Essential: true
           PortMappings: [{ContainerPort: 8000, Protocol: tcp}]
           ReadonlyRootFilesystem: true
@@ -214,9 +222,17 @@ Resources:
       TaskRoleArn: !GetAtt ApplicationTaskRole.Arn
       Volumes: [{Name: scratch}]
       ContainerDefinitions:
+        - Name: scratch-init
+          Image: !Ref ApplicationImage
+          User: '0'
+          Command: [/bin/sh, -c, 'chmod 1777 /tmp']
+          Essential: false
+          ReadonlyRootFilesystem: true
+          MountPoints: [{SourceVolume: scratch, ContainerPath: /tmp, ReadOnly: false}]
         - Name: export
           Image: !Ref ApplicationImage
           Command: [python, scripts/aws_entrypoint.py, python, -m, app.workers.export_queue_worker, --watch]
+          DependsOn: [{ContainerName: scratch-init, Condition: SUCCESS}]
           Essential: true
           ReadonlyRootFilesystem: true
           MountPoints: [{SourceVolume: scratch, ContainerPath: /tmp, ReadOnly: false}]
@@ -246,9 +262,17 @@ Resources:
       TaskRoleArn: !GetAtt ApplicationTaskRole.Arn
       Volumes: [{Name: scratch}]
       ContainerDefinitions:
+        - Name: scratch-init
+          Image: !Ref MigrationApplicationImage
+          User: '0'
+          Command: [/bin/sh, -c, 'chmod 1777 /tmp']
+          Essential: false
+          ReadonlyRootFilesystem: true
+          MountPoints: [{SourceVolume: scratch, ContainerPath: /tmp, ReadOnly: false}]
         - Name: migration
           Image: !Ref MigrationApplicationImage
           Command: [python, scripts/aws_entrypoint.py, sh, -c, 'alembic upgrade head && python -m scripts.seed_builtin_roles']
+          DependsOn: [{ContainerName: scratch-init, Condition: SUCCESS}]
           Essential: true
           ReadonlyRootFilesystem: true
           MountPoints: [{SourceVolume: scratch, ContainerPath: /tmp, ReadOnly: false}]
