@@ -11,7 +11,9 @@ COPY pyproject.toml alembic.ini ./
 COPY app ./app
 COPY alembic ./alembic
 COPY scripts ./scripts
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir --upgrade "setuptools>=78.1.1" \
+    && pip install --no-cache-dir . \
+    && pip uninstall --yes pip setuptools
 
 USER aurinara-edc
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
