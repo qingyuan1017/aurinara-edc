@@ -11,7 +11,7 @@ Parameters:
   ApplicationImage: {Type: String, AllowedPattern: '^.+@sha256:[0-9a-f]{64}$'}
   MigrationApplicationImage: {Type: String, AllowedPattern: '^.+@sha256:[0-9a-f]{64}$'}
   DatabaseInstanceClass: {Type: String, Default: db.m7g.large}
-  AlarmEmail: {Type: String}
+  AlarmEmail: {Type: String, Default: ''}
   ServicesEnabled: {Type: String, AllowedValues: ['true', 'false'], Default: 'false'}
   PlatformPrivateLinkServiceName: {Type: String}
   PlatformPrivateUrl: {Type: String}

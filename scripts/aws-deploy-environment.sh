@@ -7,8 +7,9 @@ vpc_cidr=${3:?missing VPC CIDR}
 database_class=${4:?missing database class}
 dns_provider=${DNS_PROVIDER:-cloudflare}
 hosted_zone_id=${HOSTED_ZONE_ID:-}
+alarm_email=${ALARM_EMAIL:-}
 
-required=(APPLICATION_IMAGE BASE_DOMAIN CERTIFICATE_ARN PLATFORM_STACK_NAME ALARM_EMAIL CLOUDFORMATION_EXECUTION_ROLE_ARN)
+required=(APPLICATION_IMAGE BASE_DOMAIN CERTIFICATE_ARN PLATFORM_STACK_NAME CLOUDFORMATION_EXECUTION_ROLE_ARN)
 for name in "${required[@]}"; do [[ -n "${!name:-}" ]] || { echo "$name is required" >&2; exit 1; }; done
 [[ "$dns_provider" == cloudflare || "$dns_provider" == route53 ]] || { echo "DNS_PROVIDER must be cloudflare or route53" >&2; exit 1; }
 [[ "$dns_provider" != route53 || -n "$hosted_zone_id" ]] || { echo "HOSTED_ZONE_ID is required for Route 53" >&2; exit 1; }
@@ -44,7 +45,7 @@ deploy() {
     --parameter-overrides \
       Environment="$environment" VpcCidr="$vpc_cidr" BaseDomain="$BASE_DOMAIN" \
       DnsProvider="$dns_provider" HostedZoneId="$hosted_zone_id" CertificateArn="$CERTIFICATE_ARN" \
-      ApplicationImage="$service_image" MigrationApplicationImage="$migration_image" DatabaseInstanceClass="$database_class" AlarmEmail="$ALARM_EMAIL" ServicesEnabled="$enabled" \
+      ApplicationImage="$service_image" MigrationApplicationImage="$migration_image" DatabaseInstanceClass="$database_class" AlarmEmail="$alarm_email" ServicesEnabled="$enabled" \
       PlatformPrivateLinkServiceName="$platform_service" PlatformPrivateUrl="$platform_private_url" PlatformPublicUrl="$platform_public_url" PlatformEventBusName="$event_bus" \
       SharedIdentityKeyArn="$identity_key" UserPoolId="$user_pool" SpaClientId="$spa_client" JwtIssuer="$jwt_issuer" JwtJwksUrl="$jwks_url" \
       CognitoDomain="$cognito_domain" ServiceTokenUrl="$token_url" ServiceClientId="$service_client" ServiceClientSecretArn="$service_secret"
@@ -54,7 +55,8 @@ current_image=$APPLICATION_IMAGE
 services_enabled=false
 if aws cloudformation describe-stacks --stack-name "$stack_name" >/dev/null 2>&1; then
   current_image=$(aws cloudformation describe-stacks --stack-name "$stack_name" --query "Stacks[0].Parameters[?ParameterKey=='ApplicationImage'].ParameterValue" --output text)
-  services_enabled=true
+  services_enabled=$(aws cloudformation describe-stacks --stack-name "$stack_name" --query "Stacks[0].Parameters[?ParameterKey=='ServicesEnabled'].ParameterValue" --output text)
+  [[ "$services_enabled" == true ]] || services_enabled=false
 fi
 
 deploy "$current_image" "$APPLICATION_IMAGE" "$services_enabled"

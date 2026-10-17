@@ -27,8 +27,9 @@ Configure both GitHub environments with the bootstrap outputs:
 `AWS_DEPLOYMENT_ROLE_ARN`, `CLOUDFORMATION_EXECUTION_ROLE_ARN`,
 `APPLICATION_REPOSITORY_URI`, and `TEMPLATE_BUCKET_NAME`. Also configure
 `BASE_DOMAIN`, `CERTIFICATE_ARN`, `DNS_PROVIDER=cloudflare`,
-`CLOUDFLARE_ZONE_ID`, and `ALARM_EMAIL`; store `CLOUDFLARE_API_TOKEN` as an
-environment secret.
+`CLOUDFLARE_ZONE_ID`; store `CLOUDFLARE_API_TOKEN` as an environment secret.
+`ALARM_EMAIL` is optional; when omitted, alarms and dashboards are created
+without email or budget subscriptions.
 
 ## Deploy
 

@@ -31,7 +31,11 @@ Resources:
                 token.actions.githubusercontent.com:repository: !Sub '${GitHubOwner}/${GitHubRepository}'
                 token.actions.githubusercontent.com:ref: !Sub 'refs/heads/${DeploymentBranch}'
               StringLike:
-                token.actions.githubusercontent.com:sub: [!Sub 'repo:${GitHubOwner}/${GitHubRepository}:environment:staging', !Sub 'repo:${GitHubOwner}/${GitHubRepository}:environment:production']
+                token.actions.githubusercontent.com:sub:
+                  - !Sub 'repo:${GitHubOwner}/${GitHubRepository}:environment:staging'
+                  - !Sub 'repo:${GitHubOwner}/${GitHubRepository}:environment:production'
+                  - !Sub 'repo:${GitHubOwner}@*/${GitHubRepository}@*:environment:staging'
+                  - !Sub 'repo:${GitHubOwner}@*/${GitHubRepository}@*:environment:production'
       Policies:
         - PolicyName: delivery
           PolicyDocument:
