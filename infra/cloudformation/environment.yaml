@@ -17,7 +17,6 @@ Parameters:
   DatabaseInstanceClass: {Type: String, Default: db.m7g.large}
   AlarmEmail: {Type: String, Default: ''}
   ServicesEnabled: {Type: String, AllowedValues: ['true', 'false'], Default: 'false'}
-  PlatformPrivateLinkServiceName: {Type: String}
   PlatformPrivateUrl: {Type: String}
   PlatformPublicUrl: {Type: String}
   PlatformEventBusName: {Type: String}
@@ -53,7 +52,6 @@ Resources:
         AppSubnetIds: !Join [',', !Ref AppSubnetIds]
         RunnerSubnetIds: !Join [',', !Ref RunnerSubnetIds]
         DataSubnetIds: !Join [',', !Ref DataSubnetIds]
-        PlatformPrivateLinkServiceName: !Ref PlatformPrivateLinkServiceName
   Data:
     Type: AWS::CloudFormation::Stack
     Properties:

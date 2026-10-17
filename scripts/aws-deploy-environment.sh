@@ -18,7 +18,6 @@ platform_output() {
   aws cloudformation describe-stacks --stack-name "$PLATFORM_STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
 }
 
-platform_service=$(platform_output PlatformPrivateLinkServiceName)
 vpc_id=$(platform_output VpcId)
 vpc_cidr=$(platform_output VpcCidr)
 app_subnet_ids=$(platform_output AppSubnetIds)
@@ -52,7 +51,7 @@ deploy() {
       AppSubnetIds="$app_subnet_ids" RunnerSubnetIds="$runner_subnet_ids" DataSubnetIds="$data_subnet_ids" BaseDomain="$BASE_DOMAIN" \
       DnsProvider="$dns_provider" HostedZoneId="$hosted_zone_id" CertificateArn="$CERTIFICATE_ARN" \
       ApplicationImage="$service_image" MigrationApplicationImage="$migration_image" DatabaseInstanceClass="$database_class" AlarmEmail="$alarm_email" ServicesEnabled="$enabled" \
-      PlatformPrivateLinkServiceName="$platform_service" PlatformPrivateUrl="$platform_private_url" PlatformPublicUrl="$platform_public_url" PlatformEventBusName="$event_bus" \
+      PlatformPrivateUrl="$platform_private_url" PlatformPublicUrl="$platform_public_url" PlatformEventBusName="$event_bus" \
       SharedIdentityKeyArn="$identity_key" UserPoolId="$user_pool" SpaClientId="$spa_client" JwtIssuer="$jwt_issuer" JwtJwksUrl="$jwks_url" \
       CognitoDomain="$cognito_domain" ServiceTokenUrl="$token_url" ServiceClientId="$service_client" ServiceClientSecretArn="$service_secret"
 }
