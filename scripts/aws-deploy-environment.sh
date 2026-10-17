@@ -59,6 +59,16 @@ deploy() {
 current_image=$APPLICATION_IMAGE
 services_enabled=false
 if aws cloudformation describe-stacks --stack-name "$stack_name" >/dev/null 2>&1; then
+  stack_status=""
+  for _ in {1..90}; do
+    stack_status=$(aws cloudformation describe-stacks --stack-name "$stack_name" --query 'Stacks[0].StackStatus' --output text)
+    [[ "$stack_status" == *_IN_PROGRESS ]] || break
+    sleep 10
+  done
+  if [[ "$stack_status" == *_IN_PROGRESS ]]; then
+    echo "Timed out waiting for ${stack_name} to finish ${stack_status}" >&2
+    exit 1
+  fi
   current_image=$(aws cloudformation describe-stacks --stack-name "$stack_name" --query "Stacks[0].Parameters[?ParameterKey=='ApplicationImage'].ParameterValue" --output text)
   services_enabled=$(aws cloudformation describe-stacks --stack-name "$stack_name" --query "Stacks[0].Parameters[?ParameterKey=='ServicesEnabled'].ParameterValue" --output text)
   [[ "$services_enabled" == true ]] || services_enabled=false
@@ -72,6 +82,6 @@ security_group=$(aws cloudformation describe-stacks --stack-name "$stack_name" -
 run_arn=$(aws ecs run-task --cluster "$cluster" --task-definition "$task" --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$security_group],assignPublicIp=DISABLED}" --query 'tasks[0].taskArn' --output text)
 [[ "$run_arn" != None && -n "$run_arn" ]] || { echo "migration task did not start" >&2; exit 1; }
 aws ecs wait tasks-stopped --cluster "$cluster" --tasks "$run_arn"
-exit_code=$(aws ecs describe-tasks --cluster "$cluster" --tasks "$run_arn" --query 'tasks[0].containers[0].exitCode' --output text)
+exit_code=$(aws ecs describe-tasks --cluster "$cluster" --tasks "$run_arn" --query "tasks[0].containers[?name=='migration'].exitCode | [0]" --output text)
 [[ "$exit_code" == 0 ]] || { echo "migration failed with exit code $exit_code" >&2; exit 1; }
 deploy "$APPLICATION_IMAGE" "$APPLICATION_IMAGE" true
