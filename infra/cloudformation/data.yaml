@@ -41,6 +41,12 @@ Resources:
             Principal: {Service: events.amazonaws.com}
             Action: [kms:Decrypt, kms:GenerateDataKey]
             Resource: '*'
+          - Sid: CloudFrontFrontendDecrypt
+            Effect: Allow
+            Principal: {Service: cloudfront.amazonaws.com}
+            Action: [kms:Decrypt, kms:DescribeKey]
+            Resource: '*'
+            Condition: {StringEquals: {'aws:SourceAccount': !Ref AWS::AccountId}}
   DataKeyAlias: {Type: AWS::KMS::Alias, Properties: {AliasName: !Sub 'alias/aurinara-edc-${Environment}', TargetKeyId: !Ref DataKey}}
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
