@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import PaginationParams, get_db, require_permission
 from app.core.audit import audit_service
 from app.core.exceptions import ConflictError
+from app.models.shared.identity import User
 from app.schemas.edc.study import (
     StudyCreate,
     StudyResponse,
@@ -56,7 +57,7 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 @router.get("", response_model=PaginatedResponse[StudyResponse])
 async def list_studies(
     session: DbSession,
-    current_user: Annotated[..., Depends(require_permission("study.read"))],
+    current_user: Annotated[User, Depends(require_permission("study.read"))],
     pagination: Annotated[PaginationParams, Depends()],
 ) -> PaginatedResponse[StudyResponse]:
     """List all active studies (paginated).
@@ -77,7 +78,7 @@ async def list_studies(
 async def create_study(
     body: StudyCreate,
     session: DbSession,
-    current_user: Annotated[..., Depends(require_permission("study.create"))],
+    current_user: Annotated[User, Depends(require_permission("study.create"))],
 ) -> StudyResponse:
     """Create a new study.
 
@@ -94,7 +95,7 @@ async def create_study(
 async def get_study(
     study_id: UUID,
     session: DbSession,
-    current_user: Annotated[..., Depends(require_permission("study.read"))],
+    current_user: Annotated[User, Depends(require_permission("study.read"))],
 ) -> StudyResponse:
     """Get a study by ID.
 
@@ -109,7 +110,7 @@ async def update_study(
     study_id: UUID,
     body: StudyUpdate,
     session: DbSession,
-    current_user: Annotated[..., Depends(require_permission("study.configure"))],
+    current_user: Annotated[User, Depends(require_permission("study.configure"))],
 ) -> StudyResponse:
     """Update study metadata (partial PATCH).
 
@@ -151,7 +152,7 @@ async def update_study(
 async def delete_study(
     study_id: UUID,
     session: DbSession,
-    current_user: Annotated[..., Depends(require_permission("study.configure"))],
+    current_user: Annotated[User, Depends(require_permission("study.configure"))],
 ) -> None:
     """Soft-delete a study.
 
@@ -186,7 +187,7 @@ async def transition_study_status(
     study_id: UUID,
     body: StudyStatusTransition,
     session: DbSession,
-    current_user: Annotated[..., Depends(require_permission("study.configure"))],
+    current_user: Annotated[User, Depends(require_permission("study.configure"))],
 ) -> StudyResponse:
     """Transition a study's status along the allowed state machine.
 
@@ -212,7 +213,7 @@ async def transition_study_status(
 async def list_versions(
     study_id: UUID,
     session: DbSession,
-    current_user: Annotated[..., Depends(require_permission("study.read"))],
+    current_user: Annotated[User, Depends(require_permission("study.read"))],
 ) -> list[StudyVersionResponse]:
     """List all versions of a study.
 
@@ -235,7 +236,7 @@ versions_router = APIRouter(prefix="/versions", tags=["versions"])
 async def publish_version(
     version_id: UUID,
     session: DbSession,
-    current_user: Annotated[..., Depends(require_permission("version.publish"))],
+    current_user: Annotated[User, Depends(require_permission("version.publish"))],
 ) -> StudyVersionResponse:
     """Publish a draft Study_Version (draft → published).
 
