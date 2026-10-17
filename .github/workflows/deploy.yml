@@ -3,9 +3,6 @@ on:
   push: {branches: [main]}
   workflow_dispatch:
 permissions: {contents: read, id-token: write}
-concurrency:
-  group: aurinara-edc-production-delivery
-  cancel-in-progress: false
 env: {AWS_REGION: us-east-1}
 jobs:
   build:
@@ -29,6 +26,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: staging
+    concurrency:
+      group: aurinara-edc-staging-delivery
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -85,6 +85,9 @@ jobs:
     needs: [build, staging]
     runs-on: ubuntu-latest
     environment: production
+    concurrency:
+      group: aurinara-edc-production-delivery
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
