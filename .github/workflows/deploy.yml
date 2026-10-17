@@ -3,6 +3,9 @@ on:
   push: {branches: [main]}
   workflow_dispatch:
 permissions: {contents: read, id-token: write}
+concurrency:
+  group: aurinara-edc-production-delivery
+  cancel-in-progress: false
 env: {AWS_REGION: us-east-1}
 jobs:
   build:
