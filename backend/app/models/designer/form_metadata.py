@@ -48,6 +48,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.odm_oid import new_odm_oid
 
 if TYPE_CHECKING:  # avoid runtime import cycles across module boundaries
     from app.models.designer.codelist import Codelist
@@ -77,6 +78,9 @@ class FormDefinition(Base):
     study_version_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("study_versions.id", ondelete="CASCADE"), nullable=False
     )
+    odm_oid: Mapped[str] = mapped_column(
+        String(255), nullable=False, default=lambda: new_odm_oid("FORM")
+    )
 
     # Form metadata
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -85,6 +89,9 @@ class FormDefinition(Base):
     )
     display_order: Mapped[int] = mapped_column(Integer, nullable=False)
     is_repeating: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    requires_signature: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     form_type: Mapped[str] = mapped_column(
         String(50), nullable=False, default="simple", server_default="simple"
     )
@@ -137,6 +144,14 @@ class FormSection(Base):
     form_definition_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("form_definitions.id", ondelete="CASCADE"), nullable=False
     )
+    odm_oid: Mapped[str] = mapped_column(
+        String(255), nullable=False, default=lambda: new_odm_oid("IG")
+    )
+    is_repeating: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    repeat_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    repeat_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Section metadata
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -196,6 +211,27 @@ class FieldDefinition(Base):
     record_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     crf_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     odm_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    odm_oid: Mapped[str] = mapped_column(
+        String(255), nullable=False, default=lambda: new_odm_oid("ITEM")
+    )
+    data_format: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    allows_partial_date: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    source_document: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    query_future_date: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    query_nonconformance: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    breaks_signature: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    review_group: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    dynamic_search_config: Mapped[dict | None] = mapped_column(JSONBType, nullable=True)
     control_type: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
@@ -239,6 +275,7 @@ class FieldDefinition(Base):
     __table_args__ = (
         Index("ix_field_definitions_form_section_id", "form_section_id"),
         Index("ix_field_definitions_codelist_id", "codelist_id"),
+        Index("ix_field_definitions_odm_oid", "odm_oid"),
     )
 
     def __repr__(self) -> str:

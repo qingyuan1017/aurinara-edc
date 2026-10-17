@@ -60,12 +60,21 @@ export function buildVisitHierarchy(visits: VisitDefinitionResponse[]): VisitHie
 }
 
 /** Return real visit leaves in the hierarchy's visual order. */
-export function flattenSelectableVisits(nodes: VisitHierarchyNode[]): FlattenedVisit[] {
+export function flattenSelectableVisits(
+  nodes: VisitHierarchyNode[],
+  additionalSelectableIds: ReadonlySet<string> = new Set(),
+): FlattenedVisit[] {
   const flattened: FlattenedVisit[] = []
   const walk = (node: VisitHierarchyNode, depth: number, parentName?: string) => {
     if (isSelectableVisit(node.visit)) {
       flattened.push({ visit: node.visit, depth, parentName })
       return
+    }
+    // Legacy ODM/Rave imports may identify a schedule-bearing visit as a
+    // folder. Show it as a column when the persisted SoA references it, while
+    // still walking its children because it can also act as a container.
+    if (visitKind(node.visit) !== 'subject' && additionalSelectableIds.has(node.visit.id)) {
+      flattened.push({ visit: node.visit, depth, parentName })
     }
     for (const child of node.children) walk(child, depth + 1, node.visit.name)
   }

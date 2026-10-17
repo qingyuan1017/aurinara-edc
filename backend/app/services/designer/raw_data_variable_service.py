@@ -43,6 +43,7 @@ _SUFFIX_PATTERN = re.compile(r"^_?[A-Za-z][A-Za-z0-9_]*$")
 FIXED_DATASET_VARIABLES: tuple[tuple[str, str, str], ...] = (
     ("PROTOCOL", "string", "Protocol"),
     ("SITE", "string", "Site"),
+    ("SUBJID", "string", "Subject identifier"),
     ("SUBJINIT", "string", "Subject initials"),
     ("VISIT", "string", "Visit"),
     ("FORM", "string", "Form"),
@@ -299,75 +300,79 @@ class RawDataVariableService:
 
         datasets: list[RawDatasetDefinitionResponse] = []
         for form in forms:
-            variables = [
-                RawDatasetVariableResponse(
-                    name=name,
-                    data_type=data_type,
-                    label=label,
-                    source="fixed",
-                )
-                for name, data_type, label in FIXED_DATASET_VARIABLES
-            ]
-            for section in sorted(form.sections, key=lambda item: item.display_order):
-                if section.is_label_only or not section.output_to_dataset:
+            datasets.append(self.build_form_dataset_definition(form, settings_by_field))
+        return datasets
+
+    @staticmethod
+    def build_form_dataset_definition(
+        form: FormDefinition,
+        settings_by_field: dict[UUID, RawDataVariableSetting],
+    ) -> RawDatasetDefinitionResponse:
+        """Build the authoritative raw dataset schema for one form definition."""
+        variables = [
+            RawDatasetVariableResponse(
+                name=name,
+                data_type=data_type,
+                label=label,
+                source="fixed",
+            )
+            for name, data_type, label in FIXED_DATASET_VARIABLES
+        ]
+        for section in sorted(form.sections, key=lambda item: item.display_order):
+            if section.is_label_only or not section.output_to_dataset:
+                continue
+            for field in sorted(section.fields, key=lambda item: item.display_order):
+                if field.control_type == "label":
                     continue
-                for field in sorted(section.fields, key=lambda item: item.display_order):
-                    if field.control_type == "label":
-                        continue
+                variables.append(
+                    RawDatasetVariableResponse(
+                        name=field.variable_name,
+                        data_type=field.data_type,
+                        label=field.label,
+                        source="field",
+                        field_definition_id=field.id,
+                    )
+                )
+                kind = _field_generation_kind(field)
+                setting = settings_by_field.get(field.id)
+                if kind in {"codelist", "numeric"}:
+                    default_suffix = "LABEL" if kind == "codelist" else "NUM"
+                    companion_suffix = (
+                        setting.suffix if setting and setting.suffix else default_suffix
+                    )
                     variables.append(
                         RawDatasetVariableResponse(
-                            name=field.variable_name,
-                            data_type=field.data_type,
-                            label=field.label,
-                            source="field",
+                            name=_variable_with_suffix(field.variable_name, companion_suffix),
+                            data_type="string" if kind == "codelist" else "decimal",
+                            label=f"{field.label} ({kind})",
+                            source=f"{kind}_companion",
                             field_definition_id=field.id,
                         )
                     )
-                    kind = _field_generation_kind(field)
-                    setting = settings_by_field.get(field.id)
-                    if kind in {"codelist", "numeric"}:
-                        default_suffix = "LABEL" if kind == "codelist" else "NUM"
-                        companion_suffix = (
-                            setting.suffix if setting and setting.suffix else default_suffix
-                        )
+                elif kind == "date":
+                    date_suffixes = (
+                        (setting.year_suffix if setting else None) or "YEAR",
+                        (setting.month_suffix if setting else None) or "MONTH",
+                        (setting.day_suffix if setting else None) or "DAY",
+                    )
+                    for component, component_suffix in zip(
+                        ("year", "month", "day"), date_suffixes, strict=True
+                    ):
                         variables.append(
                             RawDatasetVariableResponse(
-                                name=_variable_with_suffix(field.variable_name, companion_suffix),
-                                data_type="string" if kind == "codelist" else "decimal",
-                                label=f"{field.label} ({kind})",
-                                source=f"{kind}_companion",
+                                name=_variable_with_suffix(field.variable_name, component_suffix),
+                                data_type="integer",
+                                label=f"{field.label} ({component})",
+                                source=f"date_{component}",
                                 field_definition_id=field.id,
                             )
                         )
-                    elif kind == "date":
-                        date_suffixes = (
-                            (setting.year_suffix if setting else None) or "YEAR",
-                            (setting.month_suffix if setting else None) or "MONTH",
-                            (setting.day_suffix if setting else None) or "DAY",
-                        )
-                        for component, component_suffix in zip(
-                            ("year", "month", "day"), date_suffixes, strict=True
-                        ):
-                            variables.append(
-                                RawDatasetVariableResponse(
-                                    name=_variable_with_suffix(
-                                        field.variable_name, component_suffix
-                                    ),
-                                    data_type="integer",
-                                    label=f"{field.label} ({component})",
-                                    source=f"date_{component}",
-                                    field_definition_id=field.id,
-                                )
-                            )
-            datasets.append(
-                RawDatasetDefinitionResponse(
-                    form_definition_id=form.id,
-                    form_code=form.form_code,
-                    dataset_name=form.domain or form.form_code,
-                    variables=variables,
-                )
-            )
-        return datasets
+        return RawDatasetDefinitionResponse(
+            form_definition_id=form.id,
+            form_code=form.form_code,
+            dataset_name=form.domain or form.form_code,
+            variables=variables,
+        )
 
 
 # Module-level singleton for convenience

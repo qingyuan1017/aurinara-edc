@@ -26,6 +26,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     ForeignKey,
     Index,
     Integer,
@@ -36,6 +37,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.odm_oid import new_odm_oid
 
 if TYPE_CHECKING:  # avoid runtime import cycles; resolved via the shared registry
     from app.models.designer.study_version import StudyVersion
@@ -52,6 +54,9 @@ class Codelist(Base):
     # Owning study version (the Design_Version this codelist binds to — R6.4)
     study_version_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("study_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    odm_oid: Mapped[str] = mapped_column(
+        String(255), nullable=False, default=lambda: new_odm_oid("CL")
     )
 
     # Code list metadata
@@ -95,6 +100,9 @@ class CodelistItem(Base):
     code: Mapped[str] = mapped_column(String(100), nullable=False)
     label: Mapped[str] = mapped_column(String(500), nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    specify: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     # Lab reference ranges (nullable)
     normal_low: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)

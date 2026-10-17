@@ -79,6 +79,12 @@ async def create_coding_setting(
         dictionary_reference=body.dictionary_reference,
         coding_rule=body.coding_rule,
         field_definition_id=body.field_definition_id,
+        dictionary_version=body.dictionary_version,
+        coding_level=body.coding_level,
+        locale=body.locale,
+        priority=body.priority,
+        approval_required=body.approval_required,
+        auto_approval=body.auto_approval,
         actor_id=current_user.id,
     )
     return CodingSettingResponse.model_validate(setting)

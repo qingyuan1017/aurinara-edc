@@ -291,6 +291,25 @@ class PlatformAuthorizationClient:
                 "Platform role registration is temporarily unavailable"
             ) from error
 
+    def sync_permissions(self, permissions: list[dict[str, object]]) -> tuple[str, ...]:
+        """Register the EDC-owned capability catalog without defining roles."""
+
+        if not self._base_url:
+            raise ServiceUnavailableError("Platform authorization is not configured")
+        try:
+            response = self._client.put(
+                f"{self._base_url}/v1/products/aurinara-edc/permissions",
+                headers={"Authorization": f"Bearer {self.service_token()}"},
+                json={"permissions": permissions},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return tuple(str(item["code"]) for item in payload)
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
+            raise ServiceUnavailableError(
+                "Platform permission registration is temporarily unavailable"
+            ) from error
+
     def sync_site(
         self,
         *,

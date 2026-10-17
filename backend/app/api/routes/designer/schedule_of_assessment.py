@@ -48,13 +48,16 @@ async def get_schedule_of_assessment(
     version_id: UUID,
     session: DbSession,
     current_user: Annotated[User, Depends(require_permission("designer.soa.read"))],
+    arm_definition_id: UUID | None = None,
 ) -> ScheduleOfAssessmentResponse:
     """Get the schedule of assessment for a Design_Version.
 
     Permission: designer.soa.read (Designer_Role only)
     """
     await study_version_service.get_version(session, version_id)
-    soa = await schedule_of_assessment_service.get_schedule_of_assessment(session, version_id)
+    soa = await schedule_of_assessment_service.get_schedule_of_assessment(
+        session, version_id, arm_definition_id
+    )
     return ScheduleOfAssessmentResponse.model_validate(soa)
 
 
@@ -89,6 +92,7 @@ async def create_schedule_of_assessment(
     soa = await schedule_of_assessment_service.create_schedule_of_assessment(
         session,
         design_version_id=version.id,
+        arm_definition_id=body.arm_definition_id,
         entries=entries,
         actor_id=current_user.id,
     )

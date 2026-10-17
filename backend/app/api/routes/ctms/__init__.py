@@ -19,6 +19,7 @@ from app.api.routes.ctms.health import router as health_router
 from app.api.routes.ctms.milestones import router as milestones_router
 from app.api.routes.ctms.monitoring import router as monitoring_router
 from app.api.routes.ctms.portfolio import router as portfolio_router
+from app.api.routes.ctms.portfolio_management import router as portfolio_management_router
 from app.api.routes.ctms.projections import router as projections_router
 from app.api.routes.ctms.reference_data import router as reference_data_router
 from app.api.routes.ctms.reports import router as reports_router
@@ -32,6 +33,7 @@ from app.api.routes.ctms.sites import (
 from app.api.routes.ctms.studies import operational_studies_router, project_management_router
 from app.api.routes.ctms.studies import router as studies_router
 from app.api.routes.ctms.study_operations import router as study_operations_router
+from app.api.routes.ctms.study_workspace import router as study_workspace_router
 from app.api.routes.ctms.tasks import router as tasks_router
 from app.core.openapi import CTMS_ERROR_RESPONSES
 
@@ -47,6 +49,7 @@ for resource_router in (
     operational_studies_router,
     project_management_router,
     study_operations_router,
+    study_workspace_router,
     financials_router,
     sites_router,
     operational_sites_router,
@@ -55,6 +58,7 @@ for resource_router in (
     milestones_router,
     monitoring_router,
     portfolio_router,
+    portfolio_management_router,
     tasks_router,
     contacts_router,
     projections_router,

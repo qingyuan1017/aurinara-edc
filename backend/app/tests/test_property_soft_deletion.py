@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from hypothesis import given, settings
@@ -196,9 +197,24 @@ class TestSoftDeletionRetentionProperty:
                     subject_id = subject.id
 
                     # Act: soft delete
-                    await svc.soft_delete(
-                        session, subject, reason=reason, actor_id=seeded["user"].id
-                    )
+                    with (
+                        patch.object(
+                            svc,
+                            "_subject_removal_blockers",
+                            AsyncMock(return_value=[]),
+                        ),
+                        patch(
+                            "app.services.edc.subject_service.lock_service.is_modification_blocked",
+                            AsyncMock(return_value=False),
+                        ),
+                    ):
+                        await svc.soft_delete(
+                            session,
+                            subject,
+                            reason=reason,
+                            actor_id=seeded["user"].id,
+                            subject_number_confirmation=subject.subject_number,
+                        )
 
                     # Soft-delete metadata is populated.
                     assert subject.deleted_at is not None

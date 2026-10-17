@@ -17,12 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, get_db, get_permission_service
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import AuthorizationError, NotFoundError
 from app.models.edc.form_data import FieldValue, FormInstance
 from app.models.edc.sdv import SDVScopeType
 from app.models.edc.study import Study
 from app.models.shared.identity import User
 from app.schemas.edc.sdv import SDVProgressResponse, SDVStatusResponse
+from app.services.edc.scope_service import edc_scope_service
 from app.services.edc.sdv_service import sdv_service
 from app.services.shared.permission_service import PermissionService
 
@@ -42,15 +43,11 @@ async def _get_field_value(session: AsyncSession, field_id: UUID) -> FieldValue:
     )
     field_value = result.scalars().first()
     if field_value is None:
-        raise NotFoundError(
-            "Field value not found", details={"field_id": str(field_id)}
-        )
+        raise NotFoundError("Field value not found", details={"field_id": str(field_id)})
     return field_value
 
 
-async def _get_form_instance(
-    session: AsyncSession, form_instance_id: UUID
-) -> FormInstance:
+async def _get_form_instance(session: AsyncSession, form_instance_id: UUID) -> FormInstance:
     """Load a form instance and its subject hierarchy for authorization/audit."""
     result = await session.execute(
         select(FormInstance)
@@ -168,13 +165,20 @@ async def get_study_sdv_progress(
     permission_service: PermissionSvc,
 ) -> SDVProgressResponse:
     """Return verified and not-verified SDV counts for a study."""
-    permission_service.require(current_user, "sdv.manage", study_id=study_id)
+    try:
+        site_ids = edc_scope_service.authorized_site_ids(
+            current_user, permission_service, "sdv.read", study_id
+        )
+    except AuthorizationError:
+        site_ids = edc_scope_service.authorized_site_ids(
+            current_user, permission_service, "sdv.manage", study_id
+        )
 
     study = await session.get(Study, study_id)
     if study is None:
         raise NotFoundError("Study not found", details={"study_id": str(study_id)})
 
-    counts = await sdv_service.progress(session, study_id=study.id)
+    counts = await sdv_service.progress(session, study_id=study.id, authorized_site_ids=site_ids)
     return SDVProgressResponse.model_validate(counts)
 
 

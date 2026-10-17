@@ -212,15 +212,19 @@ class NotificationService:
         payload = getattr(event, "payload_json", {}) or {}
         resolved_study_id = study_id or _as_uuid(payload.get("study_id"))
         resolved_site_id = site_id or _as_uuid(payload.get("site_id"))
-        user_ids = await self._recipient_ids_for_roles(
-            session,
-            study_id=resolved_study_id,
-            site_id=resolved_site_id,
-            role_names=("CTMS_Admin",),
-        ) if resolved_study_id is not None else await self._system_recipient_ids(
-            session, role_names=("CTMS_Admin",)
+        user_ids = (
+            await self._recipient_ids_for_roles(
+                session,
+                study_id=resolved_study_id,
+                site_id=resolved_site_id,
+                role_names=("CTMS_Admin",),
+            )
+            if resolved_study_id is not None
+            else await self._system_recipient_ids(session, role_names=("CTMS_Admin",))
         )
-        safe_reason = str(reason or getattr(event, "last_error_category", None) or "COORDINATION_FAILED_EVENT")[:100]
+        safe_reason = str(
+            reason or getattr(event, "last_error_category", None) or "COORDINATION_FAILED_EVENT"
+        )[:100]
         return await self.create_ctms_notification(
             session,
             user_ids=user_ids,
@@ -253,7 +257,9 @@ class NotificationService:
             if study_id is not None
             else await self._system_recipient_ids(session, role_names=("CTMS_Admin",))
         )
-        reason_code = str(reason or getattr(conflict, "conflict_type", None) or "COORDINATION_CONFLICT")[:100]
+        reason_code = str(
+            reason or getattr(conflict, "conflict_type", None) or "COORDINATION_CONFLICT"
+        )[:100]
         return await self.create_ctms_notification(
             session,
             user_ids=user_ids,
@@ -338,9 +344,7 @@ class NotificationService:
                 "site_id": str(site_id) if site_id else None,
                 "subject_id": str(form_instance.subject_id),
                 "submitted_by": (
-                    str(form_instance.submitted_by)
-                    if form_instance.submitted_by
-                    else None
+                    str(form_instance.submitted_by) if form_instance.submitted_by else None
                 ),
             },
         )
@@ -376,6 +380,9 @@ class NotificationService:
         study_id: UUID | None = None,
         site_id: UUID | None = None,
         module: Module | str | None = Module.CTMS,
+        notification_type: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> list[Notification]:
         """List owned notifications with optional module and scope filters."""
         user_id = self._user_id(user)
@@ -388,6 +395,12 @@ class NotificationService:
             conditions.append(Notification.study_id == study_id)
         if site_id is not None:
             conditions.append(Notification.site_id == site_id)
+        if notification_type is not None:
+            conditions.append(Notification.type == notification_type)
+        if date_from is not None:
+            conditions.append(Notification.created_at >= date_from)
+        if date_to is not None:
+            conditions.append(Notification.created_at <= date_to)
         result = await session.execute(
             select(Notification).where(and_(*conditions)).order_by(Notification.created_at.desc())
         )
@@ -404,7 +417,11 @@ class NotificationService:
     ) -> list[Notification]:
         """Convenience scope-filtered CTMS inbox query."""
         return await self.list_for_user(
-            session, user, statuses=statuses, study_id=study_id, site_id=site_id,
+            session,
+            user,
+            statuses=statuses,
+            study_id=study_id,
+            site_id=site_id,
             module=Module.CTMS,
         )
 
@@ -542,7 +559,9 @@ class NotificationService:
             .join(Role, Role.id == UserRole.role_id)
             .join(User, User.id == UserRole.user_id)
             .where(
-                Role.name == role_name if role_name is not None else Role.name.in_(role_names or ()),
+                Role.name == role_name
+                if role_name is not None
+                else Role.name.in_(role_names or ()),
                 User.status == UserStatus.active,
                 scope_filter,
             )
@@ -577,6 +596,7 @@ class NotificationService:
             )
             for user_id in dict.fromkeys(user_ids)
         ]
+
         def add_notifications() -> Any:
             if hasattr(session, "add_all"):
                 return session.add_all(notifications)

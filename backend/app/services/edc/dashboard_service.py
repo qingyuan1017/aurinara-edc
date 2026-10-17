@@ -48,6 +48,8 @@ class DashboardService:
         self,
         session: AsyncSession,
         study_id: UUID,
+        *,
+        authorized_site_ids: set[UUID] | None = None,
     ) -> StudyDashboard:
         """Compute study-level dashboard metrics.
 
@@ -61,16 +63,24 @@ class DashboardService:
         """
         # --- Subject counts by status ---
         subject_counts = await self._subject_counts_by_status(
-            session, study_id=study_id
+            session,
+            study_id=study_id,
+            authorized_site_ids=authorized_site_ids,
         )
 
         # --- Form completion ---
         total_forms, submitted_forms = await self._form_completion(
-            session, study_id=study_id
+            session,
+            study_id=study_id,
+            authorized_site_ids=authorized_site_ids,
         )
 
         # --- Open query count ---
-        open_queries = await self._open_query_count(session, study_id=study_id)
+        open_queries = await self._open_query_count(
+            session,
+            study_id=study_id,
+            authorized_site_ids=authorized_site_ids,
+        )
 
         dashboard = StudyDashboard(
             subject_counts_by_status=subject_counts,
@@ -102,14 +112,10 @@ class DashboardService:
             and open query count for the site.
         """
         # --- Subject counts by status ---
-        subject_counts = await self._subject_counts_by_status(
-            session, site_id=site_id
-        )
+        subject_counts = await self._subject_counts_by_status(session, site_id=site_id)
 
         # --- Form completion ---
-        total_forms, submitted_forms = await self._form_completion(
-            session, site_id=site_id
-        )
+        total_forms, submitted_forms = await self._form_completion(session, site_id=site_id)
 
         # --- Open query count ---
         open_queries = await self._open_query_count(session, site_id=site_id)
@@ -132,6 +138,8 @@ class DashboardService:
         self,
         session: AsyncSession,
         study_id: UUID,
+        *,
+        authorized_site_ids: set[UUID] | None = None,
     ) -> QueryMetrics:
         """Compute query metrics for a study.
 
@@ -154,6 +162,8 @@ class DashboardService:
             .where(Query.study_id == study_id)
             .group_by(Query.status)
         )
+        if authorized_site_ids is not None:
+            status_counts_stmt = status_counts_stmt.where(Query.site_id.in_(authorized_site_ids))
 
         result = await session.execute(status_counts_stmt)
         rows = result.all()
@@ -162,22 +172,19 @@ class DashboardService:
         for row in rows:
             counts[row.status] = row.cnt
 
-        open_count = counts.get(QueryStatus.open, 0) + counts.get(
-            QueryStatus.reopened, 0
-        )
+        open_count = counts.get(QueryStatus.open, 0) + counts.get(QueryStatus.reopened, 0)
         answered_count = counts.get(QueryStatus.answered, 0)
         closed_count = counts.get(QueryStatus.closed, 0)
         cancelled_count = counts.get(QueryStatus.cancelled, 0)
 
         # Fetch creation dates for open queries to compute overdue and aging.
         # Computing in Python avoids database-specific interval syntax issues.
-        open_queries_stmt = (
-            select(Query.created_at)
-            .where(
-                Query.study_id == study_id,
-                Query.status.in_([QueryStatus.open, QueryStatus.reopened]),
-            )
+        open_queries_stmt = select(Query.created_at).where(
+            Query.study_id == study_id,
+            Query.status.in_([QueryStatus.open, QueryStatus.reopened]),
         )
+        if authorized_site_ids is not None:
+            open_queries_stmt = open_queries_stmt.where(Query.site_id.in_(authorized_site_ids))
         open_result = await session.execute(open_queries_stmt)
         open_dates = open_result.scalars().all()
 
@@ -193,11 +200,7 @@ class DashboardService:
             if days_open > OVERDUE_THRESHOLD_DAYS:
                 overdue_count += 1
 
-        average_days_open = (
-            round(total_days_open / len(open_dates), 2)
-            if open_dates
-            else 0.0
-        )
+        average_days_open = round(total_days_open / len(open_dates), 2) if open_dates else 0.0
 
         metrics = QueryMetrics(
             open_count=open_count,
@@ -221,6 +224,7 @@ class DashboardService:
         *,
         study_id: UUID | None = None,
         site_id: UUID | None = None,
+        authorized_site_ids: set[UUID] | None = None,
     ) -> dict[str, int]:
         """Count non-deleted subjects grouped by status.
 
@@ -236,6 +240,8 @@ class DashboardService:
             stmt = stmt.where(Subject.study_id == study_id)
         if site_id is not None:
             stmt = stmt.where(Subject.site_id == site_id)
+        if authorized_site_ids is not None:
+            stmt = stmt.where(Subject.site_id.in_(authorized_site_ids))
 
         result = await session.execute(stmt)
         rows = result.all()
@@ -248,6 +254,7 @@ class DashboardService:
         *,
         study_id: UUID | None = None,
         site_id: UUID | None = None,
+        authorized_site_ids: set[UUID] | None = None,
     ) -> tuple[int, int]:
         """Count total form instances and submitted (or beyond) instances.
 
@@ -256,20 +263,14 @@ class DashboardService:
         Returns:
             (total_count, submitted_count)
         """
-        # Statuses that count as "submitted or beyond"
-        submitted_statuses = [
-            FormInstanceStatus.submitted,
-            FormInstanceStatus.reviewed,
-            FormInstanceStatus.frozen,
-            FormInstanceStatus.locked,
-            FormInstanceStatus.signed,
-        ]
-
         base_stmt = select(
             func.count().label("total"),
             func.count(
                 case(
-                    (FormInstance.status.in_(submitted_statuses), FormInstance.id),
+                    (
+                        FormInstance.data_entry_status == FormInstanceStatus.submitted.value,
+                        FormInstance.id,
+                    ),
                     else_=None,
                 )
             ).label("submitted"),
@@ -277,13 +278,13 @@ class DashboardService:
 
         # Join to Subject for study/site filtering
         if study_id is not None or site_id is not None:
-            base_stmt = base_stmt.join(
-                Subject, FormInstance.subject_id == Subject.id
-            )
+            base_stmt = base_stmt.join(Subject, FormInstance.subject_id == Subject.id)
             if study_id is not None:
                 base_stmt = base_stmt.where(Subject.study_id == study_id)
             if site_id is not None:
                 base_stmt = base_stmt.where(Subject.site_id == site_id)
+            if authorized_site_ids is not None:
+                base_stmt = base_stmt.where(Subject.site_id.in_(authorized_site_ids))
 
         result = await session.execute(base_stmt)
         row = result.one()
@@ -296,6 +297,7 @@ class DashboardService:
         *,
         study_id: UUID | None = None,
         site_id: UUID | None = None,
+        authorized_site_ids: set[UUID] | None = None,
     ) -> int:
         """Count queries in Open or Reopened status."""
         stmt = (
@@ -308,6 +310,8 @@ class DashboardService:
             stmt = stmt.where(Query.study_id == study_id)
         if site_id is not None:
             stmt = stmt.where(Query.site_id == site_id)
+        if authorized_site_ids is not None:
+            stmt = stmt.where(Query.site_id.in_(authorized_site_ids))
 
         result = await session.execute(stmt)
         return result.scalar_one()

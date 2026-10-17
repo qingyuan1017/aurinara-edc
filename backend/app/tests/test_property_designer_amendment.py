@@ -93,6 +93,9 @@ class InMemoryVersionRepository:
             None,
         )
 
+    async def list_for_study(self, _session: object, study_id: uuid.UUID) -> list[StudyVersion]:
+        return [version for version in self.versions if version.study_id == study_id]
+
     async def add(self, _session: object, version: StudyVersion) -> StudyVersion:
         if version.id is None:
             version.id = uuid.uuid4()

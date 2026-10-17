@@ -38,6 +38,7 @@ class ScheduleEntryCreate(BaseCreateSchema):
 class ScheduleOfAssessmentCreate(BaseCreateSchema):
     """Request body for creating a Schedule_of_Assessment in a Draft_Design."""
 
+    arm_definition_id: UUID | None = None
     entries: list[ScheduleEntryCreate] = Field(default_factory=list)
 
 
@@ -58,6 +59,7 @@ class ScheduleOfAssessmentResponse(BaseSchema):
 
     id: UUID
     design_version_id: UUID
+    arm_definition_id: UUID | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime | None = None
     entries: list[ScheduleEntryResponse] = Field(default_factory=list)

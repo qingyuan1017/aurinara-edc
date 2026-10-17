@@ -26,8 +26,9 @@ from app.api.routes.edc.exports import router as exports_router
 from app.api.routes.edc.exports import study_exports_router
 from app.api.routes.edc.form_data import router as form_data_router
 from app.api.routes.edc.locks import router as locks_router
+from app.api.routes.edc.operations import router as operations_router
+from app.api.routes.edc.queries import form_queries_router, study_queries_router
 from app.api.routes.edc.queries import router as queries_router
-from app.api.routes.edc.queries import study_queries_router
 from app.api.routes.edc.records import form_instance_records_router
 from app.api.routes.edc.records import router as records_router
 
@@ -72,6 +73,7 @@ for resource_router in (
     subject_visits_router,
     visits_router,
     form_data_router,
+    form_queries_router,
     study_queries_router,
     queries_router,
     form_instance_records_router,
@@ -84,6 +86,7 @@ for resource_router in (
     study_reviews_router,
     reviews_router,
     locks_router,
+    operations_router,
     signatures_router,
     # --- Report_Area (task 16.1): read-only, server-side scope-filtered ---
     study_reports_router,

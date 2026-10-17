@@ -12,7 +12,6 @@ Satisfies Requirements:
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -24,6 +23,7 @@ from app.core.audit import audit_service
 from app.core.ctms import Module
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.designer.arm_definition import ArmDefinition
+from app.models.designer.schedule_of_assessment import ScheduleOfAssessment
 from app.schemas.designer.arm_definition import ArmDefinitionUpdate
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,6 @@ class ArmService:
         name: str,
         display_order: int,
         description: str | None = None,
-        visit_definition_ids: Sequence[UUID] | None = None,
         actor_id: UUID | None = None,
     ) -> ArmDefinition:
         """Persist an Arm_Definition within one Design_Version.
@@ -56,19 +55,13 @@ class ArmService:
             name: Arm name; 1-100 characters, unique within the design version.
             display_order: Presentation order; 1-999.
             description: Optional free-text description of the arm.
-            visit_definition_ids: Real visit leaf IDs occurring in this arm
-                (standalone or cycle-owned); each must belong to the same
-                Design_Version as the arm. Folder/cycle UI selections are
-                expanded to their leaf visits before reaching this contract.
             actor_id: Optional actor UUID for the audit event.
 
         Returns:
-            The persisted ArmDefinition with its member-visit associations loaded.
+            The persisted ArmDefinition.
 
         Raises:
-            ValidationError: If the name length or display order is out of range,
-                a member visit does not exist, or a member visit belongs to a
-                different design version.
+            ValidationError: If the name length or display order is out of range.
             ConflictError: If the name already exists within the design version;
                 the error details identify the duplicate name.
         """
@@ -111,13 +104,6 @@ class ArmService:
             description=normalized_description,
         )
 
-        unique_visit_ids, member_visits = await self._resolve_member_visits(
-            session,
-            design_version_id=design_version_id,
-            visit_definition_ids=visit_definition_ids or [],
-        )
-        arm.visits = member_visits
-
         session.add(arm)
         await session.flush()
 
@@ -127,19 +113,15 @@ class ArmService:
             entity_id=arm.id,
             action="create",
             module=Module.DESIGNER,
-            new_value=(
-                f"name={normalized_name}; display_order={display_order}; "
-                f"visit_count={len(unique_visit_ids)}"
-            ),
+            new_value=f"name={normalized_name}; display_order={display_order}",
             actor_id=actor_id,
         )
 
         logger.info(
-            "Arm definition created: id=%s design_version_id=%s name=%r visits=%d",
+            "Arm definition created: id=%s design_version_id=%s name=%r",
             arm.id,
             design_version_id,
             normalized_name,
-            len(unique_visit_ids),
         )
         return arm
 
@@ -148,14 +130,12 @@ class ArmService:
         session: AsyncSession,
         arm_id: UUID,
     ) -> ArmDefinition:
-        """Fetch a live arm and eagerly load its visit membership."""
+        """Fetch a live arm."""
         result = await session.execute(
-            select(ArmDefinition)
-            .where(
+            select(ArmDefinition).where(
                 ArmDefinition.id == arm_id,
                 ArmDefinition.deleted_at.is_(None),
             )
-            .options(selectinload(ArmDefinition.visits))
         )
         arm = result.scalars().first()
         if arm is None:
@@ -173,7 +153,7 @@ class ArmService:
         *,
         actor_id: UUID | None = None,
     ) -> ArmDefinition:
-        """Partially update an arm and replace membership with real visit leaves."""
+        """Partially update an arm's descriptive fields."""
         arm = await self.get_arm_definition(session, arm_id)
         changes = data.model_dump(exclude_unset=True)
 
@@ -215,26 +195,9 @@ class ArmService:
         if "description" in changes and changes["description"] is not None:
             changes["description"] = str(changes["description"]).strip() or None
 
-        old_values = {
-            key: (
-                [str(visit.id) for visit in arm.visits]
-                if key == "visit_definition_ids"
-                else getattr(arm, key)
-            )
-            for key in changes
-        }
-        visit_ids = changes.pop("visit_definition_ids", None)
+        old_values = {key: getattr(arm, key) for key in changes}
         for key, value in changes.items():
             setattr(arm, key, value)
-
-        if visit_ids is not None:
-            normalized_ids, member_visits = await self._resolve_member_visits(
-                session,
-                design_version_id=arm.study_version_id,
-                visit_definition_ids=visit_ids,
-            )
-            arm.visits = member_visits
-            changes["visit_definition_ids"] = normalized_ids
 
         arm.updated_at = datetime.now(UTC)
         await session.flush()
@@ -252,70 +215,14 @@ class ArmService:
         logger.info("Arm definition updated: id=%s changes=%s", arm.id, list(changes))
         return await self.get_arm_definition(session, arm.id)
 
-    async def _resolve_member_visits(
-        self,
-        session: AsyncSession,
-        *,
-        design_version_id: UUID,
-        visit_definition_ids: Sequence[UUID],
-    ) -> tuple[list[UUID], list[object]]:
-        """Validate arm members and return unique IDs plus ORM visit rows."""
-        unique_visit_ids = list(dict.fromkeys(visit_definition_ids))
-        if not unique_visit_ids:
-            return [], []
-
-        visit_model = ArmDefinition.visits.property.mapper.class_
-        result = await session.execute(
-            select(
-                visit_model.id,
-                visit_model.study_version_id,
-                visit_model.definition_kind,
-            ).where(visit_model.id.in_(unique_visit_ids))
-        )
-        found = {row[0]: (row[1], row[2]) for row in result.all()}
-        missing = [visit_id for visit_id in unique_visit_ids if visit_id not in found]
-        if missing:
-            raise ValidationError(
-                "One or more member visit definitions were not found",
-                details={"missing_visit_definition_ids": [str(value) for value in missing]},
-            )
-        cross_version = [
-            str(visit_id)
-            for visit_id in unique_visit_ids
-            if found[visit_id][0] != design_version_id
-        ]
-        if cross_version:
-            raise ValidationError(
-                "One or more member visit definitions belong to a different design version",
-                details={"cross_version_visit_ids": cross_version},
-            )
-        container_ids = [
-            str(visit_id)
-            for visit_id in unique_visit_ids
-            if found[visit_id][1] not in {"visit", "cycle_visit"}
-        ]
-        if container_ids:
-            raise ValidationError(
-                "Arm membership must contain real visits, not folder or cycle containers",
-                details={"container_visit_definition_ids": container_ids},
-            )
-
-        visit_result = await session.execute(
-            select(visit_model).where(visit_model.id.in_(unique_visit_ids))
-        )
-        visits_by_id = {visit.id: visit for visit in visit_result.scalars().all()}
-        return unique_visit_ids, [visits_by_id[visit_id] for visit_id in unique_visit_ids]
-
     async def list_arm_definitions(
         self,
         session: AsyncSession,
         design_version_id: UUID,
     ) -> list[ArmDefinition]:
-        """List a version's Arm_Definitions (with member visits) by display order.
+        """List a version's Arm_Definitions by display order.
 
-        Reads are not audited (matching the other Designer list reads). The
-        ``visits`` relationship is eager-loaded so the route can serialize the
-        member ids without triggering an async lazy load.
+        Reads are not audited (matching the other Designer list reads).
 
         Args:
             session: The active async session.
@@ -330,10 +237,72 @@ class ArmService:
                 ArmDefinition.study_version_id == design_version_id,
                 ArmDefinition.deleted_at.is_(None),
             )
-            .options(selectinload(ArmDefinition.visits))
             .order_by(ArmDefinition.display_order, ArmDefinition.id)
         )
         return list(result.scalars().all())
+
+    async def delete_arm_definition(
+        self,
+        session: AsyncSession,
+        arm_id: UUID,
+        *,
+        actor_id: UUID | None = None,
+    ) -> None:
+        """Soft-delete a draft arm and its arm-scoped schedule atomically.
+
+        The common schedule and schedules owned by other arms are unchanged.
+        The route guards the owning design version as mutable before invoking
+        this service, so operational subjects can never reference the arm being
+        removed.
+        """
+        arm = await self.get_arm_definition(session, arm_id)
+        schedule_result = await session.execute(
+            select(ScheduleOfAssessment)
+            .where(
+                ScheduleOfAssessment.arm_definition_id == arm.id,
+                ScheduleOfAssessment.deleted_at.is_(None),
+            )
+            .options(selectinload(ScheduleOfAssessment.entries))
+        )
+        schedules = list(schedule_result.scalars().all())
+        now = datetime.now(UTC)
+        for schedule in schedules:
+            for entry in schedule.entries:
+                if entry.deleted_at is None:
+                    entry.deleted_at = now
+            schedule.deleted_at = now
+            schedule.updated_at = now
+            await session.flush()
+            await audit_service.record(
+                session,
+                entity_type="schedule_of_assessment",
+                entity_id=schedule.id,
+                action="delete",
+                module=Module.DESIGNER,
+                old_value=(
+                    f"cascade from arm {arm.id}; "
+                    f"design_version_id={arm.study_version_id}"
+                ),
+                actor_id=actor_id,
+            )
+
+        arm.deleted_at = now
+        arm.updated_at = now
+        await session.flush()
+        await audit_service.record(
+            session,
+            entity_type="arm_definition",
+            entity_id=arm.id,
+            action="delete",
+            module=Module.DESIGNER,
+            old_value=f"name={arm.name}; display_order={arm.display_order}",
+            actor_id=actor_id,
+        )
+        logger.info(
+            "Arm definition soft-deleted: id=%s cascaded_schedules=%d",
+            arm.id,
+            len(schedules),
+        )
 
 
 # Module-level singleton for convenience

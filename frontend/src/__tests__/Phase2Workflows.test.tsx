@@ -79,6 +79,84 @@ describe('Phase 2 workflow controls', () => {
     expect(screen.queryByRole('button', { name: 'Save Draft' })).not.toBeInTheDocument()
   })
 
+  it('creates a query for a specific saved field value from the data-entry page', async () => {
+    useAuthStore.setState((state) => ({
+      ...state,
+      user: state.user ? { ...state.user, permissions: [...state.user.permissions, 'query.create'] } : null,
+    }))
+    const get = vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({
+      data: url === '/studies/study-1/queries/assignment-roles'
+        ? ['Site Coordinator', 'Data Manager']
+        : url === '/form-instances/form-1/fields/field-def-1/queries'
+          ? { items: [{ id: 'query-old', text: 'Earlier clarification', status: 'Closed', assigned_role: 'Site Coordinator', created_at: '2026-01-01T10:00:00Z' }], page: 1, page_size: 100, total: 1 }
+          : {
+        id: 'form-1', study_id: 'study-1', form_definition_id: 'def-1', form_name: 'Vitals', subject_id: 'subject-1',
+        subject_number: 'SUBJ-001', visit_name: 'Baseline', status: 'Submitted', data_entry_status: 'Submitted', is_frozen: false, is_locked: false,
+        sections: [{ id: 'section-1', title: 'Measurements', order: 1, fields: [{ id: 'field-def-1', name: 'weight', label: 'Weight', control_type: 'text', is_required: false }] }],
+        data: { 'field-def-1': '70 kg' },
+        field_values: [{ id: 'field-value-1', field_definition_id: 'field-def-1', value: '70 kg' }],
+      },
+    } as never))
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { id: 'query-1' } } as never)
+
+    renderWithQueryClient(<FormEntryPage formInstanceId="form-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add query for Weight' }))
+    expect(screen.getByRole('dialog', { name: 'Add query for Weight' })).toBeInTheDocument()
+    expect(screen.getByText('70 kg')).toBeInTheDocument()
+    expect(await screen.findByText('Earlier clarification')).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'query status: Closed' })).toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: 'Site Coordinator' })).toBeInTheDocument()
+    expect(get).toHaveBeenCalledWith('/studies/study-1/queries/assignment-roles', {
+      params: { target_type: 'Form_Instance', target_id: 'form-1' },
+    })
+    fireEvent.change(screen.getByLabelText('Assigned role (optional)'), { target: { value: 'Site Coordinator' } })
+    fireEvent.change(screen.getByLabelText('Describe the issue'), { target: { value: 'Please confirm this measurement.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create query' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/form-instances/form-1/fields/field-def-1/queries', {
+      text: 'Please confirm this measurement.',
+      assigned_role: 'Site Coordinator',
+    }))
+    expect(await screen.findByText('Query created for Weight.')).toBeInTheDocument()
+  })
+
+  it('creates a field-specific query for an unanswered checkbox', async () => {
+    useAuthStore.setState((state) => ({
+      ...state,
+      user: state.user ? { ...state.user, permissions: [...state.user.permissions, 'query.create'] } : null,
+    }))
+    vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({
+      data: url === '/studies/study-1/queries/assignment-roles'
+        ? ['Site Coordinator']
+        : url === '/form-instances/form-1/fields/field-def-checkbox/queries'
+          ? { items: [], page: 1, page_size: 100, total: 0 }
+          : {
+        id: 'form-1', study_id: 'study-1', form_definition_id: 'def-1', form_name: 'Eligibility', subject_id: 'subject-1',
+        subject_number: 'SUBJ-001', visit_name: 'Screening', status: 'In Progress', data_entry_status: 'In Progress', is_frozen: false, is_locked: false,
+        sections: [{ id: 'section-1', title: 'Eligibility', order: 1, fields: [{ id: 'field-def-checkbox', label: 'Eligibility confirmed', control_type: 'checkbox', is_required: false }] }],
+        data: {},
+        field_values: [],
+      },
+    } as never))
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { id: 'query-2' } } as never)
+
+    renderWithQueryClient(<FormEntryPage formInstanceId="form-1" />)
+
+    const addQuery = await screen.findByRole('button', { name: 'Add query for Eligibility confirmed' })
+    expect(addQuery).toBeEnabled()
+    fireEvent.click(addQuery)
+    expect(screen.getByText('No value entered')).toBeInTheDocument()
+    expect(await screen.findByText('No previous queries for this field.')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Describe the issue'), { target: { value: 'Please confirm eligibility.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create query' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/form-instances/form-1/fields/field-def-checkbox/queries', {
+      text: 'Please confirm eligibility.',
+      assigned_role: null,
+    }))
+  })
+
   it('renders a query thread and posts a response and close action', async () => {
     vi.spyOn(api, 'get').mockResolvedValue({ data: {
       id: 'query-1', target_type: 'Form_Instance', target_id: 'form-1', text: 'Confirm the visit date.',
@@ -99,11 +177,7 @@ describe('Phase 2 workflow controls', () => {
   })
 
   it('marks an SDV worklist form verified and refreshes its workflow state', async () => {
-    vi.spyOn(api, 'get').mockImplementation((url) => {
-      if (String(url).endsWith('/sdv-progress')) return Promise.resolve({ data: { verified: 0, not_verified: 1 } }) as never
-      if (String(url).includes('/subjects/')) return Promise.resolve({ data: { visits: [{ name: 'Baseline', forms: [{ form_instance_id: 'form-1', name: 'Vitals', status: 'Submitted' }] }] } }) as never
-      return Promise.resolve({ data: { items: [{ id: 'subject-1', subject_number: 'SUBJ-001', site_id: 'site-1', status: 'Enrolled' }], page: 1, page_size: 100, total: 1 } }) as never
-    })
+    vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [{ form_instance_id: 'form-1', subject_id: 'subject-1', subject_number: 'SUBJ-001', site_name: 'Site 1', visit_name: 'Baseline', form_name: 'Vitals', workflow: 'sdv', workflow_status: 'Not Verified', status: { data_entry: 'Submitted', review: 'Not Reviewed', sdv: 'Not Verified', sdr: 'Not Selected', active_query_count: 0 } }], page: 1, page_size: 100, total: 1 } } as never)
     const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {} } as never)
 
     renderWithQueryClient(<SDVWorklistPage studyId="study-1" />)
@@ -114,11 +188,7 @@ describe('Phase 2 workflow controls', () => {
   })
 
   it('marks a clinical review worklist form reviewed and supports clearing it', async () => {
-    vi.spyOn(api, 'get').mockImplementation((url) => {
-      if (String(url).endsWith('/review-progress')) return Promise.resolve({ data: { reviewed: 0, not_reviewed: 1 } }) as never
-      if (String(url).includes('/subjects/')) return Promise.resolve({ data: { visits: [{ name: 'Baseline', forms: [{ form_instance_id: 'form-1', name: 'Vitals', status: 'Submitted' }] }] } }) as never
-      return Promise.resolve({ data: { items: [{ id: 'subject-1', subject_number: 'SUBJ-001', site_id: 'site-1', status: 'Enrolled' }], page: 1, page_size: 100, total: 1 } }) as never
-    })
+    vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [{ form_instance_id: 'form-1', subject_id: 'subject-1', subject_number: 'SUBJ-001', site_name: 'Site 1', visit_name: 'Baseline', form_name: 'Vitals', workflow: 'review', workflow_status: 'Not Reviewed', status: { data_entry: 'Submitted', review: 'Not Reviewed', sdv: 'Not Verified', sdr: 'Not Selected', active_query_count: 0 } }], page: 1, page_size: 100, total: 1 } } as never)
     const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {} } as never)
 
     renderWithQueryClient(<ReviewWorklistPage studyId="study-1" />)
@@ -153,6 +223,7 @@ describe('Phase 2 workflow controls', () => {
     renderWithQueryClient(<EditCheckBuilderPage studyId="study-1" />)
     const name = await screen.findByPlaceholderText('AE start before end')
     fireEvent.change(name, { target: { value: 'Required weight' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced JSON' }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Rule definition' }), { target: { value: '{invalid' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save check' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Rule JSON must be valid JSON.')
@@ -185,5 +256,73 @@ describe('Phase 2 workflow controls', () => {
 
     await waitFor(() => expect(remove).toHaveBeenCalledWith('/designer/edit-checks/check-1'))
     expect(await screen.findByText('Edit check deleted.')).toBeInTheDocument()
+  })
+
+  it('tests and marks an imported edit check as retested with a review note', async () => {
+    const checks = [{
+      id: 'check-1', name: 'Imported weight check', description: null,
+      rule_json: { field: 'weight', operator: 'not_null' }, severity: 'query',
+      is_active: true, needs_retesting: true, retesting_reason: 'Converted from Rave ALS',
+      created_at: '2026-01-01T10:00:00Z',
+    }]
+    vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({ data: url === '/studies/study-1/versions'
+      ? [{ id: 'ver-draft', study_id: 'study-1', version_number: '1', status: 'draft', created_at: 'x' }]
+      : checks } as never))
+    const post = vi.spyOn(api, 'post').mockImplementation((url) => Promise.resolve({ data: url.endsWith('/test')
+      ? { passed: false, matched: true }
+      : { edit_check_id: 'check-1', passed: false, matched: true, needs_retesting: false } } as never))
+
+    renderWithQueryClient(<EditCheckBuilderPage studyId="study-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Imported weight check/ }))
+    expect(screen.getByText('Retest required before publication.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Test rule' }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/designer/edit-checks/check-1/test', { sample_data: {} }))
+
+    fireEvent.change(screen.getByLabelText('Retest review note'), {
+      target: { value: 'Verified the converted condition and query action.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as retested' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/designer/edit-checks/check-1/retest', {
+      sample_data: {},
+      expected_matched: true,
+      review_note: 'Verified the converted condition and query action.',
+    }))
+    expect(await screen.findByText(/recorded in the audit trail/)).toBeInTheDocument()
+  })
+
+  it('bulk marks all pending edit checks retested after an explicit attestation', async () => {
+    const checks = [1, 2].map((index) => ({
+      id: `check-${index}`, name: `Imported check ${index}`, description: null,
+      rule_json: { field: 'weight', operator: 'not_null' }, severity: 'query',
+      is_active: true, needs_retesting: true, retesting_reason: 'Converted from Rave ALS',
+      created_at: '2026-01-01T10:00:00Z',
+    }))
+    vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({ data: url === '/studies/study-1/versions'
+      ? [{ id: 'ver-draft', study_id: 'study-1', version_number: '1', status: 'draft', created_at: 'x' }]
+      : checks } as never))
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {
+      study_version_id: 'ver-draft', reviewed_count: 2, remaining_count: 0,
+    } } as never)
+
+    renderWithQueryClient(<EditCheckBuilderPage studyId="study-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retest all (2)' }))
+    expect(screen.getByRole('dialog', { name: 'Mark all edit checks as retested?' })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/Bulk review note/), {
+      target: { value: 'Reviewed both imported checks against the approved specification.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Mark all 2 retested' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith(
+      '/designer/studies/study-1/edit-checks/retest-all',
+      {
+        review_note: 'Reviewed both imported checks against the approved specification.',
+        acknowledge_without_individual_samples: true,
+      },
+      { params: { study_version_id: 'ver-draft' } },
+    ))
+    expect(await screen.findByText(/2 edit checks marked as retested/)).toBeInTheDocument()
   })
 })

@@ -16,17 +16,32 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PaginationParams
 from app.api.pagination import paginate
 from app.core.audit import audit_service
-from app.core.exceptions import BusinessRuleError, NotFoundError
-from app.models.edc.query import Query, QueryMessage, QueryStatus, QueryType
+from app.core.exceptions import BusinessRuleError, NotFoundError, ValidationError
+from app.models.designer.form_metadata import FieldDefinition, FormSection
+from app.models.edc.form_data import FieldValue, FormInstance
+from app.models.edc.form_record import FormRecord
+from app.models.edc.query import Query, QueryMessage, QueryStatus, QueryTargetType, QueryType
 from app.models.edc.subject import Subject
+from app.models.edc.visit import VisitInstance
+from app.models.shared.audit import AuditEvent
+from app.models.shared.identity import (
+    Permission,
+    Role,
+    RolePermission,
+    ScopeLevel,
+    User,
+    UserRole,
+    UserStatus,
+)
 from app.schemas.edc.query import QueryFilters
 from app.schemas.shared.base import PaginatedResponse
+from app.services.edc.lock_service import lock_service
 from app.services.shared.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
@@ -81,10 +96,29 @@ class QueryService:
         Returns:
             The created Query instance with status Open.
         """
-        if design_version_id is None:
-            design_version_id = await self._resolve_design_version_id(
-                session, subject_id
+        (
+            target_study_id,
+            target_site_id,
+            target_subject_id,
+            target_design_version_id,
+        ) = await self._resolve_target_context(session, target_type, target_id)
+        if target_study_id != study_id:
+            raise ValidationError(
+                message="Query target does not belong to the requested study",
+                details={"target_type": str(target_type), "target_id": str(target_id)},
             )
+        if site_id is not None and site_id != target_site_id:
+            raise ValidationError(
+                message="Query site context does not match its target", details={}
+            )
+        if subject_id is not None and subject_id != target_subject_id:
+            raise ValidationError(
+                message="Query subject context does not match its target", details={}
+            )
+        site_id = target_site_id
+        subject_id = target_subject_id
+        design_version_id = design_version_id or target_design_version_id
+        await self._ensure_not_hard_locked(session, subject_id)
 
         query = Query(
             study_id=study_id,
@@ -98,6 +132,7 @@ class QueryService:
             status=QueryStatus.open,
             created_by=actor_id,
             design_version_id=design_version_id,
+            messages=[],
         )
         session.add(query)
         await session.flush()
@@ -127,6 +162,38 @@ class QueryService:
         )
         return query
 
+    async def _resolve_target_context(
+        self,
+        session: AsyncSession,
+        target_type: str,
+        target_id: UUID,
+    ) -> tuple[UUID, UUID, UUID, UUID]:
+        """Resolve authoritative query scope from the affected clinical object."""
+        normalized = QueryTargetType(target_type)
+        subject: Subject | None = None
+        if normalized == QueryTargetType.subject:
+            subject = await session.get(Subject, target_id)
+        elif normalized == QueryTargetType.visit_instance:
+            visit = await session.get(VisitInstance, target_id)
+            subject = visit.subject if visit else None
+        elif normalized == QueryTargetType.form_instance:
+            form = await session.get(FormInstance, target_id)
+            subject = form.subject if form else None
+        elif normalized == QueryTargetType.form_record:
+            record = await session.get(FormRecord, target_id)
+            subject = record.form_instance.subject if record else None
+        elif normalized == QueryTargetType.field:
+            field = await session.get(FieldValue, target_id)
+            subject = field.form_instance.subject if field else None
+        if subject is None or subject.deleted_at is not None:
+            raise NotFoundError(message="Query target not found", details={})
+        return (
+            subject.study_id,
+            subject.site_id,
+            subject.id,
+            subject.study_version_id,
+        )
+
     async def _resolve_design_version_id(
         self, session: AsyncSession, subject_id: UUID | None
     ) -> UUID | None:
@@ -142,6 +209,124 @@ class QueryService:
             select(Subject.study_version_id).where(Subject.id == subject_id)
         )
         return result.scalar_one_or_none()
+
+    async def list_assignment_roles(
+        self,
+        session: AsyncSession,
+        *,
+        study_id: UUID,
+        site_id: UUID,
+    ) -> list[str]:
+        """Return active recipient roles available in the target's scope."""
+        scope_filter = or_(
+            and_(
+                Role.scope_level == ScopeLevel.system,
+                UserRole.study_id.is_(None),
+                UserRole.site_id.is_(None),
+            ),
+            and_(
+                Role.scope_level == ScopeLevel.study,
+                UserRole.study_id == study_id,
+                UserRole.site_id.is_(None),
+            ),
+            and_(
+                Role.scope_level == ScopeLevel.site,
+                UserRole.study_id == study_id,
+                UserRole.site_id == site_id,
+            ),
+        )
+        result = await session.execute(
+            select(Role.name)
+            .join(RolePermission, RolePermission.role_id == Role.id)
+            .join(Permission, Permission.id == RolePermission.permission_id)
+            .join(UserRole, UserRole.role_id == Role.id)
+            .join(User, User.id == UserRole.user_id)
+            .where(
+                Permission.code == "query.respond",
+                User.status == UserStatus.active,
+                scope_filter,
+            )
+            .distinct()
+            .order_by(Role.name)
+        )
+        return list(result.scalars().all())
+
+    async def ensure_field_target(
+        self,
+        session: AsyncSession,
+        *,
+        form_instance: FormInstance,
+        field_definition_id: UUID,
+    ) -> FieldValue:
+        """Return a field-value target, creating an empty placeholder if unanswered."""
+        await self._ensure_not_hard_locked(session, form_instance.subject_id)
+
+        # Serialize concurrent first-query attempts for fields in the same form.
+        await session.execute(
+            select(FormInstance.id).where(FormInstance.id == form_instance.id).with_for_update()
+        )
+        definition_result = await session.execute(
+            select(FieldDefinition.id)
+            .join(FormSection, FormSection.id == FieldDefinition.form_section_id)
+            .where(
+                FieldDefinition.id == field_definition_id,
+                FormSection.form_definition_id == form_instance.form_definition_id,
+            )
+        )
+        if definition_result.scalar_one_or_none() is None:
+            raise NotFoundError(message="Query field not found in form instance", details={})
+
+        value_result = await session.execute(
+            select(FieldValue).where(
+                FieldValue.form_instance_id == form_instance.id,
+                FieldValue.field_definition_id == field_definition_id,
+            )
+        )
+        field_value = value_result.scalars().first()
+        if field_value is None:
+            field_value = FieldValue(
+                form_instance=form_instance,
+                field_definition_id=field_definition_id,
+                value=None,
+                design_version_id=form_instance.design_version_id,
+            )
+            session.add(field_value)
+            await session.flush()
+        return field_value
+
+    async def list_field_queries(
+        self,
+        session: AsyncSession,
+        *,
+        form_instance: FormInstance,
+        field_definition_id: UUID,
+        pagination: PaginationParams,
+    ) -> PaginatedResponse:
+        """List every query linked to a field in one form instance."""
+        definition_result = await session.execute(
+            select(FieldDefinition.id)
+            .join(FormSection, FormSection.id == FieldDefinition.form_section_id)
+            .where(
+                FieldDefinition.id == field_definition_id,
+                FormSection.form_definition_id == form_instance.form_definition_id,
+            )
+        )
+        if definition_result.scalar_one_or_none() is None:
+            raise NotFoundError(message="Query field not found in form instance", details={})
+
+        target_result = await session.execute(
+            select(FieldValue.id).where(
+                FieldValue.form_instance_id == form_instance.id,
+                FieldValue.field_definition_id == field_definition_id,
+            )
+        )
+        target_ids = list(target_result.scalars().all())
+        statement = select(Query).where(
+            Query.study_id == form_instance.subject.study_id,
+            Query.target_type == QueryTargetType.field,
+            Query.target_id.in_(target_ids),
+        )
+        return await paginate(session, statement.order_by(Query.created_at.desc()), pagination)
 
     # ------------------------------------------------------------------
     # Respond (Req 13.3, 13.6, 13.7)
@@ -170,6 +355,7 @@ class QueryService:
         Raises:
             BusinessRuleError: If the query is not in Open or Reopened status.
         """
+        await self._ensure_not_hard_locked(session, query.subject_id)
         if query.status not in _RESPOND_FROM:
             raise BusinessRuleError(
                 message=f"Cannot respond to a query in status '{query.status}'",
@@ -243,6 +429,7 @@ class QueryService:
         Raises:
             BusinessRuleError: If the query is not in Open or Answered status.
         """
+        await self._ensure_not_hard_locked(session, query.subject_id)
         if query.status not in _CLOSE_FROM:
             raise BusinessRuleError(
                 message=f"Cannot close a query in status '{query.status}'",
@@ -308,6 +495,7 @@ class QueryService:
         Raises:
             BusinessRuleError: If the query is not in Closed status.
         """
+        await self._ensure_not_hard_locked(session, query.subject_id)
         if query.status not in _REOPEN_FROM:
             raise BusinessRuleError(
                 message=f"Cannot reopen a query in status '{query.status}'",
@@ -372,6 +560,7 @@ class QueryService:
         Raises:
             BusinessRuleError: If the query is not in Open or Answered status.
         """
+        await self._ensure_not_hard_locked(session, query.subject_id)
         if query.status not in _CANCEL_FROM:
             raise BusinessRuleError(
                 message=f"Cannot cancel a query in status '{query.status}'",
@@ -412,6 +601,20 @@ class QueryService:
         )
         return query
 
+    @staticmethod
+    async def _ensure_not_hard_locked(session: AsyncSession, subject_id: UUID | None) -> None:
+        if subject_id is None:
+            return
+        if await lock_service.is_hard_locked(
+            session,
+            object_type="subject",
+            object_id=subject_id,
+        ):
+            raise BusinessRuleError(
+                message="Query state cannot be changed while the subject is locked",
+                details={},
+            )
+
     # ------------------------------------------------------------------
     # Get by ID (with messages)
     # ------------------------------------------------------------------
@@ -429,9 +632,7 @@ class QueryService:
         Raises:
             NotFoundError: If no query exists with the given ID.
         """
-        result = await session.execute(
-            select(Query).where(Query.id == query_id)
-        )
+        result = await session.execute(select(Query).where(Query.id == query_id))
         query = result.scalars().first()
         if query is None:
             raise NotFoundError(
@@ -450,6 +651,7 @@ class QueryService:
         study_id: UUID,
         filters: QueryFilters | None = None,
         pagination: PaginationParams | None = None,
+        authorized_site_ids: set[UUID] | None = None,
     ) -> PaginatedResponse:
         """List queries for a study with optional filters and pagination.
 
@@ -462,11 +664,9 @@ class QueryService:
         Returns:
             PaginatedResponse containing Query instances (without messages).
         """
-        stmt = (
-            select(Query)
-            .where(Query.study_id == study_id)
-            .order_by(Query.created_at.desc())
-        )
+        stmt = select(Query).where(Query.study_id == study_id).order_by(Query.created_at.desc())
+        if authorized_site_ids is not None:
+            stmt = stmt.where(Query.site_id.in_(authorized_site_ids))
 
         # Apply optional filters
         if filters is not None:
@@ -480,11 +680,39 @@ class QueryService:
                 stmt = stmt.where(Query.site_id == filters.site_id)
             if filters.subject_id is not None:
                 stmt = stmt.where(Query.subject_id == filters.subject_id)
+            if filters.assigned_role is not None:
+                stmt = stmt.where(Query.assigned_role == filters.assigned_role)
+            if filters.active is True:
+                stmt = stmt.where(
+                    Query.status.in_((QueryStatus.open, QueryStatus.answered, QueryStatus.reopened))
+                )
+            elif filters.active is False:
+                stmt = stmt.where(Query.status.in_((QueryStatus.closed, QueryStatus.cancelled)))
 
         if pagination is None:
             pagination = PaginationParams(page=1, page_size=25)
 
         return await paginate(session, stmt, pagination)
+
+    async def history(
+        self,
+        session: AsyncSession,
+        study_id: UUID,
+        pagination: PaginationParams,
+        *,
+        authorized_site_ids: set[UUID] | None = None,
+        subject_id: UUID | None = None,
+    ) -> PaginatedResponse:
+        """Return immutable query audit events for an authorized study scope."""
+        stmt = select(AuditEvent).where(
+            AuditEvent.study_id == study_id,
+            AuditEvent.entity_type == "query",
+        )
+        if authorized_site_ids is not None:
+            stmt = stmt.where(AuditEvent.site_id.in_(authorized_site_ids))
+        if subject_id is not None:
+            stmt = stmt.where(AuditEvent.subject_id == subject_id)
+        return await paginate(session, stmt.order_by(AuditEvent.timestamp.desc()), pagination)
 
 
 # Module-level singleton for convenience

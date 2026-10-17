@@ -27,6 +27,7 @@ from sqlalchemy.orm import selectinload
 from app.core.audit import audit_service
 from app.core.ctms import Module
 from app.core.exceptions import NotFoundError, ValidationError
+from app.models.designer.arm_definition import ArmDefinition
 from app.models.designer.form_metadata import FormDefinition
 from app.models.designer.schedule_of_assessment import (
     ScheduleOfAssessment,
@@ -64,6 +65,7 @@ class ScheduleOfAssessmentService:
         *,
         design_version_id: UUID,
         entries: list[ScheduleEntryInput],
+        arm_definition_id: UUID | None = None,
         actor_id: UUID | None = None,
     ) -> ScheduleOfAssessment:
         """Persist a Schedule_of_Assessment within one Design_Version (R4.1).
@@ -74,6 +76,9 @@ class ScheduleOfAssessmentService:
         Args:
             session: The active async session (caller's transaction).
             design_version_id: The owning Design_Version (R4.1).
+            arm_definition_id: Optional treatment arm. ``None`` identifies the
+                common/pre-arm schedule; an id identifies that arm's complete
+                treatment schedule.
             entries: The form/procedure-to-visit/cycle mappings to persist.
             actor_id: Optional actor UUID for the audit event.
 
@@ -87,16 +92,18 @@ class ScheduleOfAssessmentService:
         """
         for index, entry in enumerate(entries):
             self._validate_entry(entry, index)
+        await self._validate_arm_scope(session, design_version_id, arm_definition_id)
         await self._validate_references(session, design_version_id, entries)
 
-        # Idempotent replace (A.12): a design version holds at most one live SoA.
-        # Soft-delete every existing live SoA (and each of its live entries)
-        # before constructing the replacement, recording one 'delete' audit
-        # event per replaced SoA — all in the caller's transaction so the
-        # replacement and the retirement commit (or roll back) together.
-        await self._retire_existing(session, design_version_id, actor_id)
+        # Idempotent replace (A.12): each common/arm scope holds at most one
+        # live SoA. Retire only the selected scope before constructing its
+        # replacement, in the caller's transaction.
+        await self._retire_existing(session, design_version_id, arm_definition_id, actor_id)
 
-        soa = ScheduleOfAssessment(design_version_id=design_version_id)
+        soa = ScheduleOfAssessment(
+            design_version_id=design_version_id,
+            arm_definition_id=arm_definition_id,
+        )
         session.add(soa)
         await session.flush()
 
@@ -106,7 +113,10 @@ class ScheduleOfAssessmentService:
             entity_id=soa.id,
             action="create",
             module=Module.DESIGNER,
-            new_value=f"design_version_id={design_version_id}; entries={len(entries)}",
+            new_value=(
+                f"design_version_id={design_version_id}; "
+                f"arm_definition_id={arm_definition_id}; entries={len(entries)}"
+            ),
             actor_id=actor_id,
         )
 
@@ -114,12 +124,39 @@ class ScheduleOfAssessmentService:
             await self._add_entry(session, soa, entry, actor_id)
 
         logger.info(
-            "Schedule of assessment created: id=%s design_version_id=%s entries=%d",
+            "Schedule of assessment created: id=%s design_version_id=%s "
+            "arm_definition_id=%s entries=%d",
             soa.id,
             design_version_id,
+            arm_definition_id,
             len(entries),
         )
         return await self._get_with_entries(session, soa.id)
+
+    async def _validate_arm_scope(
+        self,
+        session: AsyncSession,
+        design_version_id: UUID,
+        arm_definition_id: UUID | None,
+    ) -> None:
+        """Require an arm-scoped SoA to reference a live arm in this version."""
+        if arm_definition_id is None:
+            return
+        result = await session.execute(
+            select(ArmDefinition.id).where(
+                ArmDefinition.id == arm_definition_id,
+                ArmDefinition.study_version_id == design_version_id,
+                ArmDefinition.deleted_at.is_(None),
+            )
+        )
+        if result.scalar_one_or_none() is None:
+            raise ValidationError(
+                "Schedule arm must belong to the same design version",
+                details={
+                    "field": "arm_definition_id",
+                    "arm_definition_id": str(arm_definition_id),
+                },
+            )
 
     async def _validate_references(
         self,
@@ -185,9 +222,10 @@ class ScheduleOfAssessmentService:
         self,
         session: AsyncSession,
         design_version_id: UUID,
+        arm_definition_id: UUID | None,
         actor_id: UUID | None,
     ) -> None:
-        """Soft-delete every live SoA (and its live entries) for a version.
+        """Soft-delete the live SoA (and entries) for one version/scope.
 
         Records one 'delete' audit event per replaced SoA within the caller's
         transaction (A.12 idempotency).
@@ -196,6 +234,7 @@ class ScheduleOfAssessmentService:
             select(ScheduleOfAssessment)
             .where(
                 ScheduleOfAssessment.design_version_id == design_version_id,
+                ScheduleOfAssessment.arm_definition_id == arm_definition_id,
                 ScheduleOfAssessment.deleted_at.is_(None),
             )
             .options(selectinload(ScheduleOfAssessment.entries))
@@ -213,7 +252,10 @@ class ScheduleOfAssessmentService:
                 entity_id=soa.id,
                 action="delete",
                 module=Module.DESIGNER,
-                old_value=(f"design_version_id={design_version_id}; replaced (idempotent save)"),
+                old_value=(
+                    f"design_version_id={design_version_id}; "
+                    f"arm_definition_id={arm_definition_id}; replaced (idempotent save)"
+                ),
                 actor_id=actor_id,
             )
 
@@ -298,13 +340,17 @@ class ScheduleOfAssessmentService:
         return result.scalars().one()
 
     async def get_schedule_of_assessment(
-        self, session: AsyncSession, design_version_id: UUID
+        self,
+        session: AsyncSession,
+        design_version_id: UUID,
+        arm_definition_id: UUID | None = None,
     ) -> ScheduleOfAssessment:
-        """Retrieve a version's SoA, raising ``NotFoundError`` if missing."""
+        """Retrieve one common or arm-scoped SoA, raising if missing."""
         result = await session.execute(
             select(ScheduleOfAssessment)
             .where(
                 ScheduleOfAssessment.design_version_id == design_version_id,
+                ScheduleOfAssessment.arm_definition_id == arm_definition_id,
                 ScheduleOfAssessment.deleted_at.is_(None),
             )
             .options(selectinload(ScheduleOfAssessment.entries))
@@ -317,9 +363,31 @@ class ScheduleOfAssessmentService:
         if soa is None:
             raise NotFoundError(
                 "Schedule of assessment not found for design version",
-                details={"design_version_id": str(design_version_id)},
+                details={
+                    "design_version_id": str(design_version_id),
+                    "arm_definition_id": (str(arm_definition_id) if arm_definition_id else None),
+                },
             )
         return soa
+
+    async def list_schedule_of_assessments(
+        self, session: AsyncSession, design_version_id: UUID
+    ) -> list[ScheduleOfAssessment]:
+        """List every live common and arm-scoped schedule for a version."""
+        result = await session.execute(
+            select(ScheduleOfAssessment)
+            .where(
+                ScheduleOfAssessment.design_version_id == design_version_id,
+                ScheduleOfAssessment.deleted_at.is_(None),
+            )
+            .options(selectinload(ScheduleOfAssessment.entries))
+            .order_by(
+                ScheduleOfAssessment.arm_definition_id.asc().nullsfirst(),
+                ScheduleOfAssessment.created_at.desc(),
+                ScheduleOfAssessment.id.desc(),
+            )
+        )
+        return list(result.scalars().all())
 
 
 # Module-level singleton for convenience.

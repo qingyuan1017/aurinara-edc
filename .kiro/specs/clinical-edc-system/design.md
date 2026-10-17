@@ -11,7 +11,7 @@ This design satisfies the current 32 EDC requirements in `requirements.md` and t
 1. **Explicit first-party ownership.** Every persisted field has exactly one authoritative module. Canonical Study and Site identity is shared; EDC owns clinical references/use and CTMS owns operational semantics. EDC remains authoritative for Study_Version, clinical subjects, protocol visits, clinical data, clinical quality, clinical attachments, and clinical exports.
 2. **Audit-safe by construction.** Every EDC clinical or key-configuration mutation writes an immutable clinical Audit_Event inside the same database transaction as the data change. The audit subsystem rejects updates and deletes at both the application and database layers. There is no code path that mutates clinical data without producing an Audit_Event.
 3. **Authoritative server-side authorization.** The shared Permission_Service is the single source of truth for both modules. Every protected route resolves an Authorization_Scope (union of role permission codes applied at study/site scope) and enforces route-level and object-level checks. Frontend permission logic is convenience only.
-4. **Safe declarative edit checks.** The Edit_Check_Engine evaluates a constrained JSON DSL with a fixed operator set. It never executes user-provided Python or JavaScript. Rules are validated against a schema before persistence, are testable before publish, and are versioned with their owning Study_Version.
+4. **Safe declarative edit checks with a governed extension boundary.** The Edit_Check_Engine evaluates a constrained JSON DSL with a fixed operator set and never executes user-provided Python or JavaScript in the API process. Optional custom Python uses immutable maker-checker-approved versions and a separately deployed, fail-closed sandbox with no network or database authority and bounded resources.
 5. **Soft-delete retention.** EDC clinical records and CTMS operational records use module-specific soft deletion/archive rules. Clinical subjects, forms, queries, attachments, and audit data are never physically removed; deletion actor, timestamp, and reason remain attributable.
 6. **Independent, coordinated delivery.** EDC clinical workflows remain operational when CTMS is disabled, empty, or unavailable. Cross-module changes use only approved minimized projections or explicitly named coordinated transitions through an internal, idempotent `Coordination_Service`; module boundaries are enforced by internal typed contracts and ownership rules.
 
@@ -325,9 +325,9 @@ Owns version lifecycle and the immutability of published metadata.
 
 `Subject_Service` is EDC-owned. It owns clinical subject identity, clinical identifier generation, Study/Site and published Study_Version binding, clinical access/status, casebook initialization, and clinical subject data. CTMS `Enrollment_Service` owns operational targets, milestones, and operational subject status in separate records and must reference an existing EDC Subject identifier.
 
-- `create_subject(study, site, data) -> Subject` — persists one `Clinical_Subject_Registry` record bound to the canonical Study, Site, and selected published Study_Version (7.1); generates the clinical subject identifier using the configured EDC rule and enforces uniqueness within the Study (7.2); initializes Visit_Instances and Form_Instances from the bound version atomically (7.4).
+- `create_subject(study, site, data) -> Subject` — persists one `Clinical_Subject_Registry` record bound to the canonical Study, Site, and selected published Study_Version (7.1); generates the clinical subject identifier using the configured EDC rule and enforces uniqueness within the Study (7.2); atomically initializes Visit_Instances and Form_Instances for the initial registered phase, with whole-version initialization retained for legacy designs without subject phases (7.4).
 - `transition_status(subject, target)` — enforces the configured EDC clinical subject status machine (7.3) and writes an EDC clinical Audit_Event (7.6).
-- `get_casebook(user, subject)` — returns only EDC clinical visit/form structure and status (7.5).
+- `get_casebook(user, subject)` — returns only the cumulative EDC clinical visit/form structure activated along the subject's audited phase path and its clinical status (7.5).
 - `get_ctms_projection(user, subject)` — supplies only an approved minimized projection such as canonical identifier/reference, approved operational status or milestone signal, site reference, source version, and correlation metadata. It excludes Field_Values, source documents, unrestricted notes, and query messages.
 - CTMS commands cannot create a Subject, allocate or replace a clinical identifier, bind a Study_Version, initialize a casebook, or mutate clinical subject status unless an explicit `Status_Ownership_Rule` names a coordinated transition (7.7–7.9, 32).
 
@@ -351,7 +351,7 @@ stateDiagram-v2
 This service is EDC-owned and manages protocol visit definitions and Visit_Instances used by clinical casebooks. CTMS `Monitoring_Service` owns separate `Monitoring_Plans` and `Monitoring_Activities`; a monitoring activity may carry a read-only `edc_visit_instance_id` reference but cannot create or mutate an EDC protocol visit.
 
 - `define_visit(version, data) -> VisitDefinition` — persists name, visit number, type, target day, window bounds, display order, and required flag (8.1); only while the owning version is draft.
-- `initialize_instances(subject)` — creates EDC Visit_Instances from the bound version's definitions (8.2).
+- `initialize_instances(subject, definition_ids, skip_existing)` — idempotently creates EDC Visit_Instances activated by the initial or newly entered visit-bearing phase. An arm phase only selects the subsequent SoA scope; later phases pass the intersection of their visit membership and the selected arm SoA. Omitting `definition_ids` retains whole-version initialization for designs without phase configuration (8.2).
 - `record_visit_date(instance, date)` — computes EDC window status from the subject protocol reference date and configured bounds (8.3).
 - `create_unscheduled(subject, data)` — where permitted by the bound Study_Version, creates an unscheduled EDC Visit_Instance without a scheduled visit number (8.4).
 - `mark_missed(instance)` — sets the EDC protocol visit status to missed (8.5).
@@ -390,10 +390,12 @@ Loads, saves, submits, reopens, and edits clinical field values for Form_Instanc
 
 ### Edit_Check_Engine (Requirement 12)
 
-Evaluates a constrained declarative JSON DSL. It **never executes user-provided code** (12.7).
+Evaluates a constrained declarative JSON DSL. It **never executes user-provided code in-process** (12.7). The optional custom-function path is a separate integration boundary: author, approve, and execute are distinct permissions; approval requires a different actor; only active immutable versions can run; and the API delegates to an explicitly configured sandbox runtime. There is no local evaluation fallback.
 
 - DSL: boolean trees of `and`/`or`/`not` over conditions `{field, operator, value | value_field}`. Operators: `is_null`, `not_null`, `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `not_in`, `matches` (anchored regex), `before`, `after`, `within_days`.
 - `validate_rule(json)` — validates against the operator/condition schema before persisting (12.1).
+- `CustomFunctionService` — owns immutable Python source versions, SHA-256 provenance, submit/approve/activate/retire/disable lifecycle, maker-checker enforcement, and execution metadata. Source changes always create a new version.
+- `CustomFunctionRuntimeClient` — POSTs minimized inputs to the isolated runtime with execution limits. Responses are size bounded and may contain only typed results plus allowlisted commands. The runtime has no direct database credentials; commands require separate platform validation before application.
 - Rule types (12.2): required field, range, date comparison, cross-field, cross-form, code list validation, format validation, duplicate record, missing visit/form, conditional required, lab abnormality.
 - Severities (12.3): info, warning, error, query.
 - `test(rule, sample_data) -> Outcome` — evaluates against sample data without persisting clinical data (12.4); enforces test-before-publish.
@@ -498,6 +500,7 @@ Append-only, two-layer immutability.
 
 - `create_export(study, params) -> ExportJob` — creates an EDC clinical job, enqueues it, and tracks `Queued → Running → Completed/Failed` (19.1).
 - Worker generates EDC clinical CSV, Excel, JSON, SAS XPT, or ODM XML and stores the file (19.5).
+- Dataset workers select only Form_Instances whose canonical data-entry status is `Submitted`; saved Not Started or In Progress forms produce no export rows. Review, freeze, lock, and signature remain separate lifecycle dimensions and do not remove an otherwise submitted form from export eligibility (19.8).
 - Filters (19.3): study, site, clinical subject, protocol visit, form, domain, inclusive UTC date range, changed-since-last-export, locked-data-only, and clean-data-only. Scope filtering is applied before content generation.
 - `subject_list_export(scope)` (19.2) produces only authorized EDC clinical subjects.
 - `download(export)` (19.4) authorizes only the requesting User's completed EDC job, provides a time-limited signed URL or authenticated stream, and writes an EDC clinical Audit_Event.
@@ -1118,6 +1121,16 @@ The shared exception mapping also covers first-party boundary failures. CTMS ret
 - **Scope-aware masking:** out-of-scope objects return `403` or are masked as `404` so existence is not leaked.
 - **No internal leakage:** database driver messages and stack traces are logged with the request_id but never returned to clients.
 - **Deterministic mapping:** services raise typed domain exceptions; a single exception handler maps them to the envelope, keeping routes thin (Requirement 23.1).
+
+## Core EDC Gap-Closure Architecture
+
+`FormOperationalStatus` is the canonical boundary type. The legacy `form_instances.status` remains a one-release read alias while `data_entry_status` owns only Not Started, In Progress, and Submitted. Review and SDV rows carry source revision stamps; SDR uses version-owned settings, immutable selections, and revision-bound results; signatures retain their signed hash and become stale independently. Active freeze and lock records remain the enforcement primitive.
+
+All ID routes load the clinical object before authorization and derive Study/Site scope from that object. Collection routes intersect authorized Site grants. The shared revision service updates a changed Field_Value or Form_Record and its Form_Instance, Visit_Instance, and Subject in the same transaction. Save and submit run calculated fields, conditional visibility, and applicable published edit checks server-side.
+
+Operational queries are aggregate and paginated: the subject list returns completion and quality summaries; the casebook returns a visit/form matrix; form and quality worklists provide bounded-query navigation; listings accept a server-defined dataset identifier rather than SQL or client-selected arbitrary columns. Every listing row carries its source eCRF URL.
+
+`ClinicalControlRequest` separates intent, approval, and execution. Requester and approver must differ. Execution locks the owning Study row, recalculates readiness, compares the new snapshot to current state, and atomically creates or clears the applicable FreezeLock controls and Audit_Events. Freeze permits quality/query workflow but rejects data and attachment mutation; hard lock permits only audit/export reads and controlled unlock.
 
 ## Testing Strategy
 

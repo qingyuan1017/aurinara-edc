@@ -1,0 +1,203 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Aurinara EDC encrypted PostgreSQL, attachments, frontend storage, event queue, and backups.
+
+Parameters:
+  Environment: {Type: String, AllowedValues: [staging, production]}
+  DataSubnetIds: {Type: List<AWS::EC2::Subnet::Id>}
+  DatabaseSecurityGroupId: {Type: AWS::EC2::SecurityGroup::Id}
+  DatabaseInstanceClass: {Type: String}
+  PlatformEventBusName: {Type: String}
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, production]
+
+Resources:
+  DataKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: !Sub Aurinara EDC ${Environment} data key
+      EnableKeyRotation: true
+      PendingWindowInDays: 30
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - {Effect: Allow, Principal: {AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'}, Action: 'kms:*', Resource: '*'}
+          - Sid: CloudWatchLogs
+            Effect: Allow
+            Principal: {Service: !Sub 'logs.${AWS::Region}.amazonaws.com'}
+            Action: [kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
+            Resource: '*'
+            Condition: {ArnLike: {'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*'}}
+          - Sid: CloudTrail
+            Effect: Allow
+            Principal: {Service: cloudtrail.amazonaws.com}
+            Action: [kms:GenerateDataKey*, kms:DescribeKey]
+            Resource: '*'
+            Condition: {StringEquals: {'aws:SourceArn': !Sub 'arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/aurinara-edc-${Environment}'}}
+          - Sid: EventBridgeQueueEncryption
+            Effect: Allow
+            Principal: {Service: events.amazonaws.com}
+            Action: [kms:Decrypt, kms:GenerateDataKey]
+            Resource: '*'
+  DataKeyAlias: {Type: AWS::KMS::Alias, Properties: {AliasName: !Sub 'alias/aurinara-edc-${Environment}', TargetKeyId: !Ref DataKey}}
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: {DBSubnetGroupDescription: Aurinara EDC private data subnets, SubnetIds: !Ref DataSubnetIds}
+  DatabaseParameters:
+    Type: AWS::RDS::DBParameterGroup
+    Properties: {Family: postgres16, Description: Aurinara EDC PostgreSQL 16 parameters, Parameters: {rds.force_ssl: '1', log_min_duration_statement: '1000'}}
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub aurinara-edc/${Environment}/database
+      KmsKeyId: !Ref DataKey
+      GenerateSecretString: {SecretStringTemplate: '{"username":"aurinara_edc"}', GenerateStringKey: password, PasswordLength: 40, ExcludeCharacters: '"@/\\'}
+  ApplicationSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub aurinara-edc/${Environment}/application
+      KmsKeyId: !Ref DataKey
+      GenerateSecretString: {SecretStringTemplate: '{}', GenerateStringKey: secret_key, PasswordLength: 64, ExcludePunctuation: true}
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub aurinara-edc-${Environment}
+      Engine: postgres
+      EngineVersion: '16.9'
+      DBName: aurinara_edc
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      AllocatedStorage: !If [IsProduction, 100, 50]
+      MaxAllocatedStorage: !If [IsProduction, 500, 200]
+      StorageType: gp3
+      StorageEncrypted: true
+      KmsKeyId: !Ref DataKey
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VPCSecurityGroups: [!Ref DatabaseSecurityGroupId]
+      DBParameterGroupName: !Ref DatabaseParameters
+      MultiAZ: !If [IsProduction, true, false]
+      PubliclyAccessible: false
+      BackupRetentionPeriod: !If [IsProduction, 35, 7]
+      DeletionProtection: !If [IsProduction, true, false]
+      EnablePerformanceInsights: true
+      PerformanceInsightsKMSKeyId: !Ref DataKey
+      PerformanceInsightsRetentionPeriod: !If [IsProduction, 731, 7]
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt EnhancedMonitoringRole.Arn
+      EnableCloudwatchLogsExports: [postgresql, upgrade]
+      CopyTagsToSnapshot: true
+  EnhancedMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: {Version: '2012-10-17', Statement: [{Effect: Allow, Principal: {Service: monitoring.rds.amazonaws.com}, Action: 'sts:AssumeRole'}]}
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole]
+
+  AttachmentBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'aurinara-edc-${Environment}-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration: {Status: Enabled}
+      BucketEncryption: {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: aws:kms, KMSMasterKeyID: !Ref DataKey}, BucketKeyEnabled: true}]}
+      PublicAccessBlockConfiguration: &PublicBlock {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
+      LifecycleConfiguration: {Rules: [{Id: AbortMultipart, Status: Enabled, AbortIncompleteMultipartUpload: {DaysAfterInitiation: 7}}, {Id: NoncurrentVersions, Status: Enabled, NoncurrentVersionTransitions: [{StorageClass: GLACIER, TransitionInDays: 90}]}]}
+  AttachmentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AttachmentBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Sid: DenyInsecureTransport, Effect: Deny, Principal: '*', Action: 's3:*', Resource: [!GetAtt AttachmentBucket.Arn, !Sub '${AttachmentBucket.Arn}/*'], Condition: {Bool: {'aws:SecureTransport': false}}}]
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'aurinara-edc-${Environment}-frontend-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration: {Status: Enabled}
+      BucketEncryption: {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: aws:kms, KMSMasterKeyID: !Ref DataKey}, BucketKeyEnabled: true}]}
+      PublicAccessBlockConfiguration: *PublicBlock
+  AccessLogBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'aurinara-edc-${Environment}-logs-${AWS::AccountId}-${AWS::Region}'
+      OwnershipControls: {Rules: [{ObjectOwnership: BucketOwnerPreferred}]}
+      AccessControl: LogDeliveryWrite
+      VersioningConfiguration: {Status: Enabled}
+      BucketEncryption: {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]}
+      PublicAccessBlockConfiguration: *PublicBlock
+      LifecycleConfiguration: {Rules: [{Id: RetainLogs, Status: Enabled, ExpirationInDays: 365}]}
+
+  ProjectionDlq:
+    Type: AWS::SQS::Queue
+    Properties: {QueueName: !Sub 'aurinara-edc-${Environment}-platform-dlq', KmsMasterKeyId: !Ref DataKey, MessageRetentionPeriod: 1209600}
+  ProjectionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub aurinara-edc-${Environment}-platform
+      KmsMasterKeyId: !Ref DataKey
+      ReceiveMessageWaitTimeSeconds: 20
+      VisibilityTimeout: 120
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy: {deadLetterTargetArn: !GetAtt ProjectionDlq.Arn, maxReceiveCount: 5}
+  PlatformEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub aurinara-edc-${Environment}-platform-events
+      EventBusName: !Ref PlatformEventBusName
+      State: ENABLED
+      EventPattern: {source: [aurinara.platform]}
+      Targets: [{Id: edc-projection, Arn: !GetAtt ProjectionQueue.Arn}]
+  ProjectionQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [!Ref ProjectionQueue]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: events.amazonaws.com}
+            Action: sqs:SendMessage
+            Resource: !GetAtt ProjectionQueue.Arn
+            Condition: {ArnEquals: {'aws:SourceArn': !GetAtt PlatformEventRule.Arn}}
+
+  BackupVault:
+    Type: AWS::Backup::BackupVault
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties: {BackupVaultName: !Sub 'aurinara-edc-${Environment}', EncryptionKeyArn: !GetAtt DataKey.Arn}
+  BackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: {Version: '2012-10-17', Statement: [{Effect: Allow, Principal: {Service: backup.amazonaws.com}, Action: 'sts:AssumeRole'}]}
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup, arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Backup]
+  BackupPlan:
+    Type: AWS::Backup::BackupPlan
+    Properties: {BackupPlan: {BackupPlanName: !Sub 'aurinara-edc-${Environment}', BackupPlanRule: [{RuleName: daily, TargetBackupVault: !Ref BackupVault, ScheduleExpression: 'cron(0 6 ? * * *)', Lifecycle: {DeleteAfterDays: 35}}]}}
+  BackupSelection:
+    Type: AWS::Backup::BackupSelection
+    Properties: {BackupPlanId: !Ref BackupPlan, BackupSelection: {SelectionName: attachments, IamRoleArn: !GetAtt BackupRole.Arn, Resources: [!GetAtt AttachmentBucket.Arn]}}
+
+Outputs:
+  DataKeyArn: {Value: !GetAtt DataKey.Arn}
+  DatabaseEndpoint: {Value: !GetAtt Database.Endpoint.Address}
+  DatabaseIdentifier: {Value: !Ref Database}
+  DatabaseSecretArn: {Value: !Ref DatabaseSecret}
+  ApplicationSecretArn: {Value: !Ref ApplicationSecret}
+  AttachmentBucketName: {Value: !Ref AttachmentBucket}
+  FrontendBucketName: {Value: !Ref FrontendBucket}
+  FrontendBucketRegionalDomainName: {Value: !GetAtt FrontendBucket.RegionalDomainName}
+  AccessLogBucketName: {Value: !Ref AccessLogBucket}
+  AccessLogBucketDomainName: {Value: !GetAtt AccessLogBucket.DomainName}
+  ProjectionQueueUrl: {Value: !Ref ProjectionQueue}
+  ProjectionQueueName: {Value: !GetAtt ProjectionQueue.QueueName}
+  ProjectionDlqName: {Value: !GetAtt ProjectionDlq.QueueName}
+  BackupVaultName: {Value: !Ref BackupVault}

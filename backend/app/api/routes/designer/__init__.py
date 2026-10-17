@@ -21,6 +21,8 @@ from app.api.routes.designer.codelists import (
 )
 from app.api.routes.designer.coding_settings import router as coding_settings_router
 from app.api.routes.designer.crf_access import router as crf_access_router
+from app.api.routes.designer.custom_functions import router as custom_functions_router
+from app.api.routes.designer.custom_functions import version_router as custom_function_versions_router
 from app.api.routes.designer.edit_checks import (
     router as edit_checks_router,
 )
@@ -38,10 +40,12 @@ from app.api.routes.designer.forms import (
 from app.api.routes.designer.forms import (
     router as forms_router,
 )
+from app.api.routes.designer.odm20 import router as odm20_router
 from app.api.routes.designer.raw_data_variables import router as raw_data_variables_router
 from app.api.routes.designer.schedule_of_assessment import (
     router as schedule_of_assessment_router,
 )
+from app.api.routes.designer.sdr import router as sdr_settings_router
 from app.api.routes.designer.study_versions import (
     study_versions_router,
     versions_router,
@@ -76,6 +80,8 @@ for resource_router in (
     form_dependencies_router,
     edit_checks_study_router,
     edit_checks_router,
+    custom_functions_router,
+    custom_function_versions_router,
     study_codelists_router,
     codelists_router,
     subject_phases_router,
@@ -87,7 +93,9 @@ for resource_router in (
     arms_router,
     crf_access_router,
     raw_data_variables_router,
+    odm20_router,
     coding_settings_router,
+    sdr_settings_router,
     bulk_import_router,
 ):
     router.include_router(resource_router)

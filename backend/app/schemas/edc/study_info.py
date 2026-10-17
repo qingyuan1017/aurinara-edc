@@ -194,8 +194,7 @@ class VersionUpgradeResult(BaseModel):
     from_design_version_id: UUID | None = Field(
         None,
         description=(
-            "Prior bound Design_Version (None when a Site's subjects were on "
-            "mixed versions)"
+            "Prior bound Design_Version (None when a Site's subjects were on mixed versions)"
         ),
     )
     to_design_version_id: UUID

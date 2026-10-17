@@ -14,6 +14,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     UniqueConstraint,
     Uuid,
@@ -70,25 +71,20 @@ class SDVStatus(Base):
     )
 
     # Verification state
-    is_verified: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    verified_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Verification actor
     verified_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    verified_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     verifier: Mapped["User | None"] = relationship(  # noqa: F821

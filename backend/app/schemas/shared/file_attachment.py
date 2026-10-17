@@ -14,6 +14,13 @@ class FileAttachmentDelete(BaseCreateSchema):
     reason: str = Field(..., min_length=1, description="Reason for deleting the attachment")
 
 
+class RepositoryAttachmentBind(BaseCreateSchema):
+    """Bind one exact Repository version as a study attachment."""
+
+    version_id: UUID
+    expected_sha256: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+
+
 class FileAttachmentResponse(BaseSchema):
     """Persisted attachment metadata and soft-delete state."""
 
@@ -38,7 +45,7 @@ class FileAttachmentResponse(BaseSchema):
     filename: str
     content_type: str
     size_bytes: int
-    storage_key: str
+    storage_key: str | None
     uploaded_by: UUID
     uploaded_at: UtcDatetime
     deleted_at: UtcDatetime | None = None

@@ -286,6 +286,49 @@ def test_role_catalog_registration_returns_platform_mappings() -> None:
     assert registered[0].scope_level == "study"
 
 
+def test_permission_catalog_registration_does_not_define_roles() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "PUT"
+        assert request.url.path == "/v1/products/aurinara-edc/permissions"
+        payload = json.loads(request.content)
+        assert payload == {
+            "permissions": [
+                {
+                    "code": "edc.designer.odm.export",
+                    "description": "Export ODM metadata",
+                    "module": "designer",
+                    "allowed_scope_levels": ["system", "study"],
+                }
+            ]
+        }
+        return httpx.Response(200, json=[{"code": "edc.designer.odm.export"}])
+
+    settings = Settings(
+        _env_file=None,
+        environment="test",
+        platform_control_plane_url="https://platform.test",
+        platform_authorization_mode="enforced",
+        platform_service_token_url="https://issuer.test/token",
+        platform_service_client_id="client",
+        platform_service_client_secret="secret",
+    )
+    client = PlatformAuthorizationClient(settings, httpx.MockTransport(handler))
+    client._token = ("service-token", float("inf"))
+
+    registered = client.sync_permissions(
+        [
+            {
+                "code": "edc.designer.odm.export",
+                "description": "Export ODM metadata",
+                "module": "designer",
+                "allowed_scope_levels": ["system", "study"],
+            }
+        ]
+    )
+
+    assert registered == ("edc.designer.odm.export",)
+
+
 def test_ctms_site_registration_preserves_the_generated_canonical_id() -> None:
     study_id = uuid4()
     site_id = uuid4()

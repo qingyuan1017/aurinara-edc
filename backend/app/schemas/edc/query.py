@@ -25,32 +25,36 @@ from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
 class QueryCreate(BaseCreateSchema):
     """Request body for creating a new Query (Requirement 13.1)."""
 
-    target_type: QueryTargetType = Field(
-        ..., description="Type of the affected object"
-    )
-    target_id: UUID = Field(
-        ..., description="ID of the affected object"
-    )
-    text: str = Field(
-        ..., min_length=1, max_length=4000, description="Initial query text"
-    )
-    query_type: QueryType = Field(
-        default=QueryType.manual, description="Origin of the query"
-    )
+    target_type: QueryTargetType = Field(..., description="Type of the affected object")
+    target_id: UUID = Field(..., description="ID of the affected object")
+    text: str = Field(..., min_length=1, max_length=4000, description="Initial query text")
+    query_type: QueryType = Field(default=QueryType.manual, description="Origin of the query")
     assigned_role: str | None = Field(
-        None, min_length=1, max_length=100,
+        None,
+        min_length=1,
+        max_length=100,
         description="Role assigned to resolve the query",
     )
     site_id: UUID | None = Field(None, description="Optional site context")
     subject_id: UUID | None = Field(None, description="Optional subject context")
 
 
+class FieldQueryCreate(BaseCreateSchema):
+    """Request body for a manual query on a field in a form instance."""
+
+    text: str = Field(..., min_length=1, max_length=4000, description="Initial query text")
+    assigned_role: str | None = Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description="Role assigned to resolve the query",
+    )
+
+
 class QueryRespond(BaseCreateSchema):
     """Request body for responding to a Query (Requirement 13.3)."""
 
-    message: str = Field(
-        ..., min_length=1, max_length=4000, description="Response message text"
-    )
+    message: str = Field(..., min_length=1, max_length=4000, description="Response message text")
 
 
 class QueryMessageResponse(BaseSchema):
@@ -102,6 +106,9 @@ class QueryListResponse(BaseSchema):
     updated_at: UtcDatetime | None = None
     closed_at: UtcDatetime | None = None
     closed_by: UUID | None = None
+    site_label: str | None = None
+    subject_label: str | None = None
+    age_days: int = 0
 
 
 class QueryFilters(BaseSchema):
@@ -112,3 +119,5 @@ class QueryFilters(BaseSchema):
     query_type: QueryType | None = None
     site_id: UUID | None = None
     subject_id: UUID | None = None
+    assigned_role: str | None = None
+    active: bool | None = None

@@ -27,6 +27,12 @@ class CodingSettingCreate(BaseCreateSchema):
     dictionary_reference: str = Field(..., min_length=1, max_length=255)
     coding_rule: str | None = None
     field_definition_id: UUID | None = None
+    dictionary_version: str | None = Field(None, max_length=100)
+    coding_level: str | None = Field(None, max_length=100)
+    locale: str | None = Field(None, max_length=35)
+    priority: int = Field(default=100, ge=0, le=10_000)
+    approval_required: bool = True
+    auto_approval: bool = False
 
 
 class CodingSettingResponse(BaseSchema):
@@ -37,6 +43,12 @@ class CodingSettingResponse(BaseSchema):
     dictionary_reference: str
     coding_rule: str | None = None
     field_definition_id: UUID | None = None
+    dictionary_version: str | None = None
+    coding_level: str | None = None
+    locale: str | None = None
+    priority: int = 100
+    approval_required: bool = True
+    auto_approval: bool = False
     created_at: UtcDatetime
     updated_at: UtcDatetime | None = None
 

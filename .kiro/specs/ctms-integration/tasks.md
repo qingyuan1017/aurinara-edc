@@ -77,7 +77,7 @@ Tasks marked with `*` are optional test tasks. Property tests use Hypothesis, on
 - [x] 2.2a Move operational study configuration and entity assignment into CTMS
   - Project platform-owned Study name and sponsor as read-only values; remove them from CTMS mutation contracts.
   - Add the full CTMS study setup fields for classification, purpose, enrollment/site expectations, dates, currency, and query expectations with validation and audit coverage.
-  - Add reusable Country, Site, Depot, Staff, Participating Organization, and Investigational Product catalog records and scoped Study assignments; create Sites in CTMS, synchronize the generated CTMS identifier to the shared canonical Site record, and remove manual identifier entry.
+  - Add reusable Country, Site, Depot, Staff, Participating Organization, and Investigational Product catalog records and scoped Study assignments; add an available Site master to a Study by creating a distinct canonical Site record with a Study-specific Site identifier, allowing the same Site master to carry different identifiers in different Studies.
   - _Requirements: 3.1, 3.5–3.13_
 
 - [x] 2.2b Add configurable CTMS reference data

@@ -24,6 +24,7 @@ class FormRecordCreate(BaseCreateSchema):
         default=None,
         description="Optional mapping of repeating-form field identifiers to values",
     )
+    reason: str | None = Field(None, max_length=4000)
 
 
 class FormRecordUpdate(BaseUpdateSchema):
@@ -33,12 +34,21 @@ class FormRecordUpdate(BaseUpdateSchema):
         ...,
         description="Mapping of repeating-form field identifiers to values",
     )
+    reason: str | None = Field(None, max_length=4000)
 
 
 class FormRecordDelete(BaseCreateSchema):
     """Payload for a soft deletion; the reason is retained in history."""
 
-    reason: str = Field(..., min_length=1, description="Reason for deleting the row")
+    reason: str = Field(
+        ..., min_length=1, max_length=4000, description="Reason for deleting the row"
+    )
+
+
+class FormRecordRestore(BaseCreateSchema):
+    """Reason is mandatory when restoring a row after form submission."""
+
+    reason: str | None = Field(None, max_length=4000)
 
 
 class FormRecordResponse(BaseSchema):

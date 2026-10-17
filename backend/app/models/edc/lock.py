@@ -108,9 +108,7 @@ class FreezeLock(Base):
     unlocked_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    unlocked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    unlocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     unlock_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,

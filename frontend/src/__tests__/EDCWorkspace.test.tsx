@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EDCWorkspacePage, FormStatusStrip, normalizeDataEntryStatus } from '@/features/edc'
 import { api } from '@/lib/api'
@@ -53,6 +53,54 @@ describe('EDC study workspaces', () => {
     expect(await screen.findByText('Query Dashboard')).toBeInTheDocument()
     expect(screen.getByText('4.5')).toBeInTheDocument()
     expect(api.get).toHaveBeenCalledWith('/studies/study-1/query-metrics')
+  })
+
+  it('filters the form worklist independently by every displayed column', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: {
+        items: [
+          {
+            form_instance_id: 'form-instance-1',
+            subject_id: 'subject-1',
+            subject_number: 'SUBJ-001',
+            site_name: 'North Clinic',
+            visit_name: 'Screening',
+            form_name: 'Demographics',
+            status: { data_entry: 'In Progress', review: 'Not Reviewed', sdv: 'Not Verified', sdr: 'Pending', freeze: 'Inactive', lock: 'Inactive', signature: 'Missing', active_query_count: 2 },
+          },
+          {
+            form_instance_id: 'form-instance-2',
+            subject_id: 'subject-2',
+            subject_number: 'SUBJ-002',
+            site_name: 'South Clinic',
+            visit_name: 'Baseline',
+            form_name: 'Vital Signs',
+            status: { data_entry: 'Draft', review: 'Reviewed', sdv: 'Verified', sdr: 'Complete', freeze: 'Inactive', lock: 'Inactive', signature: 'Missing', active_query_count: 0 },
+          },
+        ],
+        page: 1,
+        page_size: 100,
+        total: 2,
+      },
+    } as never)
+
+    renderPage('incomplete-forms')
+
+    expect(await screen.findByText('SUBJ-001')).toBeInTheDocument()
+    for (const name of ['site', 'subject', 'visit', 'form', 'entry', 'review', 'SDV', 'SDR', 'queries']) {
+      expect(screen.getByLabelText(`Filter by ${name}`)).toBeInTheDocument()
+    }
+
+    fireEvent.change(screen.getByLabelText('Filter by subject'), { target: { value: '002' } })
+    expect(screen.queryByText('SUBJ-001')).not.toBeInTheDocument()
+    expect(screen.getByText('SUBJ-002')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Filter by review'), { target: { value: 'Not Reviewed' } })
+    expect(screen.getByText('No forms match the current column filters.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear column filters' }))
+    expect(screen.getByText('SUBJ-001')).toBeInTheDocument()
+    expect(screen.getByText('SUBJ-002')).toBeInTheDocument()
   })
 
   it('presents form workflow dimensions independently', () => {

@@ -32,6 +32,8 @@ from app.models.edc.site import Site
 from app.models.edc.subject import Subject
 from app.models.edc.visit import VisitInstance
 from app.models.shared.export import Export, ExportStatus
+from app.schemas.designer.raw_data_variable_setting import RawDatasetVariableResponse
+from app.services.edc.raw_dataset_export_service import RawDatasetPackage, RawDatasetTable
 from app.workers.export_worker import (
     FIELD_EXPORT_COLUMNS,
     ODM_NS,
@@ -49,6 +51,12 @@ CANONICAL_ROW = {
     "form_name": "Demographics",
     "field_variable_name": "AGE",
     "value": "45",
+}
+
+RAW_ROW = {
+    "PROTOCOL": "P-001",
+    "SITE": "SITE-01",
+    "AGE": "45",
 }
 
 
@@ -104,6 +112,30 @@ def _mock_session() -> AsyncMock:
     return session
 
 
+def _raw_package(study_id: uuid.UUID) -> RawDatasetPackage:
+    columns = [
+        RawDatasetVariableResponse(
+            name=name,
+            data_type="string",
+            label=name,
+            source="fixed" if name != "AGE" else "field",
+        )
+        for name in RAW_ROW
+    ]
+    return RawDatasetPackage(
+        study_id=str(study_id),
+        generated_at="2026-10-15T12:00:00Z",
+        datasets=[
+            RawDatasetTable(
+                name="DM",
+                columns=columns,
+                rows=[RAW_ROW],
+                subject_keys=[CANONICAL_ROW["subject_number"]],
+            )
+        ],
+    )
+
+
 async def _generate_export(tmp_path: Path, export_type: str) -> Path:
     """Run one export through the worker and return its generated file path."""
     export = _make_export(export_type)
@@ -121,6 +153,11 @@ async def _generate_export(tmp_path: Path, export_type: str) -> Path:
             new_callable=AsyncMock,
         ),
         patch("app.workers.export_worker._get_export_dir", return_value=tmp_path),
+        patch(
+            "app.workers.export_worker.raw_dataset_export_service.build_package",
+            new_callable=AsyncMock,
+            return_value=_raw_package(export.study_id),
+        ),
     ):
         await run_export(session, export)
 
@@ -140,7 +177,8 @@ async def test_json_export_round_trips_data_without_loss(tmp_path):
 
     assert path.suffix == ".json"
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload == [CANONICAL_ROW]
+    assert payload["DM"] == [RAW_ROW]
+    assert payload["_manifest"]["datasets"][0]["name"] == "DM"
     assert json.loads(json.dumps(payload, sort_keys=True)) == payload
 
 
@@ -158,12 +196,9 @@ async def test_odm_export_round_trips_data_without_loss(tmp_path):
     }
 
     assert values == {
-        "subject_number": CANONICAL_ROW["subject_number"],
-        "site_number": CANONICAL_ROW["site_number"],
-        "visit_name": CANONICAL_ROW["visit_name"],
-        "form_name": CANONICAL_ROW["form_name"],
-        "field_variable_name": CANONICAL_ROW["field_variable_name"],
-        "value": CANONICAL_ROW["value"],
+        "IT_DM_PROTOCOL": "P-001",
+        "IT_DM_SITE": "SITE-01",
+        "IT_DM_AGE": "45",
     }
 
 
@@ -186,8 +221,12 @@ async def test_xpt_export_generates_a_sas_transport_file(tmp_path):
     """SAS XPT export starts with the SAS transport library header."""
     path = await _generate_export(tmp_path, "xpt")
 
-    assert path.suffix == ".xpt"
-    assert path.read_bytes().startswith(b"HEADER RECORD*******LIBRARY HEADER RECORD!!!!!!!")
+    assert path.suffix == ".zip"
+    with zipfile.ZipFile(path) as archive:
+        assert {"manifest.json", "DM.xpt"}.issubset(archive.namelist())
+        assert archive.read("DM.xpt").startswith(
+            b"HEADER RECORD*******LIBRARY HEADER RECORD!!!!!!!"
+        )
 
 
 @pytest.mark.asyncio
@@ -218,8 +257,7 @@ def _generated_rows(draw):
     """Generate bounded canonical rows with values safe for every serializer."""
     row_count = draw(st.integers(min_value=1, max_value=6))
     return [
-        {column: draw(_EXPORT_TEXT) for column in FIELD_EXPORT_COLUMNS}
-        for _ in range(row_count)
+        {column: draw(_EXPORT_TEXT) for column in FIELD_EXPORT_COLUMNS} for _ in range(row_count)
     ]
 
 
@@ -242,7 +280,12 @@ def _read_odm_rows(payload: bytes) -> list[dict[str, str]]:
         for offset in range(0, len(items), len(FIELD_EXPORT_COLUMNS)):
             chunk = items[offset : offset + len(FIELD_EXPORT_COLUMNS)]
             assert [item.attrib["ItemOID"] for item in chunk] == list(FIELD_EXPORT_COLUMNS)
-            rows.append({column: item.attrib.get("Value", "") for column, item in zip(FIELD_EXPORT_COLUMNS, chunk, strict=True)})
+            rows.append(
+                {
+                    column: item.attrib.get("Value", "")
+                    for column, item in zip(FIELD_EXPORT_COLUMNS, chunk, strict=True)
+                }
+            )
     return rows
 
 
@@ -253,9 +296,7 @@ def _read_excel_rows(payload: bytes) -> list[dict[str, str]]:
         sheet = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
     rows: list[list[str]] = []
     for row in sheet.findall(".//main:row", namespace):
-        rows.append(
-            [node.text or "" for node in row.findall("./main:c/main:is/main:t", namespace)]
-        )
+        rows.append([node.text or "" for node in row.findall("./main:c/main:is/main:t", namespace)])
     assert rows[0] == list(FIELD_EXPORT_COLUMNS)
     return [dict(zip(FIELD_EXPORT_COLUMNS, values, strict=True)) for values in rows[1:]]
 
@@ -263,7 +304,9 @@ def _read_excel_rows(payload: bytes) -> list[dict[str, str]]:
 def _read_xpt_rows(payload: bytes, row_count: int) -> list[dict[str, str]]:
     """Read the fixed-width XPORT v5 rows emitted by the worker."""
     variable_count_offset = 7 * 80
-    variable_count = int(struct.unpack(">d", payload[variable_count_offset : variable_count_offset + 8])[0])
+    variable_count = int(
+        struct.unpack(">d", payload[variable_count_offset : variable_count_offset + 8])[0]
+    )
     assert variable_count == len(FIELD_EXPORT_COLUMNS)
     descriptor_start = variable_count_offset + 8
     lengths = [

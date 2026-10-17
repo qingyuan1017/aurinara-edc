@@ -42,6 +42,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.odm_oid import new_odm_oid
 
 if TYPE_CHECKING:  # avoid a runtime import cycle; the registry resolves by string
     from app.models.designer.study_version import StudyVersion
@@ -107,6 +108,9 @@ class SubjectPhaseDefinition(Base):
         ForeignKey("study_versions.id", ondelete="CASCADE"),
         nullable=False,
     )
+    odm_oid: Mapped[str] = mapped_column(
+        String(255), nullable=False, default=lambda: new_odm_oid("PH")
+    )
 
     # Phase name — 1-100 characters, unique within the owning design version (R3.1, R3.2)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -161,6 +165,12 @@ class SubjectPhaseDefinition(Base):
             "ix_subject_phase_definitions_design_version_id",
             "design_version_id",
         ),
+        UniqueConstraint(
+            "design_version_id",
+            "odm_oid",
+            name="uq_subject_phase_definition_oid_per_version",
+        ),
+        Index("ix_subject_phase_definitions_odm_oid", "odm_oid"),
     )
 
     def __repr__(self) -> str:

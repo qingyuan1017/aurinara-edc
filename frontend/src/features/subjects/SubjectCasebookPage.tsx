@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { api } from '@/lib/api'
+import { api, getApiErrorMessage } from '@/lib/api'
 import type { SubjectPhaseStateResponse, SubjectPhaseUpdate } from '@/api/model'
 import { PERMISSIONS, usePermission } from '@/lib/permissions'
 import {
@@ -9,6 +9,7 @@ import {
   ErrorState,
   LoadingState,
   DetailCard,
+  ConfirmDialog,
   OwnershipBadge,
   PageContainer,
   PageHeader,
@@ -73,6 +74,8 @@ export function SubjectCasebookPage({ subjectId, studyId }: SubjectCasebookPageP
   const [selectedArmId, setSelectedArmId] = useState('')
   const [armDialogOpen, setArmDialogOpen] = useState(false)
   const [phaseError, setPhaseError] = useState('')
+  const [reverseDialogOpen, setReverseDialogOpen] = useState(false)
+  const [reverseError, setReverseError] = useState('')
   const { data: casebook, isLoading, error } = useQuery({
     queryKey: ['casebook', subjectId],
     queryFn: async () => {
@@ -102,8 +105,21 @@ export function SubjectCasebookPage({ subjectId, studyId }: SubjectCasebookPageP
       client.invalidateQueries({ queryKey: ['subject-phase', subjectId] })
       client.invalidateQueries({ queryKey: ['casebook', subjectId] })
       client.invalidateQueries({ queryKey: ['visits', subjectId] })
+      client.invalidateQueries({ queryKey: ['addable-visits', subjectId] })
     },
     onError: () => setPhaseError('Could not update the subject phase.'),
+  })
+  const reversePhase = useMutation({
+    mutationFn: async (reason: string) => api.post(`/subjects/${subjectId}/phase/reverse`, { reason }),
+    onSuccess: () => {
+      setReverseDialogOpen(false)
+      setReverseError('')
+      client.invalidateQueries({ queryKey: ['subject-phase', subjectId] })
+      client.invalidateQueries({ queryKey: ['casebook', subjectId] })
+      client.invalidateQueries({ queryKey: ['subjects'] })
+      client.invalidateQueries({ queryKey: ['visits', subjectId] })
+    },
+    onError: (error) => setReverseError(getApiErrorMessage(error, 'The subject phase could not be reversed.')),
   })
 
   const chosenPhase = phaseState?.next_phases?.find((phase) => phase.id === selectedPhaseId)
@@ -179,6 +195,23 @@ export function SubjectCasebookPage({ subjectId, studyId }: SubjectCasebookPageP
                 <p className="text-sm text-muted-foreground">No next phase is configured from the current phase.</p>
               )}
             </div>
+            {phaseState.previous_phase ? (
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-sm font-medium">Correction</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!canUpdatePhase || reversePhase.isPending}
+                  onClick={() => {
+                    setReverseError('')
+                    setReverseDialogOpen(true)
+                  }}
+                >
+                  Reverse to {phaseState.previous_phase.name}
+                </Button>
+                <p className="text-xs text-muted-foreground">Previously collected visits and clinical data remain retained.</p>
+              </div>
+            ) : null}
           </div>
           {phaseState.arm_name ? <p className="mt-2 text-sm text-muted-foreground">Assigned arm: {phaseState.arm_name}</p> : null}
           {phaseError ? <Alert variant="destructive" className="mt-3"><AlertDescription>{phaseError}</AlertDescription></Alert> : null}
@@ -206,6 +239,30 @@ export function SubjectCasebookPage({ subjectId, studyId }: SubjectCasebookPageP
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={reverseDialogOpen}
+        title="Reverse subject phase"
+        description={`Return this subject to ${phaseState?.previous_phase?.name ?? 'the previous phase'} without deleting any visits, forms, or audit history.`}
+        confirmLabel="Reverse phase"
+        confirmVariant="default"
+        pending={reversePhase.isPending}
+        reason={{
+          label: 'Reason for change',
+          description: 'Required for the immutable audit trail.',
+          required: true,
+          maxLength: 4000,
+        }}
+        onConfirm={(reason) => {
+          if (reason) reversePhase.mutate(reason)
+        }}
+        onCancel={() => {
+          setReverseDialogOpen(false)
+          setReverseError('')
+        }}
+      >
+        {reverseError ? <Alert variant="destructive"><AlertDescription>{reverseError}</AlertDescription></Alert> : null}
+      </ConfirmDialog>
 
       {casebook.visits.length === 0 ? (
         <EmptyState title="No visits scheduled for this subject." />

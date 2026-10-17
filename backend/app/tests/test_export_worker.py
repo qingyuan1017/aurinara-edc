@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import uuid
+import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,6 +24,8 @@ from app.models.edc.site import Site
 from app.models.edc.subject import Subject, SubjectStatus
 from app.models.edc.visit import VisitInstance
 from app.models.shared.export import Export, ExportStatus, ExportType
+from app.schemas.designer.raw_data_variable_setting import RawDatasetVariableResponse
+from app.services.edc.raw_dataset_export_service import RawDatasetPackage, RawDatasetTable
 from app.workers.export_worker import (
     run_csv_export,
     run_export,
@@ -119,6 +123,23 @@ def _mock_session_with_results(results):
     return session
 
 
+def _make_raw_package(rows: list[dict[str, str]]) -> RawDatasetPackage:
+    columns = [
+        RawDatasetVariableResponse(
+            name=name,
+            data_type="string",
+            label=name,
+            source="fixed" if name != "AGE" else "field",
+        )
+        for name in ("PROTOCOL", "SITE", "AGE")
+    ]
+    return RawDatasetPackage(
+        study_id=str(uuid.uuid4()),
+        generated_at="2026-10-15T12:00:00Z",
+        datasets=[RawDatasetTable(name="DM", columns=columns, rows=rows)],
+    )
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -129,28 +150,15 @@ class TestRunCsvExport:
 
     @pytest.mark.asyncio
     async def test_generates_csv_with_correct_columns(self, tmp_path):
-        """CSV export produces file with expected header and data rows."""
+        """CSV export produces a ZIP with one CSV per selected dataset."""
         export = _make_export(filters=None)
-        field_values = [
-            _make_field_value(
-                subject_number="SUBJ-001",
-                site_number="SITE-01",
-                visit_name="Visit 1",
-                form_name="Demographics",
-                variable_name="AGE",
-                value="45",
-            ),
-            _make_field_value(
-                subject_number="SUBJ-002",
-                site_number="SITE-02",
-                visit_name="Visit 2",
-                form_name="Vitals",
-                variable_name="WEIGHT",
-                value="72.5",
-            ),
-        ]
-
-        session = _mock_session_with_results(field_values)
+        package = _make_raw_package(
+            [
+                {"PROTOCOL": "P-001", "SITE": "SITE-01", "AGE": "45"},
+                {"PROTOCOL": "P-001", "SITE": "SITE-02", "AGE": "72"},
+            ]
+        )
+        session = _mock_session_with_results([])
 
         with (
             patch(
@@ -169,6 +177,11 @@ class TestRunCsvExport:
                 "app.workers.export_worker._get_export_dir",
                 return_value=tmp_path,
             ),
+            patch(
+                "app.workers.export_worker.raw_dataset_export_service.build_package",
+                new_callable=AsyncMock,
+                return_value=package,
+            ),
         ):
             await run_csv_export(session, export)
 
@@ -181,31 +194,26 @@ class TestRunCsvExport:
             assert "file_path" in call_kwargs
             assert call_kwargs["file_size"] > 0
 
-            # Verify CSV content
+            # Verify dataset package content
             file_path = Path(call_kwargs["file_path"])
             assert file_path.exists()
-
-            content = file_path.read_text()
-            reader = csv.reader(io.StringIO(content))
-            rows = list(reader)
-
-            # Header + 2 data rows
-            assert len(rows) == 3
-            assert rows[0] == [
-                "subject_number",
-                "site_number",
-                "visit_name",
-                "form_name",
-                "field_variable_name",
-                "value",
+            assert file_path.suffix == ".zip"
+            with zipfile.ZipFile(file_path) as archive:
+                assert set(archive.namelist()) == {"manifest.json", "DM.csv"}
+                manifest = json.loads(archive.read("manifest.json"))
+                rows = list(csv.reader(io.StringIO(archive.read("DM.csv").decode())))
+            assert manifest["datasets"][0]["name"] == "DM"
+            assert rows == [
+                ["PROTOCOL", "SITE", "AGE"],
+                ["P-001", "SITE-01", "45"],
+                ["P-001", "SITE-02", "72"],
             ]
-            assert rows[1] == ["SUBJ-001", "SITE-01", "Visit 1", "Demographics", "AGE", "45"]
-            assert rows[2] == ["SUBJ-002", "SITE-02", "Visit 2", "Vitals", "WEIGHT", "72.5"]
 
     @pytest.mark.asyncio
     async def test_handles_empty_result_set(self, tmp_path):
         """CSV export produces header-only file when no data matches filters."""
         export = _make_export(filters={"site_id": str(uuid.uuid4())})
+        package = _make_raw_package([])
         session = _mock_session_with_results([])
 
         with (
@@ -225,18 +233,22 @@ class TestRunCsvExport:
                 "app.workers.export_worker._get_export_dir",
                 return_value=tmp_path,
             ),
+            patch(
+                "app.workers.export_worker.raw_dataset_export_service.build_package",
+                new_callable=AsyncMock,
+                return_value=package,
+            ),
         ):
             await run_csv_export(session, export)
 
             call_kwargs = mock_complete.call_args[1]
             file_path = Path(call_kwargs["file_path"])
-            content = file_path.read_text()
-            reader = csv.reader(io.StringIO(content))
-            rows = list(reader)
+            with zipfile.ZipFile(file_path) as archive:
+                rows = list(csv.reader(io.StringIO(archive.read("DM.csv").decode())))
 
             # Only header row
             assert len(rows) == 1
-            assert rows[0][0] == "subject_number"
+            assert rows[0] == ["PROTOCOL", "SITE", "AGE"]
 
     @pytest.mark.asyncio
     async def test_marks_export_failed_on_error(self, tmp_path):
@@ -245,7 +257,6 @@ class TestRunCsvExport:
 
         session = AsyncMock()
         session.flush = AsyncMock()
-        session.execute = AsyncMock(side_effect=RuntimeError("DB connection lost"))
 
         with (
             patch(
@@ -259,6 +270,11 @@ class TestRunCsvExport:
             patch(
                 "app.workers.export_worker._get_export_dir",
                 return_value=tmp_path,
+            ),
+            patch(
+                "app.workers.export_worker.raw_dataset_export_service.build_package",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("DB connection lost"),
             ),
         ):
             with pytest.raises(RuntimeError, match="DB connection lost"):

@@ -40,7 +40,8 @@ export function LoginPage() {
   const [challengePending, setChallengePending] = useState(false)
   const [mfaCode, setMfaCode] = useState('')
   const cognitoConfigured = isCognitoConfigured()
-  const sdkConfigured = isCognitoSdkConfigured()
+  const managedLoginOnly = import.meta.env.VITE_MANAGED_LOGIN_ONLY === 'true'
+  const sdkConfigured = !managedLoginOnly && isCognitoSdkConfigured()
 
   const {
     register,
@@ -177,7 +178,7 @@ export function LoginPage() {
         <CognitoNewPasswordForm pending={challengePending} onSubmit={submitNewPassword} />
       ) : (
         <>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {!managedLoginOnly ? <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               label="Email"
               id="email"
@@ -223,10 +224,10 @@ export function LoginPage() {
             <Button type="submit" className="w-full" pending={isLoading} loadingText="Signing in…">
               Sign In
             </Button>
-          </form>
+          </form> : null}
           {cognitoConfigured ? (
-            <Button type="button" variant="outline" className="w-full" onClick={() => void startCognitoLogin()}>
-              Sign in with Cognito
+            <Button type="button" variant={managedLoginOnly ? 'default' : 'outline'} className="w-full" onClick={() => void startCognitoLogin()}>
+              Continue to secure sign in
             </Button>
           ) : null}
         </>

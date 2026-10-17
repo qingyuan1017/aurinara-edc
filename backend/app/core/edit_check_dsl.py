@@ -19,8 +19,11 @@ from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from typing import Any, Final, Literal
 
+from pydantic import ValidationError as PydanticValidationError
+
 from app.core.exceptions import ValidationError
 from app.core.expression_evaluator import ExpressionError, evaluate_expression
+from app.schemas.designer.rule_v2 import RuleDefinitionV2
 
 # Public constants are useful to schema/API callers and keep the allowlist
 # discoverable without duplicating it in route code.
@@ -210,6 +213,20 @@ def validate_rule(rule: Any) -> dict[str, Any]:
                 "Rule must be a JSON object",
                 details={"path": "$", "error": str(exc)},
             ) from exc
+    if isinstance(rule, Mapping) and rule.get("schemaVersion") == 2:
+        try:
+            return RuleDefinitionV2.model_validate(rule).model_dump(
+                by_alias=True, exclude_none=True
+            )
+        except PydanticValidationError as exc:
+            first = exc.errors(include_url=False)[0]
+            raise RuleValidationError(
+                "Rule does not match the v2 rule schema",
+                details={
+                    "path": ".".join(str(part) for part in first["loc"]),
+                    "error": first["msg"],
+                },
+            ) from exc
     return _validate_node(rule, "$", 0, {"nodes": 0})
 
 
@@ -352,7 +369,45 @@ def evaluate_rule(rule: Any, data: Mapping[str, Any] | None = None) -> bool:
     """
     canonical = validate_rule(rule)
     context = data if isinstance(data, Mapping) else {}
+    if canonical.get("schemaVersion") == 2:
+        return _evaluate_v2_condition(canonical["condition"], context)
     return _evaluate_node(canonical, context)
+
+
+def _v2_field_value(reference: Mapping[str, Any] | None, data: Mapping[str, Any]) -> Any:
+    if not reference:
+        return None
+    oid = reference.get("itemOID")
+    return _lookup(data, str(oid)) if oid else None
+
+
+def _evaluate_v2_condition(condition: Mapping[str, Any], data: Mapping[str, Any]) -> bool:
+    operator = condition["operator"]
+    children = condition.get("children", [])
+    if operator == "any":
+        return any(_evaluate_v2_condition(child, data) for child in children)
+    if operator == "all":
+        return all(_evaluate_v2_condition(child, data) for child in children)
+    if operator == "count":
+        expected = condition.get("value")
+        return sum(_evaluate_v2_condition(child, data) for child in children) == expected
+
+    field_value = _v2_field_value(condition.get("field"), data)
+    if operator == "exists":
+        return field_value is not None
+    if operator == "changed":
+        previous = data.get("_previous", {})
+        old_value = _v2_field_value(condition.get("field"), previous) if isinstance(previous, Mapping) else None
+        return field_value != old_value
+    legacy = {
+        "field": condition.get("field", {}).get("itemOID"),
+        "operator": operator,
+    }
+    if condition.get("otherField"):
+        legacy["value_field"] = condition["otherField"].get("itemOID")
+    elif "value" in condition:
+        legacy["value"] = condition.get("value")
+    return _evaluate_condition(legacy, data)
 
 
 def _evaluate_node(node: Mapping[str, Any], data: Mapping[str, Any]) -> bool:

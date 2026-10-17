@@ -65,9 +65,7 @@ sdr_router = APIRouter(prefix="/studies", tags=["sdr"])
 
 
 @sdr_router.get("/{study_id}/sdr", response_model=SubAreaSurface)
-async def get_sdr(
-    study_id: UUID, session: DbSession, current_user: _StudyRead
-) -> SubAreaSurface:
+async def get_sdr(study_id: UUID, session: DbSession, current_user: _StudyRead) -> SubAreaSurface:
     """SDR surface for a study (R8.8). Permission: study.read."""
     return await study_info_areas_service.sdr(session, study_id)
 
@@ -80,9 +78,7 @@ lab_router = APIRouter(prefix="/studies", tags=["lab"])
 
 
 @lab_router.get("/{study_id}/lab", response_model=SubAreaSurface)
-async def get_lab(
-    study_id: UUID, session: DbSession, current_user: _StudyRead
-) -> SubAreaSurface:
+async def get_lab(study_id: UUID, session: DbSession, current_user: _StudyRead) -> SubAreaSurface:
     """Lab surface for a study (R8.9). Permission: study.read."""
     return await study_info_areas_service.lab(session, study_id)
 
@@ -91,14 +87,10 @@ async def get_lab(
 # External Data Source (R8.10)
 # ---------------------------------------------------------------------------
 
-external_data_source_router = APIRouter(
-    prefix="/studies", tags=["external-data-source"]
-)
+external_data_source_router = APIRouter(prefix="/studies", tags=["external-data-source"])
 
 
-@external_data_source_router.get(
-    "/{study_id}/external-data-source", response_model=SubAreaSurface
-)
+@external_data_source_router.get("/{study_id}/external-data-source", response_model=SubAreaSurface)
 async def get_external_data_source(
     study_id: UUID, session: DbSession, current_user: _StudyRead
 ) -> SubAreaSurface:
@@ -113,9 +105,7 @@ async def get_external_data_source(
 adjudication_router = APIRouter(prefix="/studies", tags=["adjudication"])
 
 
-@adjudication_router.get(
-    "/{study_id}/adjudication", response_model=SubAreaSurface
-)
+@adjudication_router.get("/{study_id}/adjudication", response_model=SubAreaSurface)
 async def get_adjudication(
     study_id: UUID, session: DbSession, current_user: _StudyRead
 ) -> SubAreaSurface:
@@ -131,9 +121,7 @@ saes_router = APIRouter(prefix="/studies", tags=["saes"])
 
 
 @saes_router.get("/{study_id}/saes", response_model=SubAreaSurface)
-async def get_saes(
-    study_id: UUID, session: DbSession, current_user: _StudyRead
-) -> SubAreaSurface:
+async def get_saes(study_id: UUID, session: DbSession, current_user: _StudyRead) -> SubAreaSurface:
     """SAEs surface for a study (R8.12). Permission: study.read."""
     return await study_info_areas_service.saes(session, study_id)
 
@@ -145,9 +133,7 @@ async def get_saes(
 integrations_router = APIRouter(prefix="/studies", tags=["integrations"])
 
 
-@integrations_router.get(
-    "/{study_id}/integrations", response_model=SubAreaSurface
-)
+@integrations_router.get("/{study_id}/integrations", response_model=SubAreaSurface)
 async def get_integrations(
     study_id: UUID, session: DbSession, current_user: _StudyRead
 ) -> SubAreaSurface:

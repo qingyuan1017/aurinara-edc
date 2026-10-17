@@ -199,9 +199,7 @@ class DataEntryFlowService:
         """
         site = await self._get_site(session, state.study_id, site_id)
 
-        allowed = self._permissions.filter_sites(
-            user, [site_id], {site_id: state.study_id}
-        )
+        allowed = self._permissions.filter_sites(user, [site_id], {site_id: state.study_id})
         if site_id not in allowed:
             raise AuthorizationError(
                 message="Site is not within the user's authorization scope",
@@ -251,9 +249,7 @@ class DataEntryFlowService:
             )
 
         self._bind_subject(state, subject)
-        logger.info(
-            "Data entry flow: existing subject selected subject_id=%s", subject.id
-        )
+        logger.info("Data entry flow: existing subject selected subject_id=%s", subject.id)
         return state
 
     async def add_subject(
@@ -279,9 +275,7 @@ class DataEntryFlowService:
         if state.site_id is not None and data.site_id != state.site_id:
             data = data.model_copy(update={"site_id": state.site_id})
 
-        subject = await self._subjects.create_subject(
-            session, state.study_id, data, actor_id
-        )
+        subject = await self._subjects.create_subject(session, state.study_id, data, actor_id)
 
         self._bind_subject(state, subject)
         logger.info(
@@ -349,9 +343,7 @@ class DataEntryFlowService:
         """
         self._require_prior_step(state, FlowStep.SUBJECT, FlowStep.VISIT)
 
-        permits = await self._design.permits_unscheduled_visits(
-            session, state.design_version_id
-        )
+        permits = await self._design.permits_unscheduled_visits(session, state.design_version_id)
         if not permits:
             raise BusinessRuleError(
                 message="The bound published design does not permit unscheduled visits",
@@ -362,9 +354,7 @@ class DataEntryFlowService:
             )
 
         subject = await self._subjects.get_subject(session, state.subject_id)
-        instance = await self._visits.create_unscheduled(
-            session, subject, data, actor_id
-        )
+        instance = await self._visits.create_unscheduled(session, subject, data, actor_id)
 
         state.visit_instance_id = instance.id
         state.current_step = FlowStep.VISIT
@@ -461,12 +451,8 @@ class DataEntryFlowService:
                 },
             )
 
-        form_instance = await self._data_capture.load(
-            session, state.form_instance_id
-        )
-        updated = await self._data_capture.save_draft(
-            session, form_instance, values, actor_id
-        )
+        form_instance = await self._data_capture.load(session, state.form_instance_id)
+        updated = await self._data_capture.save_draft(session, form_instance, values, actor_id)
 
         state.current_step = FlowStep.DATA
         logger.info(
@@ -480,9 +466,7 @@ class DataEntryFlowService:
     # Internal lookups
     # ------------------------------------------------------------------
 
-    async def _get_site(
-        self, session: AsyncSession, study_id: UUID, site_id: UUID
-    ) -> Site:
+    async def _get_site(self, session: AsyncSession, study_id: UUID, site_id: UUID) -> Site:
         """Resolve a non-deleted Site within the study, or raise NotFoundError."""
         result = await session.execute(
             select(Site).where(

@@ -65,9 +65,8 @@ describe('EDC lifecycle presentation migrations', () => {
     await waitFor(() => expect(post).toHaveBeenCalledWith('/studies/study-1/queries', { target_type: 'Subject', target_id: 'form-1', text: 'Confirm the source date.', assigned_role: null }))
   })
 
-  it('keeps visit creation and date-recording endpoints while replacing prompt/modal presentation', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue({ data: [{ id: 'visit-1', name: 'Baseline', visit_date: null, window_status: 'In window', status: 'scheduled' }] } as never)
-    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {} } as never)
+  it('keeps visit date recording while hiding creation when the design has no addable visits', async () => {
+    vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({ data: url.endsWith('/addable') ? [] : [{ id: 'visit-1', name: 'Baseline', visit_date: null, window_status: 'In window', status: 'scheduled' }] } as never))
     const patch = vi.spyOn(api, 'patch').mockResolvedValue({ data: {} } as never)
     renderWithQueryClient(<VisitListPage subjectId="subject-1" />)
 
@@ -76,9 +75,44 @@ describe('EDC lifecycle presentation migrations', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Record date' }).at(-1)!)
     await waitFor(() => expect(patch).toHaveBeenCalledWith('/visits/visit-1', { visit_date: '2026-02-01' }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add unscheduled visit' }))
-    fireEvent.change(screen.getByLabelText('Visit name'), { target: { value: 'Unscheduled' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/subjects/subject-1/visits/unscheduled', { name: 'Unscheduled', visit_date: null }))
+    expect(screen.queryByRole('button', { name: 'Add visit' })).not.toBeInTheDocument()
+  })
+
+  it('adds only a Designer-approved addable visit in EDC', async () => {
+    vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({ data: url.endsWith('/addable')
+      ? [{ id: 'definition-1', name: 'Optional follow-up', visit_type: 'unscheduled', definition_kind: 'visit' }]
+      : [] } as never))
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { id: 'visit-new' } } as never)
+    renderWithQueryClient(<VisitListPage subjectId="subject-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add visit' }))
+    expect(screen.queryByRole('button', { name: 'Add unscheduled visit' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Visit'), { target: { value: 'definition-1' } })
+    fireEvent.change(screen.getByLabelText('Visit date'), { target: { value: '2026-02-02' } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add visit' }).at(-1)!)
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/subjects/subject-1/visits/addable', {
+      visit_definition_id: 'definition-1',
+      visit_date: '2026-02-02',
+    }))
+  })
+
+  it('marks a user-added visit as added in error with a required reason', async () => {
+    vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({ data: url.endsWith('/addable')
+      ? []
+      : [{ id: 'visit-1', name: 'Unscheduled', visit_date: null, window_status: null, status: 'unscheduled', is_user_added: true }] } as never))
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { id: 'visit-1', status: 'added_in_error' } } as never)
+    renderWithQueryClient(<VisitListPage subjectId="subject-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Added in error' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mark added in error' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('A reason is required.')
+
+    fireEvent.change(screen.getByLabelText('Reason *'), { target: { value: 'Added for the wrong subject' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Mark added in error' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/visits/visit-1/mark-added-in-error', {
+      reason: 'Added for the wrong subject',
+    }))
   })
 })

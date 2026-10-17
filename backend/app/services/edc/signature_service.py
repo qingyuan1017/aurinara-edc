@@ -34,6 +34,7 @@ from app.models.edc.study import StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject
 from app.models.edc.visit import VisitInstance
 from app.models.shared.identity import User, UserStatus
+from app.services.edc.lock_service import lock_service
 
 logger = logging.getLogger(__name__)
 
@@ -116,12 +117,20 @@ class SignatureService:
             object_type=object_type,
             object_id=object_id,
         )
+        if await lock_service.is_hard_locked(
+            session,
+            target,
+            object_type=target_ref.object_type.value,
+            object_id=target_ref.object_id,
+        ):
+            raise ValidationError(
+                message="The clinical target is locked and cannot be signed",
+                details={},
+            )
         snapshot = signed_data if signed_data is not None else self.snapshot(target)
         data_hash = self.hash_snapshot(snapshot)
 
-        design_version_id = await self._resolve_design_version_id(
-            session, target, target_ref
-        )
+        design_version_id = await self._resolve_design_version_id(session, target, target_ref)
 
         signature = Signature(
             object_type=target_ref.object_type.value,
@@ -136,12 +145,9 @@ class SignatureService:
         )
         session.add(signature)
 
-        # The Signed form state is the integration point used by data capture
-        # to invalidate this attestation on any later post-signature edit.
+        # Signature is an independent operational dimension. Data capture
+        # compares hashes after mutations without overwriting entry status.
         if isinstance(target, FormInstance):
-            from app.models.edc.form_data import FormInstanceStatus
-
-            target.status = FormInstanceStatus.signed
             target.updated_at = datetime.now(UTC)
 
         await session.flush()
@@ -209,9 +215,7 @@ class SignatureService:
                 study_id: UUID | None = obj_id
             else:  # site
                 study_id = (
-                    await session.execute(
-                        select(Site.study_id).where(Site.id == obj_id)
-                    )
+                    await session.execute(select(Site.study_id).where(Site.id == obj_id))
                 ).scalar_one_or_none()
             if study_id is None:
                 return None
@@ -455,7 +459,9 @@ class SignatureService:
         object_type: SignatureObjectType | str | None,
         object_id: UUID | None,
     ) -> _SignedTarget:
-        explicit_type = object_type.value if isinstance(object_type, SignatureObjectType) else object_type
+        explicit_type = (
+            object_type.value if isinstance(object_type, SignatureObjectType) else object_type
+        )
         if explicit_type is not None:
             try:
                 normalized_type = SignatureObjectType(str(explicit_type))
@@ -503,8 +509,12 @@ class SignatureService:
         return _SignedTarget(
             object_type=normalized_type,
             object_id=UUID(str(resolved_id)),
-            study_id=getattr(context_target, "study_id", None) or getattr(subject, "study_id", None) or getattr(study, "id", None),
-            site_id=getattr(context_target, "site_id", None) or getattr(subject, "site_id", None) or getattr(site, "id", None),
+            study_id=getattr(context_target, "study_id", None)
+            or getattr(subject, "study_id", None)
+            or getattr(study, "id", None),
+            site_id=getattr(context_target, "site_id", None)
+            or getattr(subject, "site_id", None)
+            or getattr(site, "id", None),
             subject_id=getattr(context_target, "subject_id", None) or getattr(subject, "id", None),
         )
 

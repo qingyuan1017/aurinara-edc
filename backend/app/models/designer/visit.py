@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -44,6 +45,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.odm_oid import new_odm_oid
 
 if TYPE_CHECKING:  # avoid runtime import cycles across module boundaries
     from app.models.designer.study_version import StudyVersion
@@ -64,6 +66,9 @@ class VisitDefinition(Base):
     # Owning Design_Version
     study_version_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("study_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    odm_oid: Mapped[str] = mapped_column(
+        String(255), nullable=False, default=lambda: new_odm_oid("SE")
     )
 
     # Visit metadata
@@ -120,6 +125,13 @@ class VisitDefinition(Base):
     # Ordering and requirement
     display_order: Mapped[int] = mapped_column(Integer, nullable=False)
     is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    addable: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="Whether EDC users may add another instance of this visit definition",
+    )
 
     # Timestamp
     created_at: Mapped[datetime] = mapped_column(
@@ -136,10 +148,15 @@ class VisitDefinition(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "NOT addable OR definition_kind IN ('visit', 'cycle_visit')",
+            name="ck_visit_definitions_addable_real_visit",
+        ),
         Index("ix_visit_definitions_study_version_id", "study_version_id"),
         Index("ix_visit_definitions_visit_type", "visit_type"),
         Index("ix_visit_definitions_definition_kind", "definition_kind"),
         Index("ix_visit_definitions_parent_folder_id", "parent_folder_id"),
+        Index("ix_visit_definitions_odm_oid", "odm_oid"),
     )
 
     def __repr__(self) -> str:

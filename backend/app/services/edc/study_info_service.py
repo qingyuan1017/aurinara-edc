@@ -92,9 +92,7 @@ class StudyInfoService:
             allowed_transitions=sorted(s.value for s in allowed),
         )
 
-    async def get_id_configuration(
-        self, session: AsyncSession, study_id: UUID
-    ) -> IdConfiguration:
+    async def get_id_configuration(self, session: AsyncSession, study_id: UUID) -> IdConfiguration:
         """Return ID Configuration, resolving design-dependent format (R8.1, R8.14).
 
         The design version is resolved from the study's latest Published_Design
@@ -114,9 +112,7 @@ class StudyInfoService:
     # R8.2 — CRF Version management
     # ------------------------------------------------------------------
 
-    async def get_version_history(
-        self, session: AsyncSession, study_id: UUID
-    ) -> CrfVersionHistory:
+    async def get_version_history(self, session: AsyncSession, study_id: UUID) -> CrfVersionHistory:
         """Return the study's CRF Version History (R8.2).
 
         Lists every ``StudyVersion`` for the study (draft and published) ordered
@@ -173,9 +169,7 @@ class StudyInfoService:
         (R8.14); these are design-time read/write grants projected read-only for
         the operational Access Control surface.
         """
-        definitions = await self._design.list_crf_access_definitions(
-            session, design_version_id
-        )
+        definitions = await self._design.list_crf_access_definitions(session, design_version_id)
         entries = [
             AccessControlEntry(
                 role=d.role,

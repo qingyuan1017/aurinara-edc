@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { PermissionGuard } from '@/components/guards/PermissionGuard'
 import { PERMISSIONS, usePermission } from '@/lib/permissions'
 import type {
+  ArmDefinitionResponse,
   ScheduleEntryCreate,
   ScheduleOfAssessmentCreate,
   ScheduleOfAssessmentResponse,
@@ -46,27 +47,76 @@ function isNotFound(error: unknown): boolean {
   return (error as { response?: { status?: number } })?.response?.status === 404
 }
 
+function matrixStateFromSchedule(schedule: ScheduleOfAssessmentResponse | null | undefined): {
+  cells: CellSet
+  procedureRows: ProcedureRow[]
+} {
+  const cells: CellSet = new Set()
+  const procedureRows: ProcedureRow[] = []
+  const procByName = new Map<string, string>()
+  for (const entry of schedule?.entries ?? []) {
+    if (!entry.visit_definition_id) continue
+    if (entry.form_definition_id) {
+      cells.add(cellKey(formRowKey(entry.form_definition_id), entry.visit_definition_id))
+    } else if (entry.procedure_name) {
+      let key = procByName.get(entry.procedure_name)
+      if (!key) {
+        key = makeKey()
+        procByName.set(entry.procedure_name, key)
+        procedureRows.push({ key, name: entry.procedure_name })
+      }
+      cells.add(cellKey(procRowKey(key), entry.visit_definition_id))
+    }
+  }
+  return { cells, procedureRows }
+}
+
 function ScheduleOfAssessmentEditor({ studyId, versionId, readOnly }: { studyId: string; versionId: string; readOnly: boolean }) {
   const client = useQueryClient()
   const canConfigure = usePermission(PERMISSIONS.DESIGNER_SOA_CONFIGURE, studyId) && !readOnly
 
   const [cells, setCells] = useState<CellSet>(new Set())
   const [procedureRows, setProcedureRows] = useState<ProcedureRow[]>([])
-  const [seededSoaId, setSeededSoaId] = useState<string | null>(null)
+  const [selectedArmId, setSelectedArmId] = useState<string>('common')
+  const [seededScheduleKey, setSeededScheduleKey] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
   const soaQuery = useQuery({
-    queryKey: ['designer-soa', versionId],
+    queryKey: ['designer-soa', versionId, selectedArmId],
     queryFn: async () => {
       try {
-        return (await api.get<ScheduleOfAssessmentResponse>(`/designer/versions/${versionId}/schedule-of-assessment`)).data
+        return (await api.get<ScheduleOfAssessmentResponse>(
+          `/designer/versions/${versionId}/schedule-of-assessment`,
+          { params: selectedArmId === 'common' ? undefined : { arm_definition_id: selectedArmId } },
+        )).data
       } catch (err) {
         if (isNotFound(err)) return null
         throw err
       }
     },
     retry: false,
+  })
+
+  const commonSoaQuery = useQuery({
+    queryKey: ['designer-soa', versionId, 'common'],
+    queryFn: async () => {
+      try {
+        return (await api.get<ScheduleOfAssessmentResponse>(
+          `/designer/versions/${versionId}/schedule-of-assessment`,
+        )).data
+      } catch (err) {
+        if (isNotFound(err)) return null
+        throw err
+      }
+    },
+    enabled: selectedArmId !== 'common' && canConfigure,
+    retry: false,
+  })
+
+  const armsQuery = useQuery({
+    queryKey: ['designer-arms', versionId],
+    queryFn: async () => (await api.get<ArmDefinitionResponse[]>(`/designer/versions/${versionId}/arms`)).data,
   })
 
   const visitsQuery = useQuery({
@@ -78,11 +128,19 @@ function ScheduleOfAssessmentEditor({ studyId, versionId, readOnly }: { studyId:
     queryFn: async () => (await api.get<FormDefinitionSummary[]>(`/designer/studies/${studyId}/forms`, { params: { study_version_id: versionId } })).data,
   })
 
+  const loadedSoa = soaQuery.data
+  const scheduledVisitIds = useMemo(
+    () => new Set((loadedSoa?.entries ?? []).flatMap((entry) => entry.visit_definition_id ? [entry.visit_definition_id] : [])),
+    [loadedSoa],
+  )
+
   // Sort each hierarchy level independently. Containers do not become columns,
   // but their visit descendants occupy the container's position in the matrix.
+  // A legacy imported folder becomes a column only when the saved schedule
+  // directly references it.
   const visitColumns = useMemo(
-    () => flattenSelectableVisits(buildVisitHierarchy(visitsQuery.data ?? [])),
-    [visitsQuery.data],
+    () => flattenSelectableVisits(buildVisitHierarchy(visitsQuery.data ?? []), scheduledVisitIds),
+    [visitsQuery.data, scheduledVisitIds],
   )
   const visits = useMemo(() => visitColumns.map((column) => column.visit), [visitColumns])
   // Form rows ordered by form display_order, tie by id.
@@ -94,28 +152,25 @@ function ScheduleOfAssessmentEditor({ studyId, versionId, readOnly }: { studyId:
   // Seed local state from an existing SoA so the matrix round-trips. Adjusting
   // state during render (guarded by the last-seeded SoA id) is React's
   // recommended alternative to a setState-in-effect.
-  const loadedSoa = soaQuery.data
-  if (loadedSoa && loadedSoa.id !== seededSoaId) {
-    setSeededSoaId(loadedSoa.id)
-    const nextCells: CellSet = new Set()
-    const nextProcedureRows: ProcedureRow[] = []
-    const procByName = new Map<string, string>()
-    for (const entry of loadedSoa.entries ?? []) {
-      if (!entry.visit_definition_id) continue
-      if (entry.form_definition_id) {
-        nextCells.add(cellKey(formRowKey(entry.form_definition_id), entry.visit_definition_id))
-      } else if (entry.procedure_name) {
-        let key = procByName.get(entry.procedure_name)
-        if (!key) {
-          key = makeKey()
-          procByName.set(entry.procedure_name, key)
-          nextProcedureRows.push({ key, name: entry.procedure_name })
-        }
-        nextCells.add(cellKey(procRowKey(key), entry.visit_definition_id))
-      }
+  const scheduleKey = `${selectedArmId}:${loadedSoa?.id ?? 'none'}`
+  if (scheduleKey !== seededScheduleKey) {
+    setSeededScheduleKey(scheduleKey)
+    const next = matrixStateFromSchedule(loadedSoa)
+    setCells(next.cells)
+    setProcedureRows(next.procedureRows)
+  }
+
+  const copyFromCommon = () => {
+    if (!commonSoaQuery.data) {
+      setError('Save the common/pre-arm schedule before copying it to an arm.')
+      setMessage('')
+      return
     }
-    setCells(nextCells)
-    setProcedureRows(nextProcedureRows)
+    const next = matrixStateFromSchedule(commonSoaQuery.data)
+    setCells(next.cells)
+    setProcedureRows(next.procedureRows)
+    setError('')
+    setMessage('Common schedule copied into this arm as an unsaved draft. Review it, then save the schedule.')
   }
 
   const toggleCell = (rowKey: string, visitId: string) => {
@@ -207,20 +262,23 @@ function ScheduleOfAssessmentEditor({ studyId, versionId, readOnly }: { studyId:
       if (blockingProcedureRows.size) {
         throw new Error('Every scheduled procedure row needs a name before saving.')
       }
-      const payload: ScheduleOfAssessmentCreate = { entries: buildPayload() }
+      const payload: ScheduleOfAssessmentCreate = {
+        arm_definition_id: selectedArmId === 'common' ? null : selectedArmId,
+        entries: buildPayload(),
+      }
       return (await api.post<ScheduleOfAssessmentResponse>(`/designer/versions/${versionId}/schedule-of-assessment`, payload)).data
     },
     onSuccess: () => {
       // The idempotent save replaces the prior SoA with a new row; invalidating
       // refetches it and the render-time seeding re-syncs when the id changes.
-      client.invalidateQueries({ queryKey: ['designer-soa', versionId] })
+      client.invalidateQueries({ queryKey: ['designer-soa', versionId, selectedArmId] })
       setError('')
       setMessage('Schedule of assessment saved.')
     },
     onError: (err) => { setError(getApiErrorMessage(err, 'Could not save the schedule of assessment.')); setMessage('') },
   })
 
-  if (soaQuery.isLoading || visitsQuery.isLoading || formsQuery.isLoading) {
+  if (soaQuery.isLoading || visitsQuery.isLoading || formsQuery.isLoading || armsQuery.isLoading) {
     return <PageContainer wide><LoadingState label="schedule of assessment" /></PageContainer>
   }
 
@@ -231,8 +289,34 @@ function ScheduleOfAssessmentEditor({ studyId, versionId, readOnly }: { studyId:
     <PageContainer wide>
       <PageHeader
         title="Schedule of assessment"
-        description="Toggle each form or procedure against standalone visits and cycle-owned child visits. Folder and cycle containers are intentionally excluded."
-        actions={canConfigure ? <Button type="button" variant="outline" onClick={addProcedureRow}>Add procedure row</Button> : null}
+        description={selectedArmId === 'common'
+          ? 'Configure the common/pre-arm schedule. Choose a treatment arm to configure its independent treatment schedule.'
+          : 'Configure the complete visit and form schedule for the selected treatment arm.'}
+        actions={(
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-sm font-medium" htmlFor="soa-arm-scope">Schedule</label>
+            <select
+              id="soa-arm-scope"
+              aria-label="Schedule scope"
+              value={selectedArmId}
+              onChange={(event) => {
+                setSelectedArmId(event.target.value)
+                setError('')
+                setMessage('')
+              }}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="common">Common / pre-arm</option>
+              {(armsQuery.data ?? []).map((arm) => <option key={arm.id} value={arm.id}>{arm.name}</option>)}
+            </select>
+            {canConfigure && selectedArmId !== 'common' ? (
+              <Button type="button" variant="outline" disabled={commonSoaQuery.isLoading} onClick={copyFromCommon}>
+                {commonSoaQuery.isLoading ? 'Loading common…' : 'Copy from common'}
+              </Button>
+            ) : null}
+            {canConfigure ? <Button type="button" variant="outline" onClick={addProcedureRow}>Add procedure row</Button> : null}
+          </div>
+        )}
       />
       {message ? <Alert variant="success" className="mb-4"><AlertDescription>{message}</AlertDescription></Alert> : null}
       {error ? <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert> : null}

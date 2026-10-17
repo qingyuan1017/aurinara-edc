@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PortfolioOperationsPage } from '@/features/ctms'
+import { PortfolioManagementPage, PortfolioOperationsPage } from '@/features/ctms'
 import { CTMS_CAPABILITY_CODES } from '@/features/ctms/capabilities'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/lib/auth'
@@ -27,6 +27,11 @@ const manifest = {
 function renderPage(view: Parameters<typeof PortfolioOperationsPage>[0]['view']) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return render(<QueryClientProvider client={client}><PortfolioOperationsPage view={view} /></QueryClientProvider>)
+}
+
+function renderManagementPage(view: Parameters<typeof PortfolioManagementPage>[0]['view']) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return render(<QueryClientProvider client={client}><PortfolioManagementPage view={view} /></QueryClientProvider>)
 }
 
 beforeEach(() => {
@@ -81,5 +86,27 @@ describe('CTMS portfolio operations', () => {
     expect(await screen.findByRole('heading', { name: 'EUR' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'USD' })).toBeInTheDocument()
     expect(screen.getByText(/Unlike currencies are never combined/)).toBeInTheDocument()
+  })
+
+  it('loads My Work from one scoped portfolio endpoint without study fan-out', async () => {
+    const get = vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [{ source_type: 'operational_task', source_id: 'task-1', study_id: 'study-1', study_code: 'ONC-001', study_title: 'Oncology Study', title: 'Confirm activation package', status: 'Open', due_at: '2026-10-15T12:00:00Z', is_overdue: false, destination_path: '/studies/study-1/ctms/tasks', permitted_actions: ['update'] }], page: 1, page_size: 100, total: 1 } } as never)
+
+    renderManagementPage('work')
+
+    expect(await screen.findByRole('heading', { name: 'My Work' })).toBeInTheDocument()
+    expect(await screen.findByText('Confirm activation package')).toBeInTheDocument()
+    expect(get.mock.calls.some(([url]) => String(url).startsWith('/ctms/portfolio/work?'))).toBe(true)
+    expect(get.mock.calls.some(([url]) => String(url).includes('/ctms/studies/'))).toBe(false)
+  })
+
+  it('shows capacity and visit workload as separate measures', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [{ user_id: 'cra-1', user_name: 'Casey Monitor', week_start: '2026-10-12', timezone: 'America/New_York', capacity_hours: '40.00', exception_hours: '8.00', available_hours: '32.00', allocated_hours: '36.00', utilization_percent: '112.50', upcoming_visits: 3, overdue_visits: 1, is_over_capacity: true }], page: 1, page_size: 100, total: 1 } } as never)
+
+    renderManagementPage('capacity')
+
+    expect(await screen.findByText('Casey Monitor')).toBeInTheDocument()
+    expect(screen.getByText(/36.00h allocated \/ 32.00h available/)).toBeInTheDocument()
+    expect(screen.getByText(/112.50%/)).toBeInTheDocument()
+    expect(screen.getByText(/3 upcoming visits · 1 overdue visits/)).toBeInTheDocument()
   })
 })

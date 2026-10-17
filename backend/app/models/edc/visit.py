@@ -26,10 +26,12 @@ import uuid
 from datetime import UTC, date, datetime
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Uuid,
 )
@@ -54,6 +56,7 @@ class VisitInstanceStatus(enum.StrEnum):
     completed = "completed"
     missed = "missed"
     unscheduled = "unscheduled"
+    added_in_error = "added_in_error"
 
 
 # --- Models ---
@@ -105,14 +108,20 @@ class VisitInstance(Base):
     status: Mapped[VisitInstanceStatus] = mapped_column(
         String(20), nullable=False, default=VisitInstanceStatus.not_started
     )
+    is_user_added: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="True for visit occurrences explicitly added by an EDC user",
+    )
+    data_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     subject: Mapped["Subject"] = relationship("Subject", lazy="selectin")  # noqa: F821

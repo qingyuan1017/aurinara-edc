@@ -280,6 +280,8 @@ class SiteService:
         session: AsyncSession,
         study_id: UUID,
         pagination: PaginationParams,
+        *,
+        authorized_site_ids: set[UUID] | None = None,
     ) -> PaginatedResponse:
         """List non-deleted sites for a study with pagination.
 
@@ -296,6 +298,8 @@ class SiteService:
             .where(Site.study_id == study_id, Site.deleted_at.is_(None))
             .order_by(Site.created_at.desc())
         )
+        if authorized_site_ids is not None:
+            query = query.where(Site.id.in_(authorized_site_ids))
         return await paginate(session, query, pagination)
 
 

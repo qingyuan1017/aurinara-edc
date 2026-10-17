@@ -5,6 +5,7 @@ export interface FormStatusDimensions {
   queries?: string
   review?: string
   sdv?: string
+  sdr?: string
   signature?: string
   lock: string
 }
@@ -19,6 +20,7 @@ export function FormStatusStrip({ status }: { status: FormStatusDimensions }) {
     ['Queries', status.queries],
     ['Review', status.review],
     ['SDV', status.sdv],
+    ['SDR', status.sdr],
     ['Signature', status.signature],
     ['Lock', status.lock],
   ] as const

@@ -17,7 +17,7 @@ from typing import Annotated
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Header, UploadFile
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +25,11 @@ from app.api.deps import get_current_user, get_db
 from app.core.exceptions import NotFoundError, ServiceUnavailableError
 from app.models.shared.file_attachment import FileAttachment
 from app.models.shared.identity import User
-from app.schemas.shared.file_attachment import FileAttachmentDelete, FileAttachmentResponse
+from app.schemas.shared.file_attachment import (
+    FileAttachmentDelete,
+    FileAttachmentResponse,
+    RepositoryAttachmentBind,
+)
 from app.services.shared.file_attachment_service import file_attachment_service
 from app.services.shared.platform_objects import get_platform_objects
 
@@ -34,6 +38,35 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 router = APIRouter(tags=["files"])
 logger = logging.getLogger(__name__)
+
+
+@router.post(
+    "/studies/{study_id}/repository/attachments:bind",
+    response_model=FileAttachmentResponse,
+    status_code=201,
+)
+async def bind_repository_attachment(
+    study_id: UUID,
+    body: RepositoryAttachmentBind,
+    session: DbSession,
+    current_user: CurrentUser,
+    authorization: Annotated[str, Header(alias="Authorization")],
+) -> FileAttachmentResponse:
+    """Attach a selected Repository version to the current study."""
+
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise ServiceUnavailableError("A user bearer token is required for Repository binding")
+    attachment = await file_attachment_service.bind_repository_study_attachment(
+        session,
+        study_id=study_id,
+        version_id=body.version_id,
+        expected_sha256=body.expected_sha256,
+        user_access_token=token,
+        actor_id=current_user.id,
+        user=current_user,
+    )
+    return FileAttachmentResponse.model_validate(attachment)
 
 
 @router.post(
@@ -89,6 +122,8 @@ async def download_file(
                     "Shared object download unavailable in shadow mode; using legacy bytes"
                 )
 
+    if attachment.storage_key is None:
+        raise ServiceUnavailableError("This attachment exists only in Platform storage")
     content = await file_attachment_service.download(session, attachment, current_user)
     filename = quote(attachment.filename, safe="")
     return Response(

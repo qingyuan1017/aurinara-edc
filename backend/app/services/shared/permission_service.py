@@ -78,6 +78,11 @@ class PermissionService:
 
         for user_role in user.user_roles:
             role = user_role.role
+            if (
+                getattr(role, "platform_managed", False) is True
+                and getattr(role, "platform_status", "active") != "active"
+            ):
+                continue
             # Determine the study/site scope from the role assignment
             # System-level roles: study_id and site_id are None
             # Study-level roles: study_id is set, site_id is None

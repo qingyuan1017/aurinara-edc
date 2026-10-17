@@ -77,9 +77,7 @@ _SDV_FIELD_SCOPES = ("field",)
 class VersionUpgradeService:
     """Rebinds a Subject's (or a Site's subjects') Operational_Records (R8.3)."""
 
-    def __init__(
-        self, *, design_service: DesignConsumptionService | None = None
-    ) -> None:
+    def __init__(self, *, design_service: DesignConsumptionService | None = None) -> None:
         self._design = design_service or design_consumption_service
 
     # ------------------------------------------------------------------
@@ -150,8 +148,7 @@ class VersionUpgradeService:
                 error=exc,
             )
             raise BusinessRuleError(
-                "Version upgrade failed; affected records remain on their prior "
-                "design version",
+                "Version upgrade failed; affected records remain on their prior design version",
                 details={
                     "scope_type": "subject",
                     "scope_id": str(subject_id),
@@ -257,8 +254,7 @@ class VersionUpgradeService:
                 error=exc,
             )
             raise BusinessRuleError(
-                "Version upgrade failed; affected records remain on their prior "
-                "design version",
+                "Version upgrade failed; affected records remain on their prior design version",
                 details={
                     "scope_type": "site",
                     "scope_id": str(site_id),
@@ -302,13 +298,9 @@ class VersionUpgradeService:
     # Validation helpers
     # ------------------------------------------------------------------
 
-    async def _get_subject(
-        self, session: AsyncSession, subject_id: UUID
-    ) -> Subject:
+    async def _get_subject(self, session: AsyncSession, subject_id: UUID) -> Subject:
         result = await session.execute(
-            select(Subject).where(
-                Subject.id == subject_id, Subject.deleted_at.is_(None)
-            )
+            select(Subject).where(Subject.id == subject_id, Subject.deleted_at.is_(None))
         )
         subject = result.scalars().first()
         if subject is None:
@@ -350,9 +342,7 @@ class VersionUpgradeService:
         if version is None:  # pragma: no cover — guard above already resolved it
             raise NotFoundError(
                 "Target design version not found",
-                details={
-                    "target_design_version_id": str(target_design_version_id)
-                },
+                details={"target_design_version_id": str(target_design_version_id)},
             )
         if version.study_id != study_id:
             raise ValidationError(
@@ -417,9 +407,7 @@ class VersionUpgradeService:
         field_value_ids = (
             await self._scalar_ids(
                 session,
-                select(FieldValue.id).where(
-                    FieldValue.form_instance_id.in_(form_instance_ids)
-                ),
+                select(FieldValue.id).where(FieldValue.form_instance_id.in_(form_instance_ids)),
             )
             if form_instance_ids
             else []
@@ -552,23 +540,15 @@ class VersionUpgradeService:
         """
         clauses = [and_(type_column.in_(subject_types), id_column == subject_id)]
         if visit_ids:
-            clauses.append(
-                and_(type_column.in_(visit_types), id_column.in_(visit_ids))
-            )
+            clauses.append(and_(type_column.in_(visit_types), id_column.in_(visit_ids)))
         if form_instance_ids:
-            clauses.append(
-                and_(type_column.in_(form_types), id_column.in_(form_instance_ids))
-            )
+            clauses.append(and_(type_column.in_(form_types), id_column.in_(form_instance_ids)))
         if field_value_ids:
-            clauses.append(
-                and_(type_column.in_(field_types), id_column.in_(field_value_ids))
-            )
+            clauses.append(and_(type_column.in_(field_types), id_column.in_(field_value_ids)))
 
         return await self._update_rows(
             session,
-            update(model).where(or_(*clauses)).values(
-                design_version_id=target_version_id
-            ),
+            update(model).where(or_(*clauses)).values(design_version_id=target_version_id),
         )
 
     @staticmethod
@@ -586,9 +566,7 @@ class VersionUpgradeService:
         — synchronizing in-session state during the SAVEPOINT rollback would
         trigger an out-of-band refresh.
         """
-        result = await session.execute(
-            stmt.execution_options(synchronize_session=False)
-        )
+        result = await session.execute(stmt.execution_options(synchronize_session=False))
         # rowcount is reliable for UPDATE on the backends used here.
         return int(result.rowcount or 0)
 

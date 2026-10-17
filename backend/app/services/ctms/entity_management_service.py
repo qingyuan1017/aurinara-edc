@@ -47,19 +47,17 @@ def _validated_attributes(entity_type: str, attributes: Any) -> dict[str, Any]:
 
 
 class EntityManagementService:
-    async def create_site(
+    async def create_site_entity(
         self,
         session: AsyncSession,
-        study_id: UUID,
         payload: Mapping[str, Any] | Any,
         *,
         actor: Any | None = None,
         actor_id: UUID | None = None,
         correlation_id: UUID | str | None = None,
     ) -> ManagedEntity:
-        """Create a CTMS Site and its shared canonical Site identity atomically."""
+        """Create reusable Site master data without assigning it to a Study."""
 
-        await CanonicalIdentityResolver(session).resolve_study(study_id)
         values = _values(payload)
         name = str(values.pop("name")).strip()
         if not name:
@@ -69,26 +67,12 @@ class EntityManagementService:
 
         actor_uuid = _actor(actor, actor_id)
         correlation = _correlation(correlation_id, actor)
-        site_id = uuid4()
-        canonical_site = Site(
-            id=site_id,
-            study_id=study_id,
-            site_number=str(site_id),
-            name=name,
-            country=attributes.get("country"),
-            region=attributes["state"],
-            address=attributes.get("address"),
-            status=SiteStatus.active,
-        )
-        session.add(canonical_site)
-        await session.flush()
-
+        entity_id = uuid4()
         entity = ManagedEntity(
-            id=site_id,
+            id=entity_id,
             entity_type=ManagedEntityType.SITE.value,
-            code=str(site_id).upper(),
+            code=str(entity_id).upper(),
             name=name,
-            canonical_site_id=site_id,
             attributes=attributes,
             created_by=actor_uuid,
             updated_by=actor_uuid,
@@ -96,11 +80,93 @@ class EntityManagementService:
         )
         session.add(entity)
         await session.flush()
+        await ctms_atomicity_service.record_mutation(
+            session,
+            entity_type="managed_entity",
+            entity_id=entity.id,
+            study_id=None,
+            site_id=None,
+            actor_id=actor_uuid,
+            correlation_id=correlation,
+            action="create",
+            changed_fields=["entity_type", "code", "name", "attributes"],
+            payload={"managed_entity_type": ManagedEntityType.SITE.value, "code": entity.code},
+        )
+        return entity
 
+    async def assign_site_to_study(
+        self,
+        session: AsyncSession,
+        study_id: UUID,
+        payload: Mapping[str, Any] | Any,
+        *,
+        actor: Any | None = None,
+        actor_id: UUID | None = None,
+        correlation_id: UUID | str | None = None,
+    ) -> StudyEntityAssignment:
+        """Assign an available Site master and create a Study-specific Site identity."""
+
+        await CanonicalIdentityResolver(session).resolve_study(study_id)
+        values = _values(payload)
+        entity_id = UUID(str(values["entity_id"]))
+        site_number = str(values["site_number"]).strip()
+        if not site_number:
+            raise ValidationError("Study Site ID cannot be blank", {"field": "site_number"})
+        entity = await session.get(ManagedEntity, entity_id)
+        if (
+            entity is None
+            or entity.deleted_at is not None
+            or not entity.active
+            or entity.entity_type != ManagedEntityType.SITE.value
+        ):
+            raise ValidationError(
+                "Only an active available Site can be added to a Study",
+                {"field": "entity_id", "reason": "SITE_NOT_AVAILABLE"},
+            )
+        existing = await session.scalar(
+            select(StudyEntityAssignment).where(
+                StudyEntityAssignment.study_id == study_id,
+                StudyEntityAssignment.entity_id == entity_id,
+                StudyEntityAssignment.deleted_at.is_(None),
+            )
+        )
+        if existing:
+            raise ConflictError(
+                "The Site is already assigned to this Study",
+                {"reason": "DUPLICATE_RECORD", "entity_id": str(entity_id)},
+            )
+        duplicate_number = await session.scalar(
+            select(Site).where(
+                Site.study_id == study_id,
+                Site.site_number == site_number,
+                Site.deleted_at.is_(None),
+            )
+        )
+        if duplicate_number:
+            raise ConflictError(
+                "The Study Site ID is already in use",
+                {"reason": "DUPLICATE_SITE_NUMBER", "field": "site_number"},
+            )
+
+        actor_uuid = _actor(actor, actor_id)
+        correlation = _correlation(correlation_id, actor)
+        site = Site(
+            study_id=study_id,
+            site_number=site_number,
+            name=entity.name,
+            country=entity.attributes.get("country"),
+            region=entity.attributes.get("state"),
+            address=entity.attributes.get("address"),
+            status=SiteStatus.active,
+        )
+        session.add(site)
+        await session.flush()
         assignment = StudyEntityAssignment(
             study_id=study_id,
-            entity_id=site_id,
+            entity_id=entity_id,
+            site_id=site.id,
             entity=entity,
+            site=site,
             attributes={},
             created_by=actor_uuid,
             correlation_id=_correlation_uuid(correlation),
@@ -111,46 +177,47 @@ class EntityManagementService:
         await audit_service.record(
             session,
             entity_type="site",
-            entity_id=site_id,
+            entity_id=site.id,
             action="create",
             module=Module.CTMS,
             actor_id=actor_uuid,
             correlation_id=correlation,
             study_id=study_id,
-            site_id=site_id,
-            scope={"study_id": study_id, "site_id": site_id},
-            changed_fields=["id", "study_id", "name", "country", "region", "address"],
+            site_id=site.id,
+            scope={"study_id": study_id, "site_id": site.id},
+            changed_fields=[
+                "id",
+                "study_id",
+                "site_number",
+                "name",
+                "country",
+                "region",
+                "address",
+            ],
             source_module=Module.CTMS,
             target_module="PLATFORM",
-            source_record_id=site_id,
-            target_record_id=site_id,
-            new_value=f"site_id={site_id}, name={name}",
-        )
-        await ctms_atomicity_service.record_mutation(
-            session,
-            entity_type="managed_entity",
-            entity_id=entity.id,
-            study_id=study_id,
-            site_id=site_id,
-            actor_id=actor_uuid,
-            correlation_id=correlation,
-            action="create",
-            changed_fields=["entity_type", "code", "name", "canonical_site_id", "attributes"],
-            payload={"managed_entity_type": ManagedEntityType.SITE.value, "code": entity.code},
+            source_record_id=entity.id,
+            target_record_id=site.id,
+            new_value=f"site_id={site.id}, site_number={site_number}, entity_id={entity.id}",
         )
         await ctms_atomicity_service.record_mutation(
             session,
             entity_type="study_entity_assignment",
             entity_id=assignment.id,
             study_id=study_id,
-            site_id=site_id,
+            site_id=site.id,
             actor_id=actor_uuid,
             correlation_id=correlation,
             action="create",
-            changed_fields=["study_id", "entity_id", "attributes"],
-            payload={"study_id": study_id, "managed_entity_type": ManagedEntityType.SITE.value},
+            changed_fields=["study_id", "entity_id", "site_id", "attributes"],
+            payload={
+                "study_id": study_id,
+                "site_id": site.id,
+                "site_number": site_number,
+                "managed_entity_type": ManagedEntityType.SITE.value,
+            },
         )
-        return entity
+        return assignment
 
     async def create_entity(
         self,
@@ -165,8 +232,8 @@ class EntityManagementService:
         entity_type = str(getattr(values["entity_type"], "value", values["entity_type"]))
         if entity_type == ManagedEntityType.SITE.value:
             raise ValidationError(
-                "Sites must be created within a Study so CTMS can create the canonical Site identity",
-                {"field": "entity_type", "reason": "STUDY_SCOPE_REQUIRED"},
+                "Sites must be created through the Site directory",
+                {"field": "entity_type", "reason": "SITE_DIRECTORY_REQUIRED"},
             )
         attributes = _validated_attributes(entity_type, values.get("attributes"))
         code = str(values["code"]).strip().upper()
@@ -175,12 +242,6 @@ class EntityManagementService:
             raise ValidationError(
                 "Configured entity code and name cannot be blank",
                 {"fields": ["code", "name"]},
-            )
-        canonical_site_id = values.get("canonical_site_id")
-        if canonical_site_id is not None:
-            raise ValidationError(
-                "canonical_site_id is only valid for configured sites",
-                {"field": "canonical_site_id"},
             )
         await self._validate_attribute_references(session, entity_type, attributes)
         existing = await session.scalar(
@@ -201,7 +262,6 @@ class EntityManagementService:
             entity_type=entity_type,
             code=code,
             name=name,
-            canonical_site_id=canonical_site_id,
             attributes=attributes,
             created_by=actor_uuid,
             updated_by=actor_uuid,
@@ -218,7 +278,7 @@ class EntityManagementService:
             actor_id=actor_uuid,
             correlation_id=correlation,
             action="create",
-            changed_fields=["entity_type", "code", "name", "canonical_site_id", "attributes"],
+            changed_fields=["entity_type", "code", "name", "attributes"],
             payload={"managed_entity_type": entity_type, "code": code},
         )
         return entity
@@ -295,22 +355,27 @@ class EntityManagementService:
         correlation = _correlation(correlation_id, actor)
         entity.updated_by = actor_uuid
         entity.updated_at = utc_now()
-        canonical_site: Site | None = None
+        canonical_sites: list[Site] = []
         if entity.entity_type == ManagedEntityType.SITE.value:
-            canonical_site = await session.get(Site, entity.canonical_site_id)
-            if canonical_site is None or canonical_site.deleted_at is not None:
-                raise NotFoundError(
-                    "Canonical Site identity was not found",
-                    {"site_id": str(entity.canonical_site_id)},
+            assigned_sites = await session.scalars(
+                select(Site)
+                .join(StudyEntityAssignment, StudyEntityAssignment.site_id == Site.id)
+                .where(
+                    StudyEntityAssignment.entity_id == entity.id,
+                    StudyEntityAssignment.deleted_at.is_(None),
+                    Site.deleted_at.is_(None),
                 )
-            canonical_site.name = entity.name
-            canonical_site.country = entity.attributes.get("country")
-            canonical_site.region = entity.attributes.get("state")
-            canonical_site.address = entity.attributes.get("address")
-            canonical_site.status = SiteStatus.active if entity.active else SiteStatus.inactive
-            canonical_site.updated_at = utc_now()
+            )
+            canonical_sites = list(assigned_sites)
+            for canonical_site in canonical_sites:
+                canonical_site.name = entity.name
+                canonical_site.country = entity.attributes.get("country")
+                canonical_site.region = entity.attributes.get("state")
+                canonical_site.address = entity.attributes.get("address")
+                canonical_site.status = SiteStatus.active if entity.active else SiteStatus.inactive
+                canonical_site.updated_at = utc_now()
         await session.flush()
-        if canonical_site is not None:
+        for canonical_site in canonical_sites:
             await audit_service.record(
                 session,
                 entity_type="site",
@@ -333,8 +398,8 @@ class EntityManagementService:
             session,
             entity_type="managed_entity",
             entity_id=entity.id,
-            study_id=canonical_site.study_id if canonical_site is not None else None,
-            site_id=canonical_site.id if canonical_site is not None else None,
+            study_id=None,
+            site_id=None,
             actor_id=actor_uuid,
             correlation_id=correlation,
             action="update",
@@ -411,13 +476,11 @@ class EntityManagementService:
                 "Only an active configured entity can be added to a study",
                 {"field": "entity_id", "reason": "ENTITY_NOT_AVAILABLE"},
             )
-        if entity.entity_type == "site":
-            site = await session.get(Site, entity.canonical_site_id)
-            if site is None or site.study_id != study_id:
-                raise ValidationError(
-                    "Configured Site is outside the requested Study",
-                    {"field": "entity_id", "reason": "REFERENCE_SCOPE_MISMATCH"},
-                )
+        if entity.entity_type == ManagedEntityType.SITE.value:
+            raise ValidationError(
+                "Sites require a Study Site ID and must use the Site assignment workflow",
+                {"field": "entity_id", "reason": "SITE_ASSIGNMENT_REQUIRED"},
+            )
         existing = await session.scalar(
             select(StudyEntityAssignment).where(
                 StudyEntityAssignment.study_id == study_id,

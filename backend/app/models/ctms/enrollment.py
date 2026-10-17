@@ -55,6 +55,8 @@ class OperationalSubjectStatus(enum.StrEnum):
     early_terminated = "Early Terminated"
     lost_to_follow_up = "Lost to Follow-up"
     withdrawn = "Withdrawn"
+    inactive = "Inactive"
+    discontinued = "Discontinued"
 
 
 class EnrollmentTarget(Base):

@@ -59,6 +59,7 @@ class FieldDefinitionView(FrozenView):
     record_id: str | None = None
     crf_id: str | None = None
     odm_id: str | None = None
+    odm_oid: str | None = None
     control_type: str
     data_type: str
     display_order: int
@@ -76,17 +77,27 @@ class FieldDefinitionView(FrozenView):
     is_read_only: bool = False
     is_calculated: bool = False
     calculation_expression: str | None = None
+    data_format: str | None = None
+    allows_partial_date: bool = False
+    source_document: bool = True
+    query_future_date: bool = False
+    query_nonconformance: bool = False
+    breaks_signature: bool = True
+    review_group: str | None = None
+    dynamic_search_config: dict[str, Any] | None = None
 
 
 class FormDefinitionView(FrozenView):
     """Immutable view of a published form definition and its fields."""
 
     id: UUID
+    odm_oid: str | None = None
     design_version_id: UUID
     name: str
     form_code: str
     display_order: int
     is_repeating: bool
+    requires_signature: bool = False
     form_type: str = "simple"
     access_type: str = "open_access"
     domain: str | None = None
@@ -116,6 +127,7 @@ class VisitDefinitionView(FrozenView):
     """
 
     id: UUID
+    odm_oid: str | None = None
     design_version_id: UUID
     name: str
     visit_number: int
@@ -129,24 +141,20 @@ class VisitDefinitionView(FrozenView):
     window_after: int | None = None
     display_order: int
     is_required: bool
+    addable: bool = False
     repeat_min: int | None = None
     repeat_max: int | None = None
     cycle_length: int | None = None
 
 
 class ArmDefinitionView(FrozenView):
-    """Immutable view of a published arm/treatment-group definition.
-
-    ``visit_definition_ids`` lists the arm's real member visits (standalone and
-    cycle-owned leaves), expressing which visits occur in the arm.
-    """
+    """Immutable view of a published arm/treatment-group definition."""
 
     id: UUID
     design_version_id: UUID
     name: str
     display_order: int
     description: str | None = None
-    visit_definition_ids: tuple[UUID, ...] = Field(default_factory=tuple)
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +166,9 @@ class EditCheckRuleView(FrozenView):
     """Immutable view of a published, declaratively stored edit-check rule."""
 
     id: UUID
+    odm_oid: str | None = None
+    schema_version: int = 1
+    needs_retesting: bool = False
     design_version_id: UUID
     name: str
     description: str | None = None
@@ -175,12 +186,14 @@ class CodelistItemView(FrozenView):
     display_order: int
     normal_low: Decimal | None = None
     normal_high: Decimal | None = None
+    specify: bool = False
 
 
 class CodelistView(FrozenView):
     """Immutable view of a published codelist and its items."""
 
     id: UUID
+    odm_oid: str | None = None
     design_version_id: UUID
     name: str
     code: str
@@ -231,6 +244,7 @@ class ScheduleOfAssessmentView(FrozenView):
     """Immutable view of a published schedule of assessment (R4.1)."""
 
     design_version_id: UUID
+    arm_definition_id: UUID | None = None
     entries: tuple[ScheduleOfAssessmentEntryView, ...] = Field(default_factory=tuple)
 
 
@@ -284,6 +298,12 @@ class CodingSettingView(FrozenView):
     field_definition_id: UUID | None = None
     dictionary_reference: str
     coding_rule: str | None = None
+    dictionary_version: str | None = None
+    coding_level: str | None = None
+    locale: str | None = None
+    priority: int = 100
+    approval_required: bool = True
+    auto_approval: bool = False
 
 
 # ---------------------------------------------------------------------------

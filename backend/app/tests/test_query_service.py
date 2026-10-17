@@ -80,7 +80,8 @@ class TestCreateQuery:
         """create_query creates a Query with status Open and correct target (Req 13.1, 13.2)."""
         target_id = uuid.uuid4()
 
-        with patch("app.services.edc.query_service.audit_service") as mock_audit:
+        target_context = (study_id, uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
+        with patch.object(service, "_resolve_target_context", AsyncMock(return_value=target_context)), patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             query = await service.create_query(
                 mock_session,
@@ -98,6 +99,7 @@ class TestCreateQuery:
         assert query.status == QueryStatus.open
         assert query.created_by == actor_id
         assert query.query_type == QueryType.manual
+        assert query.messages == []
         mock_session.add.assert_called_once_with(query)
 
     async def test_create_query_with_optional_context(
@@ -107,7 +109,8 @@ class TestCreateQuery:
         site_id = uuid.uuid4()
         subject_id = uuid.uuid4()
 
-        with patch("app.services.edc.query_service.audit_service") as mock_audit:
+        target_context = (study_id, site_id, subject_id, uuid.uuid4())
+        with patch.object(service, "_resolve_target_context", AsyncMock(return_value=target_context)), patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             query = await service.create_query(
                 mock_session,
@@ -129,7 +132,8 @@ class TestCreateQuery:
         """create_query writes an Audit_Event (Req 13.7)."""
         target_id = uuid.uuid4()
 
-        with patch("app.services.edc.query_service.audit_service") as mock_audit:
+        target_context = (study_id, uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
+        with patch.object(service, "_resolve_target_context", AsyncMock(return_value=target_context)), patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.create_query(
                 mock_session,
@@ -151,7 +155,8 @@ class TestCreateQuery:
         self, service, mock_session, actor_id, study_id
     ):
         """create_query supports system-generated query type."""
-        with patch("app.services.edc.query_service.audit_service") as mock_audit:
+        target_context = (study_id, uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
+        with patch.object(service, "_resolve_target_context", AsyncMock(return_value=target_context)), patch("app.services.edc.query_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             query = await service.create_query(
                 mock_session,
@@ -164,6 +169,55 @@ class TestCreateQuery:
             )
 
         assert query.query_type == QueryType.system
+
+
+class TestAssignmentRoles:
+    """Tests for contextual query-assignment role options."""
+
+    async def test_lists_role_names_returned_for_target_scope(
+        self, service, mock_session, study_id
+    ):
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = ["Data Manager", "Site Coordinator"]
+        mock_session.execute.return_value = result
+
+        roles = await service.list_assignment_roles(
+            mock_session,
+            study_id=study_id,
+            site_id=uuid.uuid4(),
+        )
+
+        assert roles == ["Data Manager", "Site Coordinator"]
+        mock_session.execute.assert_awaited_once()
+
+    async def test_creates_empty_target_for_unanswered_field(
+        self, service, mock_session
+    ):
+        form_instance = MagicMock()
+        form_instance.id = uuid.uuid4()
+        form_instance.subject_id = uuid.uuid4()
+        form_instance.form_definition_id = uuid.uuid4()
+        form_instance.design_version_id = uuid.uuid4()
+        field_definition_id = uuid.uuid4()
+
+        locked_result = MagicMock()
+        definition_result = MagicMock()
+        definition_result.scalar_one_or_none.return_value = field_definition_id
+        value_result = MagicMock()
+        value_result.scalars.return_value.first.return_value = None
+        mock_session.execute.side_effect = [locked_result, definition_result, value_result]
+
+        with patch.object(service, "_ensure_not_hard_locked", AsyncMock()):
+            field_value = await service.ensure_field_target(
+                mock_session,
+                form_instance=form_instance,
+                field_definition_id=field_definition_id,
+            )
+
+        assert field_value.form_instance is form_instance
+        assert field_value.field_definition_id == field_definition_id
+        assert field_value.value is None
+        mock_session.add.assert_called_once_with(field_value)
 
 
 class TestRespond:

@@ -17,6 +17,7 @@ from uuid import UUID
 from pydantic import Field
 
 from app.models.edc.subject import SubjectStatus
+from app.schemas.edc.operations import FormOperationalStatus
 from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
 
 # ---------------------------------------------------------------------------
@@ -43,6 +44,24 @@ class SubjectCreate(BaseCreateSchema):
     )
 
 
+class SubjectEnrollmentBlocker(BaseSchema):
+    """One prerequisite preventing subject enrollment."""
+
+    code: str
+    message: str
+
+
+class SubjectEnrollmentReadinessResponse(BaseSchema):
+    """Server-derived readiness for creating a subject in a study."""
+
+    study_id: UUID
+    ready: bool
+    published_version_id: UUID | None = None
+    published_version_number: str | None = None
+    authorized_active_site_count: int = 0
+    blockers: list[SubjectEnrollmentBlocker] = Field(default_factory=list)
+
+
 class SubjectUpdate(BaseCreateSchema):
     """Request body for updating a Subject's metadata (partial PATCH).
 
@@ -64,7 +83,48 @@ class SubjectStatusTransition(BaseCreateSchema):
 class SubjectDelete(BaseCreateSchema):
     """Request body for soft-deleting a Subject (Requirement 22.2)."""
 
-    reason: str = Field(..., min_length=1, description="Reason for deletion")
+    reason: str = Field(
+        ...,
+        min_length=1,
+        max_length=4000,
+        description="Reason the subject record was entered in error",
+    )
+    subject_number_confirmation: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Exact subject number typed to confirm removal",
+    )
+
+
+class SubjectRestore(BaseCreateSchema):
+    """Request body for restoring a soft-deleted Subject."""
+
+    reason: str = Field(
+        ...,
+        min_length=1,
+        max_length=4000,
+        description="Reason for restoring the retained subject record",
+    )
+
+
+class SubjectLifecycleChange(BaseCreateSchema):
+    """Reason for an exceptional subject lifecycle transition."""
+
+    reason: str = Field(..., min_length=1, max_length=4000)
+
+
+class SubjectSiteTransfer(BaseCreateSchema):
+    """Move an entered-in-error Screening subject to another active Site."""
+
+    site_id: UUID
+    reason: str = Field(..., min_length=1, max_length=4000)
+
+
+class SubjectPhaseReverse(BaseCreateSchema):
+    """Reverse the subject to the prior audited phase without deleting data."""
+
+    reason: str = Field(..., min_length=1, max_length=4000)
 
 
 class SubjectResponse(BaseSchema):
@@ -78,6 +138,7 @@ class SubjectResponse(BaseSchema):
     arm_definition_id: UUID | None = None
     subject_number: str
     status: SubjectStatus
+    data_revision: int = 0
     created_by: UUID
     created_at: UtcDatetime
     updated_at: UtcDatetime | None = None
@@ -92,6 +153,16 @@ class SubjectListResponse(SubjectResponse):
     site_name: str | None = None
     current_phase_name: str | None = None
     current_phase_type: str | None = None
+    enrollment_at: UtcDatetime | None = None
+    latest_visit_at: UtcDatetime | None = None
+    latest_visit_name: str | None = None
+    forms_total: int = 0
+    forms_submitted: int = 0
+    completion_percent: float = 0
+    active_query_count: int = 0
+    review_summary: str | None = None
+    sdv_summary: str | None = None
+    sdr_summary: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +177,9 @@ class CasebookFormEntry(BaseSchema):
     form_definition_id: UUID | None = None
     name: str | None = None
     status: str
+    operational_status: FormOperationalStatus | None = None
+    repeating_record_count: int = 0
+    source_form_url: str | None = None
 
 
 class CasebookVisitEntry(BaseSchema):
@@ -162,6 +236,7 @@ class SubjectPhaseStateResponse(BaseSchema):
     arm_name: str | None = None
     phases: list[SubjectPhaseOption] = Field(default_factory=list)
     next_phases: list[SubjectPhaseOption] = Field(default_factory=list)
+    previous_phase: SubjectPhaseOption | None = None
     arms: list[SubjectArmOption] = Field(default_factory=list)
 
 

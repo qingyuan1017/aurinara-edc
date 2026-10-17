@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useFormContext } from 'react-hook-form'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -34,13 +35,13 @@ export interface FieldDefinition {
   is_read_only?: boolean
   is_calculated?: boolean
 }
-interface FormFieldProps { field: FieldDefinition; disabled?: boolean; onFieldFocus?: (fieldId: string) => void }
+interface FormFieldProps { field: FieldDefinition; disabled?: boolean; labelAction?: ReactNode; onFieldFocus?: (fieldId: string) => void }
 
 const BODY_REGIONS = ['Head', 'Chest', 'Abdomen', 'Left arm', 'Right arm', 'Left leg', 'Right leg', 'Back']
 const selectClassName = 'flex min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
 
 /** Dynamic eCRF control renderer shared by every data-entry form. */
-export function FormField({ field, disabled = false, onFieldFocus }: FormFieldProps) {
+export function FormField({ field, disabled = false, labelAction, onFieldFocus }: FormFieldProps) {
   const { register, setValue, watch, formState: { errors } } = useFormContext()
   const fieldError = errors[field.id]
   const errorMessage = typeof fieldError?.message === 'string' ? fieldError.message : undefined
@@ -109,7 +110,10 @@ export function FormField({ field, disabled = false, onFieldFocus }: FormFieldPr
   }
 
   return <div className="space-y-1.5" style={{ textAlign: field.text_align as 'left' | 'center' | 'right' }}>
-    <Label id={`${field.id}-label`} htmlFor={field.id} className={isDisabled ? 'text-muted-foreground' : undefined}>{field.question || field.label}{field.is_required ? <span aria-hidden="true"> *</span> : null}</Label>
+    <div className="flex min-h-8 items-center justify-between gap-3">
+      <Label id={`${field.id}-label`} htmlFor={field.id} className={isDisabled ? 'text-muted-foreground' : undefined}>{field.question || field.label}{field.is_required ? <span aria-hidden="true"> *</span> : null}</Label>
+      {labelAction}
+    </div>
     {field.caption ? <p className="text-xs text-muted-foreground">{field.caption}</p> : null}
     {renderControl()}
     {field.help_text ? <p id={`${field.id}-help`} className="text-xs text-muted-foreground">{field.help_text}</p> : null}

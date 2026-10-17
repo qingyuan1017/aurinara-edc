@@ -48,7 +48,7 @@ async def consume_once(settings: Settings | None = None, *, max_messages: int = 
             get_platform_authorization().invalidate()
         elif event.type == "platform.membership.changed.v1":
             get_platform_authorization().invalidate(study_id=event.aggregate_id)
-        elif event.type.startswith("platform.user."):
+        elif event.type == "platform.role.changed.v1" or event.type.startswith("platform.user."):
             get_platform_authorization().invalidate()
         await asyncio.to_thread(
             sqs.delete_message,

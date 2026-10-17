@@ -30,8 +30,8 @@ from sqlalchemy import (
     String,
     Table,
     Text,
-    UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,12 +40,8 @@ from app.core.database import Base
 if TYPE_CHECKING:  # avoid a runtime import cycle; the registry resolves by string
     from app.models.designer.study_version import StudyVersion
 
-# Association table for the Arm_Definition <-> Visit_Definition membership: which
-# real visit leaves (standalone or cycle-owned) occur in each arm. Folder and
-# cycle selections are expanded by the UI before persistence. Columns reference
-# tables by name so the shared ORM registry resolves
-# ``visit_definitions`` independent of which module owns the model at import
-# time; both FKs cascade on delete so removing an arm or a visit prunes the edge.
+# Legacy association retained so migration 0079 can convert existing designs to
+# arm-scoped schedules. New authoring and operational reads do not use it.
 arm_definition_visits = Table(
     "arm_definition_visits",
     Base.metadata,
@@ -72,7 +68,7 @@ class ArmDefinition(Base):
     """A design-time arm/treatment-group definition bound to one ``Design_Version``.
 
     The ``name`` is unique within a single design version (``study_version_id``);
-    the unique constraint below backs the service-level uniqueness check.
+    the live-row partial unique index below backs the service-level uniqueness check.
     ``display_order`` carries the ordering for presentation and ``description``
     is an optional free-text description of the arm.
     """
@@ -111,9 +107,8 @@ class ArmDefinition(Base):
 
     # Relationship (resolved by string against the shared ORM registry)
     study_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
-    # Many-to-many membership to real Visit_Definition leaves (which standalone
-    # or cycle-owned visits occur in this arm). Resolved by class name so the registry links regardless of the
-    # owning module of VisitDefinition.
+    # Read-only compatibility relationship for pre-0079 data. Arm scheduling is
+    # now owned by ScheduleOfAssessment.arm_definition_id.
     visits = relationship(
         "VisitDefinition",
         secondary=arm_definition_visits,
@@ -121,10 +116,13 @@ class ArmDefinition(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_arm_definition_name_per_version_live",
             "study_version_id",
             "name",
-            name="uq_arm_definition_name_per_version",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
         ),
         Index(
             "ix_arm_definitions_study_version_id",

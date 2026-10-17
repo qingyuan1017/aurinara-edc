@@ -2,10 +2,12 @@
 
 Tests cover:
   - GET   /subjects/{subject_id}/visits               list (Req 8.3, 8.5, 21.1)
+  - GET   /subjects/{subject_id}/visits/addable       list addable definitions
   - POST  /subjects/{subject_id}/visits/unscheduled   create unscheduled (Req 8.4)
   - GET   /visits/{visit_id}                          get (Req 8.3)
   - PATCH /visits/{visit_id}                           record date (Req 8.3)
   - POST  /visits/{visit_id}/mark-missed              mark missed (Req 8.5)
+  - POST  /visits/{visit_id}/mark-added-in-error      void a user-added visit
   - Permission enforcement (Req 2.2, 2.3, 21.1)
 
 Uses an in-memory SQLite database and HTTPX async client against the app.
@@ -13,6 +15,7 @@ Uses an in-memory SQLite database and HTTPX async client against the app.
 
 import uuid
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -42,6 +45,12 @@ from app.models.shared.identity import (
 @pytest.fixture
 async def async_engine():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    from app.models.designer.subject_phase_definition import (
+        SubjectPhaseDefinition as SubjectPhaseDefinitionModel,
+    )
+    from app.models.designer.subject_phase_definition import (
+        SubjectPhaseVisitDefinition as SubjectPhaseVisitDefinitionModel,
+    )
     from app.models.edc.site import Site as SiteModel
     from app.models.edc.site import StudySiteUser as StudySiteUserModel
     from app.models.edc.study import Study as StudyModel
@@ -78,6 +87,8 @@ async def async_engine():
             StudyVersionModel,
             SiteModel,
             StudySiteUserModel,
+            SubjectPhaseDefinitionModel,
+            SubjectPhaseVisitDefinitionModel,
             SubjectModel,
             VisitDefinitionModel,
             VisitInstanceModel,
@@ -103,7 +114,7 @@ async def db_session(async_engine):
 @pytest.fixture
 async def seeded(db_session: AsyncSession) -> dict:
     """Seed a user with subject permissions, a study, published version, and site."""
-    perm_codes = ["subject.read", "subject.update"]
+    perm_codes = ["subject.read", "form.enter"]
     perms = {}
     for code in perm_codes:
         p = Permission(id=uuid.uuid4(), code=code, description=code)
@@ -201,6 +212,7 @@ async def visit_definition(db_session: AsyncSession, seeded: dict) -> VisitDefin
         window_after=3,
         display_order=2,
         is_required=True,
+        addable=True,
         created_at=datetime.now(UTC),
     )
     db_session.add(vd)
@@ -296,6 +308,101 @@ class TestListSubjectVisitsRoute:
         resp = await client.get(f"/api/v1/subjects/{subject.id}/visits")
         assert resp.status_code == 401
 
+    async def test_list_addable_visits_returns_real_enabled_definition(
+        self, client, seeded, subject, visit_definition
+    ):
+        resp = await client.get(
+            f"/api/v1/subjects/{subject.id}/visits/addable",
+            headers=_auth(seeded["user"]),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == [
+            {
+                "id": str(visit_definition.id),
+                "name": "Week 4",
+                "visit_type": "scheduled",
+                "definition_kind": "visit",
+            }
+        ]
+
+    async def test_create_addable_visit_uses_bound_definition(
+        self, client, seeded, subject, visit_definition, monkeypatch
+    ):
+        from app.services.edc.form_instance_service import form_instance_service
+
+        initialize_forms = AsyncMock(return_value=[])
+        monkeypatch.setattr(form_instance_service, "initialize_for_visit", initialize_forms)
+        resp = await client.post(
+            f"/api/v1/subjects/{subject.id}/visits/addable",
+            json={"visit_definition_id": str(visit_definition.id)},
+            headers=_auth(seeded["user"]),
+        )
+
+        assert resp.status_code == 201
+        assert resp.json()["visit_definition_id"] == str(visit_definition.id)
+        assert resp.json()["status"] == "scheduled"
+        initialize_forms.assert_awaited_once()
+
+    async def test_list_addable_visits_is_limited_to_current_phase(
+        self, client, db_session, seeded, subject, visit_definition
+    ):
+        from app.models.designer.subject_phase_definition import (
+            SubjectPhaseDefinition,
+            SubjectPhaseVisitDefinition,
+        )
+
+        hidden_definition = VisitDefinition(
+            id=uuid.uuid4(),
+            study_version_id=seeded["version"].id,
+            name="Hidden follow-up",
+            visit_number=3,
+            visit_type="scheduled",
+            display_order=3,
+            is_required=True,
+            addable=True,
+        )
+        global_unscheduled = VisitDefinition(
+            id=uuid.uuid4(),
+            study_version_id=seeded["version"].id,
+            name="Unscheduled",
+            visit_number=4,
+            visit_type="unscheduled",
+            definition_kind="visit",
+            display_order=4,
+            is_required=False,
+            addable=True,
+        )
+        phase = SubjectPhaseDefinition(
+            id=uuid.uuid4(),
+            design_version_id=seeded["version"].id,
+            name="Current phase",
+            phase_type="common",
+            display_order=1,
+        )
+        db_session.add_all([hidden_definition, global_unscheduled, phase])
+        await db_session.flush()
+        db_session.add(
+            SubjectPhaseVisitDefinition(
+                subject_phase_definition_id=phase.id,
+                visit_definition_id=visit_definition.id,
+                display_order=1,
+            )
+        )
+        subject.current_phase_definition_id = phase.id
+        await db_session.flush()
+
+        resp = await client.get(
+            f"/api/v1/subjects/{subject.id}/visits/addable",
+            headers=_auth(seeded["user"]),
+        )
+
+        assert resp.status_code == 200
+        assert [item["id"] for item in resp.json()] == [
+            str(visit_definition.id),
+            str(global_unscheduled.id),
+        ]
+
 
 # ---------------------------------------------------------------------------
 # Create unscheduled visit (Req 8.4)
@@ -303,7 +410,22 @@ class TestListSubjectVisitsRoute:
 
 
 class TestCreateUnscheduledVisitRoute:
-    async def test_create_unscheduled_success(self, client, seeded, subject):
+    async def test_create_unscheduled_success(self, client, db_session, seeded, subject):
+        db_session.add(
+            VisitDefinition(
+                id=uuid.uuid4(),
+                study_version_id=seeded["version"].id,
+                name="Unscheduled",
+                visit_number=99,
+                visit_type="unscheduled",
+                definition_kind="visit",
+                display_order=99,
+                is_required=False,
+                addable=True,
+            )
+        )
+        await db_session.flush()
+
         resp = await client.post(
             f"/api/v1/subjects/{subject.id}/visits/unscheduled",
             json={"name": "Unscheduled AE Visit", "visit_date": "2024-06-01"},
@@ -315,6 +437,16 @@ class TestCreateUnscheduledVisitRoute:
         assert data["status"] == "unscheduled"
         assert data["visit_definition_id"] is None
         assert data["subject_id"] == str(subject.id)
+
+    async def test_create_unscheduled_rejected_when_design_forbids(self, client, seeded, subject):
+        resp = await client.post(
+            f"/api/v1/subjects/{subject.id}/visits/unscheduled",
+            json={"name": "Unscheduled AE Visit"},
+            headers=_auth(seeded["user"]),
+        )
+
+        assert resp.status_code == 400
+        assert "does not permit unscheduled visits" in resp.json()["error"]["message"]
 
     async def test_create_unscheduled_subject_not_found(self, client, seeded):
         resp = await client.post(
@@ -367,9 +499,7 @@ class TestRecordVisitDateRoute:
         assert data["window_status"] == "in_window"
         assert data["status"] == "in_window"
 
-    async def test_record_visit_date_after_window(
-        self, client, seeded, visit_instance
-    ):
+    async def test_record_visit_date_after_window(self, client, seeded, visit_instance):
         # Offset 40 days > 28+3 -> after_window.
         resp = await client.patch(
             f"/api/v1/visits/{visit_instance.id}",
@@ -410,15 +540,55 @@ class TestMarkMissedRoute:
         assert resp.status_code == 404
 
 
+class TestMarkAddedInErrorRoute:
+    async def test_success(self, client, seeded, visit_instance, db_session, monkeypatch):
+        from app.services.edc.visit_service import visit_service
+
+        visit_instance.is_user_added = True
+        await db_session.flush()
+        monkeypatch.setattr(
+            visit_service,
+            "_has_clinical_data",
+            AsyncMock(return_value=False),
+        )
+
+        resp = await client.post(
+            f"/api/v1/visits/{visit_instance.id}/mark-added-in-error",
+            json={"reason": "Created for the wrong subject"},
+            headers=_auth(seeded["user"]),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "added_in_error"
+        assert resp.json()["is_user_added"] is True
+
+    async def test_rejects_protocol_generated_visit(self, client, seeded, visit_instance):
+        resp = await client.post(
+            f"/api/v1/visits/{visit_instance.id}/mark-added-in-error",
+            json={"reason": "Created by mistake"},
+            headers=_auth(seeded["user"]),
+        )
+
+        assert resp.status_code == 400
+        assert "Only a user-added visit" in resp.json()["error"]["message"]
+
+    async def test_requires_reason(self, client, seeded, visit_instance):
+        resp = await client.post(
+            f"/api/v1/visits/{visit_instance.id}/mark-added-in-error",
+            json={"reason": ""},
+            headers=_auth(seeded["user"]),
+        )
+
+        assert resp.status_code == 422
+
+
 # ---------------------------------------------------------------------------
 # Permission enforcement (Req 2.2, 2.3)
 # ---------------------------------------------------------------------------
 
 
 class TestVisitPermissionEnforcement:
-    async def test_no_permission_forbidden(
-        self, client, db_session, seeded, visit_instance
-    ):
+    async def test_no_permission_forbidden(self, client, db_session, seeded, visit_instance):
         """A user without subject permissions gets 403."""
         nobody = User(
             id=uuid.uuid4(),
@@ -433,9 +603,7 @@ class TestVisitPermissionEnforcement:
         db_session.add(nobody)
         await db_session.flush()
 
-        resp = await client.get(
-            f"/api/v1/visits/{visit_instance.id}", headers=_auth(nobody)
-        )
+        resp = await client.get(f"/api/v1/visits/{visit_instance.id}", headers=_auth(nobody))
         assert resp.status_code == 403
 
     async def test_mark_missed_requires_update_permission(
@@ -447,26 +615,20 @@ class TestVisitPermissionEnforcement:
         from app.models.shared.identity import Permission as PermissionModel
 
         # Read-only role bound to the existing subject.read permission only.
-        ro_role = Role(
-            id=uuid.uuid4(), name="RO", scope_level="system", is_system=True
-        )
+        ro_role = Role(id=uuid.uuid4(), name="RO", scope_level="system", is_system=True)
         db_session.add(ro_role)
         await db_session.flush()
 
         read_perm = (
             (
                 await db_session.execute(
-                    select(PermissionModel).where(
-                        PermissionModel.code == "subject.read"
-                    )
+                    select(PermissionModel).where(PermissionModel.code == "subject.read")
                 )
             )
             .scalars()
             .first()
         )
-        db_session.add(
-            RolePermission(role_id=ro_role.id, permission_id=read_perm.id)
-        )
+        db_session.add(RolePermission(role_id=ro_role.id, permission_id=read_perm.id))
 
         ro_user = User(
             id=uuid.uuid4(),

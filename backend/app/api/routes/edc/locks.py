@@ -109,9 +109,7 @@ async def unfreeze_form_instance(
     form_instance = await _get_authorized_form(
         session, form_instance_id, current_user, permission_service
     )
-    control = await lock_service.unfreeze(
-        session, form_instance, body.reason, current_user.id
-    )
+    control = await lock_service.unfreeze(session, form_instance, body.reason, current_user.id)
     return FreezeLockResponse.model_validate(control)
 
 
@@ -146,9 +144,7 @@ async def unlock_form_instance(
     form_instance = await _get_authorized_form(
         session, form_instance_id, current_user, permission_service
     )
-    control = await lock_service.unlock(
-        session, form_instance, body.reason, current_user.id
-    )
+    control = await lock_service.unlock(session, form_instance, body.reason, current_user.id)
     return FreezeLockResponse.model_validate(control)
 
 

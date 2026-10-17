@@ -21,6 +21,7 @@ import pytest
 from app.core.exceptions import BusinessRuleError, NotFoundError, ValidationError
 from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
 from app.models.edc.form_metadata import FieldDefinition
+from app.models.edc.visit import VisitInstance, VisitInstanceStatus
 from app.services.edc.data_capture_service import DataCaptureService, data_capture_service
 
 
@@ -173,6 +174,26 @@ class TestSaveDraft:
 
         with pytest.raises(BusinessRuleError, match="Locked"):
             await service.save_draft(mock_session, fi, {str(field_def_id): "value"}, actor_id)
+
+    async def test_rejects_form_under_visit_added_in_error(
+        self, service, actor_id, field_def_id
+    ):
+        fi = _make_form_instance()
+        visit = VisitInstance(
+            id=uuid.uuid4(),
+            subject_id=fi.subject_id,
+            design_version_id=uuid.uuid4(),
+            name="Unscheduled",
+            status=VisitInstanceStatus.added_in_error,
+            is_user_added=True,
+        )
+        fi.visit_instance_id = visit.id
+        fi.visit_instance = visit
+
+        with pytest.raises(BusinessRuleError, match="visit marked as added in error"):
+            await service.save_draft(
+                AsyncMock(), fi, {str(field_def_id): "value"}, actor_id
+            )
 
     async def test_writes_audit_event(self, service, actor_id, field_def_id):
         """save_draft writes an Audit_Event for each created field (Req 10.8)."""

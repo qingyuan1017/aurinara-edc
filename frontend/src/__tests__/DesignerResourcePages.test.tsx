@@ -42,8 +42,8 @@ const DRAFT_VERSIONS = [
 ]
 
 const VISIT_LIST = [
-  { id: 'visit-1', study_version_id: 'ver-draft', name: 'Baseline', visit_number: 1, visit_type: 'scheduled', definition_kind: 'visit', target_day: 0, window_before: null, window_after: null, display_order: 1, is_required: true, repeat_min: null, repeat_max: null, cycle_length: null, member_visit_ids: [], created_at: 'x' },
-  { id: 'visit-2', study_version_id: 'ver-draft', name: 'Week 2', visit_number: 2, visit_type: 'scheduled', definition_kind: 'visit', target_day: 14, window_before: 2, window_after: 2, display_order: 2, is_required: true, repeat_min: null, repeat_max: null, cycle_length: null, member_visit_ids: [], created_at: 'x' },
+  { id: 'visit-1', study_version_id: 'ver-draft', name: 'Baseline', visit_number: 1, visit_type: 'scheduled', definition_kind: 'visit', target_day: 0, window_before: null, window_after: null, display_order: 1, is_required: true, addable: false, repeat_min: null, repeat_max: null, cycle_length: null, member_visit_ids: [], created_at: 'x' },
+  { id: 'visit-2', study_version_id: 'ver-draft', name: 'Week 2', visit_number: 2, visit_type: 'scheduled', definition_kind: 'visit', target_day: 14, window_before: 2, window_after: 2, display_order: 2, is_required: true, addable: true, repeat_min: null, repeat_max: null, cycle_length: null, member_visit_ids: [], created_at: 'x' },
 ]
 const CYCLE_VISIT = { id: 'cycle-visit-1', study_version_id: 'ver-draft', name: 'Cycle day 8', visit_number: 8, visit_type: 'scheduled', definition_kind: 'cycle_visit', target_day: 8, window_before: 1, window_after: 1, display_order: 3, is_required: true, repeat_min: null, repeat_max: null, cycle_length: null, member_visit_ids: [], created_at: 'x' }
 const CYCLE = { id: 'cycle-1', study_version_id: 'ver-draft', name: 'Treatment cycle', visit_number: 3, visit_type: 'cycle', definition_kind: 'cycle', target_day: null, window_before: null, window_after: null, display_order: 3, is_required: true, repeat_min: 1, repeat_max: 6, cycle_length: 28, member_visit_ids: ['cycle-visit-1'], created_at: 'x' }
@@ -112,20 +112,20 @@ describe('ArmsPage', () => {
     })
   }
 
-  it('lists arms from GET and creates one with member visit ids', async () => {
+  it('creates a simple arm without visit membership', async () => {
     mockArmsAndVisits()
-    vi.mocked(api.post).mockResolvedValue({ data: { id: 'arm-1', study_version_id: 'ver-draft', name: 'Active', display_order: 1, description: null, visit_definition_ids: ['visit-1'], created_at: 'x' } } as never)
+    vi.mocked(api.post).mockResolvedValue({ data: { id: 'arm-1', study_version_id: 'ver-draft', name: 'Active', display_order: 1, description: null, created_at: 'x' } } as never)
 
     renderPage(<ArmsPage studyId="study-1" />)
 
     fireEvent.change(await screen.findByPlaceholderText('Active'), { target: { value: 'Active' } })
-    fireEvent.click(await screen.findByLabelText('Include visit Baseline'))
     fireEvent.click(screen.getByRole('button', { name: 'Add arm' }))
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith(
       '/designer/versions/ver-draft/arms',
-      { name: 'Active', display_order: 1, description: null, visit_definition_ids: ['visit-1'] },
+      { name: 'Active', display_order: 1, description: null },
     ))
+    expect(screen.queryByText('Member visits')).not.toBeInTheDocument()
   })
 
   it('reads arms via GET /designer/versions/{versionId}/arms', async () => {
@@ -137,7 +137,7 @@ describe('ArmsPage', () => {
   it('selects a previous published version inside Designer and hides arm authoring controls', async () => {
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url === '/studies/study-1/versions') return Promise.resolve({ data: DRAFT_VERSIONS })
-      if (url === '/designer/versions/ver-pub/arms') return Promise.resolve({ data: [{ id: 'arm-old', study_version_id: 'ver-pub', name: 'Previous ARM', display_order: 1, description: null, visit_definition_ids: [], created_at: 'x' }] })
+      if (url === '/designer/versions/ver-pub/arms') return Promise.resolve({ data: [{ id: 'arm-old', study_version_id: 'ver-pub', name: 'Previous ARM', display_order: 1, description: null, created_at: 'x' }] })
       if (url === '/designer/versions/ver-pub/visits') return Promise.resolve({ data: [] })
       if (url === '/designer/versions/ver-draft/arms' || url === '/designer/versions/ver-draft/visits') return Promise.resolve({ data: [] })
       return Promise.resolve({ data: [] })
@@ -151,66 +151,53 @@ describe('ArmsPage', () => {
     expect(screen.getByText('Viewing published version 1. This design is read-only.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add arm' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit Previous ARM' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove Previous ARM' })).not.toBeInTheDocument()
   })
 
-  it('selects a visit folder as a group while allowing individual child overrides', async () => {
-    const hierarchicalVisits = [
-      { ...VISIT_LIST[0], id: 'folder-1', name: 'Screening', visit_number: 1, definition_kind: 'folder', visit_type: 'folder' },
-      { ...VISIT_LIST[0], id: 'screen-1', name: 'Consent', visit_number: 1, parent_folder_id: 'folder-1' },
-      { ...VISIT_LIST[0], id: 'screen-2', name: 'Eligibility', visit_number: 2, parent_folder_id: 'folder-1' },
-      { ...VISIT_LIST[1], id: 'visit-4', name: 'Week 4', visit_number: 4 },
-    ]
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url === '/studies/study-1/versions') return Promise.resolve({ data: DRAFT_VERSIONS })
-      if (url === '/designer/versions/ver-draft/arms') return Promise.resolve({ data: [] })
-      if (url === '/designer/versions/ver-draft/visits') return Promise.resolve({ data: hierarchicalVisits })
-      return Promise.resolve({ data: [] })
-    })
-    vi.mocked(api.post).mockResolvedValue({ data: { id: 'arm-1' } } as never)
-
-    renderPage(<ArmsPage studyId="study-1" />)
-
-    fireEvent.change(await screen.findByPlaceholderText('Active'), { target: { value: 'Screening arm' } })
-    fireEvent.click(screen.getByLabelText('Include group Screening'))
-    expect(screen.getByLabelText('Include visit Consent')).toBeChecked()
-    expect(screen.getByLabelText('Include visit Eligibility')).toBeChecked()
-
-    fireEvent.click(screen.getByLabelText('Include visit Eligibility'))
-    expect(screen.getByLabelText('Include group Screening')).toHaveAttribute('aria-checked', 'mixed')
-    fireEvent.click(screen.getByRole('button', { name: 'Add arm' }))
-
-    await waitFor(() => expect(api.post).toHaveBeenCalledWith(
-      '/designer/versions/ver-draft/arms',
-      { name: 'Screening arm', display_order: 1, description: null, visit_definition_ids: ['screen-1'] },
-    ))
-  })
-
-  it('edits a legacy arm by expanding its cycle container to real visit leaves', async () => {
+  it('edits arm identity without visit configuration', async () => {
     vi.mocked(api.get).mockImplementation((url: string) => {
       if (url === '/studies/study-1/versions') return Promise.resolve({ data: DRAFT_VERSIONS })
       if (url === '/designer/versions/ver-draft/arms') return Promise.resolve({ data: [{
         id: 'arm-b', study_version_id: 'ver-draft', name: 'ARM B', display_order: 2,
-        description: null, visit_definition_ids: ['visit-1', 'cycle-1'], created_at: 'x',
+        description: 'Control', created_at: 'x',
       }] })
-      if (url === '/designer/versions/ver-draft/visits') return Promise.resolve({ data: [...VISIT_LIST, CYCLE, CYCLE_VISIT] })
       return Promise.resolve({ data: [] })
     })
     vi.mocked(api.patch).mockResolvedValue({ data: {
       id: 'arm-b', study_version_id: 'ver-draft', name: 'ARM B', display_order: 2,
-      description: null, visit_definition_ids: ['visit-1', 'cycle-visit-1'], created_at: 'x',
+      description: 'Control', created_at: 'x',
     } } as never)
 
     renderPage(<ArmsPage studyId="study-1" />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit ARM B' }))
-    expect(screen.getByLabelText('Include visit Baseline')).toBeChecked()
-    expect(screen.getByLabelText('Include group Treatment cycle')).toBeChecked()
-    expect(screen.getByLabelText('Include visit Cycle day 8')).toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Update arm' }))
 
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
       '/designer/versions/ver-draft/arms/arm-b',
-      { name: 'ARM B', display_order: 2, description: null, visit_definition_ids: ['visit-1', 'cycle-visit-1'] },
+      { name: 'ARM B', display_order: 2, description: 'Control' },
+    ))
+  })
+
+  it('removes a draft arm after confirming the associated schedule impact', async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: DRAFT_VERSIONS })
+      if (url === '/designer/versions/ver-draft/arms') return Promise.resolve({ data: [{
+        id: 'arm-b', study_version_id: 'ver-draft', name: 'ARM B', display_order: 2,
+        description: 'Control', created_at: 'x',
+      }] })
+      return Promise.resolve({ data: [] })
+    })
+    vi.mocked(api.delete).mockResolvedValue({ data: undefined } as never)
+
+    renderPage(<ArmsPage studyId="study-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove ARM B' }))
+    expect(screen.getByRole('dialog', { name: 'Remove treatment arm' })).toHaveTextContent('Schedule of Assessment')
+    fireEvent.click(screen.getByRole('button', { name: 'Remove arm' }))
+
+    await waitFor(() => expect(api.delete).toHaveBeenCalledWith(
+      '/designer/versions/ver-draft/arms/arm-b',
     ))
   })
 
@@ -325,12 +312,15 @@ describe('VisitsPage', () => {
 
     expect(await screen.findByText('Baseline')).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Add definition' }))
+    expect(screen.getByRole('dialog', { name: 'Add visit definition' })).toBeInTheDocument()
     fireEvent.change(screen.getByPlaceholderText('Baseline'), { target: { value: 'Week 2' } })
+    fireEvent.click(screen.getByLabelText('Addable in EDC'))
     fireEvent.click(screen.getByRole('button', { name: 'Add visit' }))
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith(
       '/designer/versions/ver-draft/visits',
-      expect.objectContaining({ name: 'Week 2', definition_kind: 'visit', visit_type: 'scheduled', is_required: true, repeat_min: null, repeat_max: null, cycle_length: null }),
+      expect.objectContaining({ name: 'Week 2', definition_kind: 'visit', visit_type: 'scheduled', is_required: true, addable: true, repeat_min: null, repeat_max: null, cycle_length: null }),
     ))
   })
 
@@ -343,10 +333,32 @@ describe('VisitsPage', () => {
     renderPage(<VisitsPage studyId="study-1" />)
 
     await screen.findByText('Baseline')
+    fireEvent.click(screen.getByRole('button', { name: 'Add definition' }))
     // Cycle-only fields are hidden until the definition kind is 'cycle'.
     expect(screen.queryByLabelText('Cycle length')).not.toBeInTheDocument()
     fireEvent.change(screen.getByRole('combobox', { name: /Definition kind/ }), { target: { value: 'cycle' } })
     expect(await screen.findByLabelText('Cycle length')).toBeInTheDocument()
+  })
+
+  it('edits an existing visit in the definition drawer', async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: DRAFT_VERSIONS })
+      return Promise.resolve({ data: VISIT_LIST })
+    })
+    vi.mocked(api.patch).mockResolvedValue({ data: { ...VISIT_LIST[0], name: 'Updated baseline' } } as never)
+
+    renderPage(<VisitsPage studyId="study-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Baseline' }))
+    expect(screen.getByRole('dialog', { name: 'Edit visit definition' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: /Definition kind/ })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: 'Updated baseline' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+      '/designer/versions/ver-draft/visits/visit-1',
+      expect.objectContaining({ name: 'Updated baseline', visit_number: 1, visit_type: 'scheduled', display_order: 1, is_required: true }),
+    ))
   })
 
   it('configures child visits inside their owning cycle instead of using a shared list', async () => {

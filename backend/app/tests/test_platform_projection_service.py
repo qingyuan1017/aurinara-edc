@@ -6,8 +6,107 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.database import Base
 from app.models.edc.study import Study
-from app.models.shared.identity import Role, ScopeLevel, User, UserRole
+from app.models.shared.identity import Permission, Role, RolePermission, ScopeLevel, User, UserRole
 from app.services.shared.platform_projection_service import PlatformEvent, apply_platform_event
+
+
+@pytest.mark.asyncio
+async def test_platform_role_configuration_is_projected_read_only() -> None:
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    role_id = uuid4()
+
+    async with factory() as session:
+        applied = await apply_platform_event(
+            session,
+            PlatformEvent(
+                id=uuid4(),
+                type="platform.role.changed.v1",
+                aggregate_id=role_id,
+                sequence=7,
+                data={
+                    "role_id": str(role_id),
+                    "product": "aurinara-edc",
+                    "name": "ODM Designer",
+                    "description": "Manage ODM metadata",
+                    "scope_level": "study",
+                    "assignable": True,
+                    "status": "active",
+                    "revision": 1,
+                    "permission_codes": ["edc.designer.odm.export"],
+                },
+            ),
+        )
+        await session.commit()
+
+        assert applied is True
+        role = await session.get(Role, role_id)
+        assert role is not None
+        assert role.platform_managed is True
+        assert role.platform_revision == 7
+        assert role.platform_status == "active"
+        permission = await session.scalar(
+            select(Permission).where(Permission.code == "designer.odm.export")
+        )
+        assert permission is not None
+        assert await session.get(RolePermission, (role_id, permission.id)) is not None
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_platform_role_event_updates_the_original_edc_role_identity() -> None:
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    platform_role_id = uuid4()
+    source_role_id = uuid4()
+
+    async with factory() as session:
+        session.add(
+            Role(
+                id=source_role_id,
+                name="Existing Designer",
+                scope_level=ScopeLevel.study,
+                is_system=False,
+            )
+        )
+        await session.commit()
+
+        applied = await apply_platform_event(
+            session,
+            PlatformEvent(
+                id=uuid4(),
+                type="platform.role.changed.v1",
+                aggregate_id=platform_role_id,
+                sequence=8,
+                data={
+                    "role_id": str(platform_role_id),
+                    "source_role_id": str(source_role_id),
+                    "product": "aurinara-edc",
+                    "name": "Existing Designer",
+                    "description": "Now maintained in Platform",
+                    "scope_level": "study",
+                    "assignable": True,
+                    "status": "active",
+                    "revision": 2,
+                    "permission_codes": ["edc.designer.odm.export"],
+                },
+            ),
+        )
+        await session.commit()
+
+        assert applied is True
+        projected = await session.get(Role, source_role_id)
+        assert projected is not None
+        assert projected.description == "Now maintained in Platform"
+        assert projected.platform_managed is True
+        assert await session.get(Role, platform_role_id) is None
+
+    await engine.dispose()
 
 
 @pytest.mark.asyncio

@@ -133,6 +133,14 @@ class TestCreateSubject:
         """create_subject binds the published version and generates the id (Req 7.1, 7.2)."""
         site = _make_site(site_id, study_id)
         version = _make_version(study_id)
+        initial_visit_id = uuid.uuid4()
+        service._design.list_subject_phase_definitions.return_value = [
+            SimpleNamespace(
+                id=uuid.uuid4(),
+                phase_type="registered",
+                visit_definition_ids=(initial_visit_id,),
+            )
+        ]
 
         # execute call order: site lookup, published version, count for id gen, uniqueness
         results = _execute_side_effect(
@@ -167,9 +175,19 @@ class TestCreateSubject:
         # Generated id follows {site_number}-{sequence}
         assert subject.subject_number == "101-0001"
         # Visit_Instances are initialized from the bound version (Req 7.4, 8.2)
-        mock_init.assert_awaited_once_with(mock_session, subject, actor_id)
+        mock_init.assert_awaited_once_with(
+            mock_session,
+            subject,
+            actor_id,
+            definition_ids={initial_visit_id},
+        )
         # Form_Instances are initialized from the bound version (Req 7.4)
-        mock_form_init.assert_awaited_once_with(mock_session, subject, actor_id)
+        mock_form_init.assert_awaited_once_with(
+            mock_session,
+            subject,
+            actor_id,
+            definition_ids={initial_visit_id},
+        )
 
     async def test_create_subject_uses_provided_number(
         self, service, mock_session, actor_id, study_id, site_id
@@ -232,6 +250,24 @@ class TestCreateSubject:
             await service.create_subject(mock_session, study_id, data, actor_id)
 
         assert "published version" in exc_info.value.message
+
+    async def test_create_subject_rejects_inactive_site(
+        self, service, mock_session, actor_id, study_id, site_id
+    ):
+        """Enrollment cannot create a subject at a deactivated site."""
+        site = _make_site(site_id, study_id)
+        site.status = SiteStatus.inactive
+        mock_session.execute = AsyncMock(side_effect=_execute_side_effect(("first", site)))
+
+        with pytest.raises(BusinessRuleError) as exc_info:
+            await service.create_subject(
+                mock_session,
+                study_id,
+                SubjectCreate(site_id=site_id),
+                actor_id,
+            )
+
+        assert "active site" in exc_info.value.message
 
     async def test_create_subject_duplicate_number_raises_conflict(
         self, service, mock_session, actor_id, study_id, site_id
@@ -385,11 +421,9 @@ class TestSubjectPhaseState:
             name="Arm A",
             display_order=1,
             description=None,
-            visit_definition_ids=(uuid.uuid4(),),
         )
         design_service.list_subject_phase_definitions.return_value = [phase]
         design_service.list_arm_definitions.return_value = [arm]
-
         with pytest.raises(ValidationError, match="arm must be selected"):
             await service.update_phase(
                 mock_session,
@@ -399,8 +433,14 @@ class TestSubjectPhaseState:
                 actor_id=actor_id,
             )
 
-        with patch("app.services.edc.subject_service.audit_service") as mock_audit:
+        with (
+            patch("app.services.edc.subject_service.audit_service") as mock_audit,
+            patch("app.services.edc.form_instance_service.form_instance_service") as mock_forms,
+            patch("app.services.edc.visit_service.visit_service") as mock_visits,
+        ):
             mock_audit.record = AsyncMock()
+            mock_forms.initialize_instances = AsyncMock(return_value=[])
+            mock_visits.initialize_instances = AsyncMock(return_value=[])
             await service.update_phase(
                 mock_session,
                 subject,
@@ -412,22 +452,32 @@ class TestSubjectPhaseState:
         assert subject.current_phase_definition_id == phase.id
         assert subject.arm_definition_id == arm.id
         mock_audit.record.assert_awaited_once()
+        mock_visits.initialize_instances.assert_not_awaited()
+        mock_forms.initialize_instances.assert_not_awaited()
+        design_service.get_schedule_of_assessment.assert_not_awaited()
 
-    async def test_complete_phase_marks_subject_completed(
+    async def test_complete_phase_marks_subject_completed_and_materializes_visits(
         self, service, design_service, mock_session, actor_id
     ):
         subject = _make_subject(status=SubjectStatus.on_treatment)
+        visit_id = uuid.uuid4()
         phase = SimpleNamespace(
             id=uuid.uuid4(),
             name="Complete",
             phase_type="complete",
             display_order=9,
-            visit_definition_ids=(),
+            visit_definition_ids=(visit_id,),
         )
         design_service.list_subject_phase_definitions.return_value = [phase]
 
-        with patch("app.services.edc.subject_service.audit_service") as mock_audit:
+        with (
+            patch("app.services.edc.subject_service.audit_service") as mock_audit,
+            patch("app.services.edc.form_instance_service.form_instance_service") as mock_forms,
+            patch("app.services.edc.visit_service.visit_service") as mock_visits,
+        ):
             mock_audit.record = AsyncMock()
+            mock_forms.initialize_instances = AsyncMock(return_value=[])
+            mock_visits.initialize_instances = AsyncMock(return_value=[])
             await service.update_phase(
                 mock_session,
                 subject,
@@ -437,38 +487,127 @@ class TestSubjectPhaseState:
             )
 
         assert subject.status == SubjectStatus.completed
+        mock_visits.initialize_instances.assert_awaited_once_with(
+            mock_session,
+            subject,
+            actor_id,
+            definition_ids={visit_id},
+            skip_existing=True,
+        )
+        mock_forms.initialize_instances.assert_awaited_once_with(
+            mock_session,
+            subject,
+            actor_id,
+            skip_existing=True,
+            arm_definition_id=None,
+            definition_ids={visit_id},
+        )
 
-    async def test_current_phase_shows_only_associated_visits(
+    async def test_common_phase_materializes_its_visits_and_forms(
+        self, service, design_service, mock_session, actor_id
+    ):
+        subject = _make_subject()
+        subject.arm_definition_id = uuid.uuid4()
+        visit_id = uuid.uuid4()
+        phase = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Follow-up",
+            phase_type="common",
+            display_order=2,
+            visit_definition_ids=(visit_id,),
+        )
+        design_service.list_subject_phase_definitions.return_value = [phase]
+        design_service.get_schedule_of_assessment.return_value = SimpleNamespace(
+            entries=(SimpleNamespace(visit_definition_id=visit_id),)
+        )
+
+        with (
+            patch("app.services.edc.subject_service.audit_service") as mock_audit,
+            patch("app.services.edc.form_instance_service.form_instance_service") as mock_forms,
+            patch("app.services.edc.visit_service.visit_service") as mock_visits,
+        ):
+            mock_audit.record = AsyncMock()
+            mock_forms.initialize_instances = AsyncMock(return_value=[])
+            mock_visits.initialize_instances = AsyncMock(return_value=[])
+            await service.update_phase(
+                mock_session,
+                subject,
+                phase_definition_id=phase.id,
+                arm_definition_id=None,
+                actor_id=actor_id,
+            )
+
+        mock_visits.initialize_instances.assert_awaited_once_with(
+            mock_session,
+            subject,
+            actor_id,
+            definition_ids={visit_id},
+            skip_existing=True,
+        )
+        mock_forms.initialize_instances.assert_awaited_once_with(
+            mock_session,
+            subject,
+            actor_id,
+            skip_existing=True,
+            arm_definition_id=subject.arm_definition_id,
+            definition_ids={visit_id},
+        )
+
+    async def test_phase_path_shows_cumulative_visits_without_future_visits(
         self, service, design_service, mock_session
     ):
-        allowed_id = uuid.uuid4()
-        hidden_id = uuid.uuid4()
+        prior_id = uuid.uuid4()
+        current_id = uuid.uuid4()
+        future_id = uuid.uuid4()
         subject = _make_subject()
+        prior_phase_id = uuid.uuid4()
         subject.current_phase_definition_id = uuid.uuid4()
         design_service.list_subject_phase_definitions.return_value = [
             SimpleNamespace(
-                id=subject.current_phase_definition_id,
-                name="Registered",
+                id=prior_phase_id,
+                name="Screening",
                 phase_type="registered",
                 display_order=1,
-                visit_definition_ids=(allowed_id,),
-            )
+                visit_definition_ids=(prior_id,),
+            ),
+            SimpleNamespace(
+                id=subject.current_phase_definition_id,
+                name="Treatment",
+                phase_type="common",
+                display_order=2,
+                visit_definition_ids=(current_id,),
+            ),
+            SimpleNamespace(
+                id=uuid.uuid4(),
+                name="Follow-up",
+                phase_type="common",
+                display_order=3,
+                visit_definition_ids=(future_id,),
+            ),
         ]
         visits = [
             VisitInstance(
                 id=uuid.uuid4(),
                 subject_id=subject.id,
-                visit_definition_id=allowed_id,
+                visit_definition_id=prior_id,
                 design_version_id=subject.study_version_id,
-                name="Allowed",
+                name="Prior",
                 status=VisitInstanceStatus.scheduled,
             ),
             VisitInstance(
                 id=uuid.uuid4(),
                 subject_id=subject.id,
-                visit_definition_id=hidden_id,
+                visit_definition_id=current_id,
                 design_version_id=subject.study_version_id,
-                name="Hidden",
+                name="Current",
+                status=VisitInstanceStatus.scheduled,
+            ),
+            VisitInstance(
+                id=uuid.uuid4(),
+                subject_id=subject.id,
+                visit_definition_id=future_id,
+                design_version_id=subject.study_version_id,
+                name="Future",
                 status=VisitInstanceStatus.scheduled,
             ),
             VisitInstance(
@@ -480,13 +619,294 @@ class TestSubjectPhaseState:
                 status=VisitInstanceStatus.unscheduled,
             ),
         ]
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = visits
-        mock_session.execute.return_value = result
+        history_result = MagicMock()
+        history_result.all.return_value = [
+            (
+                "phase_transition",
+                str(prior_phase_id),
+                str(subject.current_phase_definition_id),
+            )
+        ]
+        visits_result = MagicMock()
+        visits_result.scalars.return_value.all.return_value = visits
+        mock_session.execute.side_effect = [history_result, visits_result]
 
         visible = await service.list_visible_visits(mock_session, subject)
 
-        assert [visit.name for visit in visible] == ["Allowed"]
+        assert [visit.name for visit in visible] == ["Prior", "Current", "Unscheduled"]
+
+    async def test_reversed_phase_visits_are_removed_from_visible_casebook_path(
+        self, service, design_service, mock_session
+    ):
+        registered_phase_id = uuid.uuid4()
+        treatment_phase_id = uuid.uuid4()
+        follow_up_phase_id = uuid.uuid4()
+        registered_visit_id = uuid.uuid4()
+        treatment_visit_id = uuid.uuid4()
+        follow_up_visit_id = uuid.uuid4()
+        subject = _make_subject()
+        subject.current_phase_definition_id = treatment_phase_id
+        design_service.list_subject_phase_definitions.return_value = [
+            SimpleNamespace(
+                id=registered_phase_id,
+                phase_type="registered",
+                visit_definition_ids=(registered_visit_id,),
+            ),
+            SimpleNamespace(
+                id=treatment_phase_id,
+                phase_type="common",
+                visit_definition_ids=(treatment_visit_id,),
+            ),
+            SimpleNamespace(
+                id=follow_up_phase_id,
+                phase_type="common",
+                visit_definition_ids=(follow_up_visit_id,),
+            ),
+        ]
+        history_result = MagicMock()
+        history_result.all.return_value = [
+            ("phase_transition", str(registered_phase_id), str(treatment_phase_id)),
+            ("phase_transition", str(treatment_phase_id), str(follow_up_phase_id)),
+            ("phase_reversal", str(follow_up_phase_id), str(treatment_phase_id)),
+        ]
+        visits_result = MagicMock()
+        visits_result.scalars.return_value.all.return_value = [
+            VisitInstance(
+                id=uuid.uuid4(),
+                subject_id=subject.id,
+                visit_definition_id=registered_visit_id,
+                design_version_id=subject.study_version_id,
+                name="Registered",
+                status=VisitInstanceStatus.scheduled,
+            ),
+            VisitInstance(
+                id=uuid.uuid4(),
+                subject_id=subject.id,
+                visit_definition_id=treatment_visit_id,
+                design_version_id=subject.study_version_id,
+                name="Treatment",
+                status=VisitInstanceStatus.scheduled,
+            ),
+            VisitInstance(
+                id=uuid.uuid4(),
+                subject_id=subject.id,
+                visit_definition_id=follow_up_visit_id,
+                design_version_id=subject.study_version_id,
+                name="Follow-up",
+                status=VisitInstanceStatus.scheduled,
+            ),
+        ]
+        mock_session.execute.side_effect = [history_result, visits_result]
+
+        visible = await service.list_visible_visits(mock_session, subject)
+
+        assert [visit.name for visit in visible] == ["Registered", "Treatment"]
+
+    async def test_phase_path_can_branch_after_reversal(
+        self, service, design_service, mock_session
+    ):
+        registered_phase_id = uuid.uuid4()
+        treatment_phase_id = uuid.uuid4()
+        first_follow_up_phase_id = uuid.uuid4()
+        alternate_follow_up_phase_id = uuid.uuid4()
+        visit_ids = [uuid.uuid4() for _ in range(4)]
+        subject = _make_subject()
+        subject.current_phase_definition_id = alternate_follow_up_phase_id
+        design_service.list_subject_phase_definitions.return_value = [
+            SimpleNamespace(
+                id=phase_id,
+                phase_type="registered" if index == 0 else "common",
+                visit_definition_ids=(visit_ids[index],),
+            )
+            for index, phase_id in enumerate(
+                (
+                    registered_phase_id,
+                    treatment_phase_id,
+                    first_follow_up_phase_id,
+                    alternate_follow_up_phase_id,
+                )
+            )
+        ]
+        history_result = MagicMock()
+        history_result.all.return_value = [
+            ("phase_transition", str(registered_phase_id), str(treatment_phase_id)),
+            ("phase_transition", str(treatment_phase_id), str(first_follow_up_phase_id)),
+            ("phase_reversal", str(first_follow_up_phase_id), str(treatment_phase_id)),
+            (
+                "phase_transition",
+                str(treatment_phase_id),
+                str(alternate_follow_up_phase_id),
+            ),
+        ]
+        mock_session.execute.return_value = history_result
+
+        allowed = await service.visible_visit_definition_ids(mock_session, subject)
+
+        assert allowed == {visit_ids[0], visit_ids[1], visit_ids[3]}
+
+    async def test_no_phase_configuration_exposes_all_visit_definitions(
+        self, service, design_service, mock_session
+    ):
+        subject = _make_subject()
+        design_service.list_subject_phase_definitions.return_value = []
+
+        allowed = await service.visible_visit_definition_ids(mock_session, subject)
+
+        assert allowed is None
+
+    async def test_configured_phases_without_current_phase_expose_no_visits(
+        self, service, design_service, mock_session
+    ):
+        subject = _make_subject()
+        design_service.list_subject_phase_definitions.return_value = [
+            SimpleNamespace(
+                id=uuid.uuid4(),
+                name="Registered",
+                phase_type="registered",
+                display_order=1,
+                visit_definition_ids=(uuid.uuid4(),),
+            )
+        ]
+        history_result = MagicMock()
+        history_result.all.return_value = []
+        mock_session.execute.return_value = history_result
+
+        allowed = await service.visible_visit_definition_ids(mock_session, subject)
+
+        assert allowed == set()
+
+    async def test_current_arm_phase_adds_no_visits(self, service, design_service, mock_session):
+        subject = _make_subject()
+        subject.current_phase_definition_id = uuid.uuid4()
+        subject.arm_definition_id = uuid.uuid4()
+        allowed_id = uuid.uuid4()
+        design_service.list_subject_phase_definitions.return_value = [
+            SimpleNamespace(
+                id=subject.current_phase_definition_id,
+                name="Treatment",
+                phase_type="arm",
+                display_order=2,
+                visit_definition_ids=(),
+            )
+        ]
+        design_service.get_schedule_of_assessment.return_value = SimpleNamespace(
+            entries=(SimpleNamespace(visit_definition_id=allowed_id),)
+        )
+        history_result = MagicMock()
+        history_result.all.return_value = []
+        mock_session.execute.return_value = history_result
+
+        allowed = await service.visible_visit_definition_ids(mock_session, subject)
+
+        assert allowed == set()
+        design_service.get_schedule_of_assessment.assert_awaited_once_with(
+            mock_session,
+            subject.study_version_id,
+            subject.arm_definition_id,
+        )
+
+    async def test_phase_after_arm_adds_only_phase_visits_in_selected_arm_soa(
+        self, service, design_service, mock_session
+    ):
+        subject = _make_subject()
+        registered_phase_id = uuid.uuid4()
+        arm_phase_id = uuid.uuid4()
+        current_phase_id = uuid.uuid4()
+        subject.current_phase_definition_id = current_phase_id
+        subject.arm_definition_id = uuid.uuid4()
+        prior_visit_id = uuid.uuid4()
+        allowed_visit_id = uuid.uuid4()
+        phase_only_visit_id = uuid.uuid4()
+        arm_only_visit_id = uuid.uuid4()
+        design_service.list_subject_phase_definitions.return_value = [
+            SimpleNamespace(
+                id=registered_phase_id,
+                phase_type="registered",
+                visit_definition_ids=(prior_visit_id,),
+            ),
+            SimpleNamespace(
+                id=arm_phase_id,
+                phase_type="arm",
+                visit_definition_ids=(),
+            ),
+            SimpleNamespace(
+                id=current_phase_id,
+                phase_type="common",
+                visit_definition_ids=(allowed_visit_id, phase_only_visit_id),
+            ),
+        ]
+        design_service.get_schedule_of_assessment.return_value = SimpleNamespace(
+            entries=(
+                SimpleNamespace(visit_definition_id=allowed_visit_id),
+                SimpleNamespace(visit_definition_id=arm_only_visit_id),
+            )
+        )
+        history_result = MagicMock()
+        history_result.all.return_value = [
+            ("phase_transition", str(registered_phase_id), str(arm_phase_id)),
+            ("phase_transition", str(arm_phase_id), str(current_phase_id)),
+        ]
+        mock_session.execute.return_value = history_result
+
+        allowed = await service.visible_visit_definition_ids(mock_session, subject)
+
+        assert allowed == {prior_visit_id, allowed_visit_id}
+
+    async def test_reverse_phase_restores_previous_phase_without_deleting_data(
+        self, service, design_service, mock_session, actor_id
+    ):
+        previous_phase = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Treatment",
+            phase_type="common",
+            display_order=2,
+            visit_definition_ids=(),
+        )
+        current_phase = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Complete",
+            phase_type="complete",
+            display_order=3,
+            visit_definition_ids=(),
+        )
+        subject = _make_subject(status=SubjectStatus.completed)
+        subject.current_phase_definition_id = current_phase.id
+        design_service.list_subject_phase_definitions.return_value = [
+            previous_phase,
+            current_phase,
+        ]
+
+        with (
+            patch.object(
+                service,
+                "_previous_phase_id",
+                AsyncMock(return_value=previous_phase.id),
+            ),
+            patch.object(
+                service,
+                "_entered_phase_path",
+                AsyncMock(return_value=[previous_phase.id, current_phase.id]),
+            ),
+            patch(
+                "app.services.edc.subject_service.lock_service.is_modification_blocked",
+                AsyncMock(return_value=False),
+            ),
+            patch("app.services.edc.subject_service.audit_service") as mock_audit,
+        ):
+            mock_audit.record = AsyncMock()
+            reversed_subject = await service.reverse_phase(
+                mock_session,
+                subject,
+                reason="Complete phase selected in error",
+                actor_id=actor_id,
+            )
+
+        assert reversed_subject.current_phase_definition_id == previous_phase.id
+        assert reversed_subject.status == SubjectStatus.on_treatment
+        mock_session.flush.assert_awaited_once()
+        mock_session.delete.assert_not_awaited()
+        assert mock_audit.record.await_args.kwargs["action"] == "phase_reversal"
+        assert mock_audit.record.await_args.kwargs["reason"] == ("Complete phase selected in error")
 
 
 class TestTransitionStatus:
@@ -505,6 +925,9 @@ class TestTransitionStatus:
             (SubjectStatus.on_treatment, SubjectStatus.early_terminated),
             (SubjectStatus.on_treatment, SubjectStatus.lost_to_follow_up),
             (SubjectStatus.on_treatment, SubjectStatus.withdrawn),
+            (SubjectStatus.screening, SubjectStatus.inactive),
+            (SubjectStatus.enrolled, SubjectStatus.discontinued),
+            (SubjectStatus.inactive, SubjectStatus.discontinued),
         ],
     )
     async def test_legal_transitions_succeed(
@@ -513,9 +936,17 @@ class TestTransitionStatus:
         """All legal subject transitions succeed (Req 7.3)."""
         subject = _make_subject(status=current)
 
-        with patch("app.services.edc.subject_service.audit_service") as mock_audit:
+        with (
+            patch("app.services.edc.subject_service.audit_service") as mock_audit,
+            patch(
+                "app.services.edc.subject_service.lock_service.is_modification_blocked",
+                AsyncMock(return_value=False),
+            ),
+        ):
             mock_audit.record = AsyncMock()
-            result = await service.transition_status(mock_session, subject, target, actor_id)
+            result = await service.transition_status(
+                mock_session, subject, target, actor_id, reason="Lifecycle correction"
+            )
 
         assert result.status == target
         assert result.updated_at is not None
@@ -569,6 +1000,38 @@ class TestTransitionStatus:
 
         with pytest.raises(BusinessRuleError):
             await service.transition_status(mock_session, subject, SubjectStatus.enrolled, actor_id)
+
+    async def test_inactive_requires_reason(self, service, mock_session, actor_id):
+        subject = _make_subject(status=SubjectStatus.screening)
+
+        with pytest.raises(ValidationError):
+            await service.transition_status(
+                mock_session,
+                subject,
+                SubjectStatus.inactive,
+                actor_id,
+                reason="  ",
+            )
+
+    async def test_discontinue_rejects_locked_subject(self, service, mock_session, actor_id):
+        subject = _make_subject(status=SubjectStatus.on_treatment)
+
+        with (
+            patch(
+                "app.services.edc.subject_service.lock_service.is_modification_blocked",
+                AsyncMock(return_value=True),
+            ),
+            pytest.raises(BusinessRuleError) as exc_info,
+        ):
+            await service.transition_status(
+                mock_session,
+                subject,
+                SubjectStatus.discontinued,
+                actor_id,
+                reason="Participation ended",
+            )
+
+        assert exc_info.value.details["reason"] == "SUBJECT_LIFECYCLE_CHANGE_LOCKED"
 
 
 class TestGetCasebook:
@@ -720,7 +1183,13 @@ class TestSoftDelete:
 
         with patch("app.services.edc.subject_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            result = await service.soft_delete(mock_session, subject, "entered in error", actor_id)
+            result = await service.soft_delete(
+                mock_session,
+                subject,
+                "entered in error",
+                actor_id,
+                subject_number_confirmation=subject.subject_number,
+            )
 
         assert result.deleted_at is not None
         assert result.deleted_by == actor_id
@@ -734,7 +1203,13 @@ class TestSoftDelete:
         subject.deleted_at = datetime.now(UTC)
 
         with pytest.raises(ConflictError):
-            await service.soft_delete(mock_session, subject, "reason", actor_id)
+            await service.soft_delete(
+                mock_session,
+                subject,
+                "reason",
+                actor_id,
+                subject_number_confirmation=subject.subject_number,
+            )
 
     async def test_soft_delete_writes_audit_event(self, service, mock_session, actor_id):
         """soft_delete writes an Audit_Event with the reason."""
@@ -742,7 +1217,13 @@ class TestSoftDelete:
 
         with patch("app.services.edc.subject_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            await service.soft_delete(mock_session, subject, "duplicate", actor_id)
+            await service.soft_delete(
+                mock_session,
+                subject,
+                "duplicate",
+                actor_id,
+                subject_number_confirmation=subject.subject_number,
+            )
 
             mock_audit.record.assert_awaited_once()
             call_kwargs = mock_audit.record.call_args.kwargs
@@ -750,6 +1231,152 @@ class TestSoftDelete:
             assert call_kwargs["action"] == "delete"
             assert call_kwargs["reason"] == "duplicate"
             assert call_kwargs["actor_id"] == actor_id
+
+    async def test_soft_delete_rejects_non_screening_subject(self, service, mock_session, actor_id):
+        subject = _make_subject(status=SubjectStatus.enrolled)
+
+        with pytest.raises(BusinessRuleError) as exc_info:
+            await service.soft_delete(
+                mock_session,
+                subject,
+                "entered in error",
+                actor_id,
+                subject_number_confirmation=subject.subject_number,
+            )
+
+        assert exc_info.value.details["reason"] == "SUBJECT_REMOVAL_STATUS_NOT_ELIGIBLE"
+
+    async def test_soft_delete_requires_exact_subject_number_confirmation(
+        self, service, mock_session, actor_id
+    ):
+        subject = _make_subject()
+
+        with pytest.raises(ValidationError) as exc_info:
+            await service.soft_delete(
+                mock_session,
+                subject,
+                "entered in error",
+                actor_id,
+                subject_number_confirmation="wrong",
+            )
+
+        assert exc_info.value.details["reason"] == "SUBJECT_NUMBER_CONFIRMATION_MISMATCH"
+
+    async def test_soft_delete_rejects_subject_with_clinical_revision(
+        self, service, mock_session, actor_id
+    ):
+        subject = _make_subject()
+        subject.data_revision = 1
+
+        with pytest.raises(BusinessRuleError) as exc_info:
+            await service.soft_delete(
+                mock_session,
+                subject,
+                "entered in error",
+                actor_id,
+                subject_number_confirmation=subject.subject_number,
+            )
+
+        assert "CLINICAL_DATA" in exc_info.value.details["blockers"]
+
+
+class TestRestoreSubject:
+    async def test_restore_clears_deletion_state_and_audits(self, service, mock_session, actor_id):
+        subject = _make_subject()
+        subject.deleted_at = datetime.now(UTC)
+        subject.deleted_by = uuid.uuid4()
+        subject.deletion_reason = "duplicate"
+
+        with patch("app.services.edc.subject_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            restored = await service.restore(
+                mock_session,
+                subject,
+                "Deletion was applied to the wrong subject",
+                actor_id,
+            )
+
+        assert restored.deleted_at is None
+        assert restored.deleted_by is None
+        assert restored.deletion_reason is None
+        assert mock_audit.record.await_args.kwargs["action"] == "restore"
+        assert mock_audit.record.await_args.kwargs["reason"] == (
+            "Deletion was applied to the wrong subject"
+        )
+
+
+class TestSwitchSubjectSite:
+    async def test_switch_site_updates_only_site_and_audits(self, service, mock_session, actor_id):
+        subject = _make_subject()
+        old_site_id = subject.site_id
+        new_site_id = uuid.uuid4()
+        target_site = _make_site(new_site_id, subject.study_id)
+        locked_result = MagicMock()
+        locked_result.scalars.return_value.first.return_value = subject
+        target_result = MagicMock()
+        target_result.scalars.return_value.first.return_value = target_site
+        mock_session.execute.side_effect = [locked_result, target_result]
+
+        with (
+            patch.object(
+                service,
+                "_subject_removal_blockers",
+                AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.edc.subject_service.lock_service.is_modification_blocked",
+                AsyncMock(return_value=False),
+            ),
+            patch("app.services.edc.subject_service.audit_service") as mock_audit,
+        ):
+            mock_audit.record = AsyncMock()
+            transferred = await service.switch_site(
+                mock_session,
+                subject,
+                site_id=new_site_id,
+                reason="Initially assigned to the wrong site",
+                actor_id=actor_id,
+            )
+
+        assert transferred.site_id == new_site_id
+        assert transferred.subject_number == "101-0001"
+        audit = mock_audit.record.await_args.kwargs
+        assert audit["action"] == "site_transfer"
+        assert audit["old_value"] == str(old_site_id)
+        assert audit["new_value"] == str(new_site_id)
+
+    async def test_switch_site_rejects_downstream_records(self, service, mock_session, actor_id):
+        subject = _make_subject()
+        new_site_id = uuid.uuid4()
+        target_site = _make_site(new_site_id, subject.study_id)
+        locked_result = MagicMock()
+        locked_result.scalars.return_value.first.return_value = subject
+        target_result = MagicMock()
+        target_result.scalars.return_value.first.return_value = target_site
+        mock_session.execute.side_effect = [locked_result, target_result]
+
+        with (
+            patch.object(
+                service,
+                "_subject_removal_blockers",
+                AsyncMock(return_value=["SAFETY_CASES"]),
+            ),
+            patch(
+                "app.services.edc.subject_service.lock_service.is_modification_blocked",
+                AsyncMock(return_value=False),
+            ),
+            pytest.raises(BusinessRuleError) as exc_info,
+        ):
+            await service.switch_site(
+                mock_session,
+                subject,
+                site_id=new_site_id,
+                reason="Initially assigned to the wrong site",
+                actor_id=actor_id,
+            )
+
+        assert exc_info.value.details["reason"] == "SUBJECT_SITE_TRANSFER_HAS_RECORDS"
+        assert exc_info.value.details["blockers"] == ["SAFETY_CASES"]
 
 
 class TestGetSubject:

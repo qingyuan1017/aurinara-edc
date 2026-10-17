@@ -15,6 +15,7 @@ from app.schemas.designer.form_metadata import (
 )
 from app.schemas.designer.study_version import (
     StudyAmendmentCreate,
+    StudyVersionAbandon,
     StudyVersionCreate,
     StudyVersionResponse,
 )
@@ -79,6 +80,7 @@ __all__ = [
     "ScheduleOfAssessmentEntryView",
     "ScheduleOfAssessmentView",
     "StudyAmendmentCreate",
+    "StudyVersionAbandon",
     "StudyVersionCreate",
     "StudyVersionResponse",
     "SubjectPhaseDefinitionCreate",

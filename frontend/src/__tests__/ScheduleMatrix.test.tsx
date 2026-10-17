@@ -64,6 +64,60 @@ describe('ScheduleOfAssessmentPage (matrix)', () => {
     seedPermissions(['designer.soa.read', 'designer.soa.configure'])
   })
 
+  it('defaults to the newest draft after an ODM import', async () => {
+    const versions = [
+      { id: 'ver-old', study_id: 'study-1', version_number: '2.0', status: 'draft', created_at: '2024-01-02T00:00:00Z' },
+      { id: 'ver-imported', study_id: 'study-1', version_number: '2.0_23Dec2025', status: 'draft', created_at: '2024-01-03T00:00:00Z' },
+    ]
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: versions })
+      if (url === '/designer/versions/ver-imported/visits') return Promise.resolve({ data: VISITS })
+      if (url === '/designer/studies/study-1/forms') return Promise.resolve({ data: FORMS })
+      if (url === '/designer/versions/ver-imported/schedule-of-assessment') {
+        return Promise.reject({ response: { status: 404 } })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    renderPage(<ScheduleOfAssessmentPage studyId="study-1" />)
+
+    expect(await screen.findByRole('checkbox', { name: 'VITALS at Baseline' })).toBeInTheDocument()
+    expect(api.get).toHaveBeenCalledWith('/designer/versions/ver-imported/visits')
+  })
+
+  it('shows a legacy imported folder when the saved schedule uses it as a visit', async () => {
+    const legacyFolderVisit = {
+      ...VISITS[0],
+      id: 'legacy-screening',
+      definition_kind: 'folder',
+    }
+    const importedSoa = {
+      id: 'soa-imported',
+      design_version_id: 'ver-draft',
+      created_at: 'x',
+      entries: [{
+        id: 'entry-1',
+        schedule_of_assessment_id: 'soa-imported',
+        form_definition_id: 'form-1',
+        procedure_name: null,
+        visit_definition_id: 'legacy-screening',
+        display_order: 1,
+        created_at: 'x',
+      }],
+    }
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: DRAFT_VERSIONS })
+      if (url === '/designer/versions/ver-draft/visits') return Promise.resolve({ data: [legacyFolderVisit] })
+      if (url === '/designer/studies/study-1/forms') return Promise.resolve({ data: FORMS })
+      if (url === '/designer/versions/ver-draft/schedule-of-assessment') return Promise.resolve({ data: importedSoa })
+      return Promise.resolve({ data: [] })
+    })
+
+    renderPage(<ScheduleOfAssessmentPage studyId="study-1" />)
+
+    expect(await screen.findByRole('checkbox', { name: 'VITALS at Baseline' })).toHaveAttribute('aria-checked', 'true')
+  })
+
   it('toggling a form cell then saving POSTs the full entry set with visit_definition_id and no cycle_definition_id', async () => {
     mockBase()
     vi.mocked(api.post).mockResolvedValue({ data: { id: 'soa-1', design_version_id: 'ver-draft', created_at: 'x', entries: [] } } as never)
@@ -75,12 +129,90 @@ describe('ScheduleOfAssessmentPage (matrix)', () => {
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith(
       '/designer/versions/ver-draft/schedule-of-assessment',
-      { entries: [{ form_definition_id: 'form-1', procedure_name: null, visit_definition_id: 'visit-1', display_order: 1 }] },
+      { arm_definition_id: null, entries: [{ form_definition_id: 'form-1', procedure_name: null, visit_definition_id: 'visit-1', display_order: 1 }] },
     ))
     const payload = vi.mocked(api.post).mock.calls[0][1] as { entries: Record<string, unknown>[] }
     expect(payload.entries.every((e) => !('cycle_definition_id' in e))).toBe(true)
     expect(screen.getByRole('checkbox', { name: 'VITALS at Cycle day 8' })).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: 'VITALS at Treatment cycle' })).not.toBeInTheDocument()
+  })
+
+  it('loads and saves an independent schedule for the selected treatment arm', async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: DRAFT_VERSIONS })
+      if (url === '/designer/versions/ver-draft/visits') return Promise.resolve({ data: VISITS })
+      if (url === '/designer/studies/study-1/forms') return Promise.resolve({ data: FORMS })
+      if (url === '/designer/versions/ver-draft/arms') return Promise.resolve({ data: [{
+        id: 'arm-a', study_version_id: 'ver-draft', name: 'Arm A', display_order: 1,
+        description: null, created_at: 'x',
+      }] })
+      if (url === '/designer/versions/ver-draft/schedule-of-assessment') {
+        return Promise.reject({ response: { status: 404 } })
+      }
+      return Promise.resolve({ data: [] })
+    })
+    vi.mocked(api.post).mockResolvedValue({ data: {
+      id: 'soa-arm-a', design_version_id: 'ver-draft', arm_definition_id: 'arm-a',
+      created_at: 'x', entries: [],
+    } } as never)
+
+    renderPage(<ScheduleOfAssessmentPage studyId="study-1" />)
+
+    fireEvent.change(await screen.findByLabelText('Schedule scope'), { target: { value: 'arm-a' } })
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'VITALS at Baseline' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save schedule' }))
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(
+      '/designer/versions/ver-draft/schedule-of-assessment',
+      { arm_definition_id: 'arm-a', entries: [{ form_definition_id: 'form-1', procedure_name: null, visit_definition_id: 'visit-1', display_order: 1 }] },
+    ))
+  })
+
+  it('copies the common schedule into an arm draft and saves it for that arm', async () => {
+    const commonSoa = {
+      id: 'soa-common', design_version_id: 'ver-draft', arm_definition_id: null,
+      created_at: 'x', entries: [
+        { id: 'entry-1', schedule_of_assessment_id: 'soa-common', form_definition_id: 'form-1', procedure_name: null, visit_definition_id: 'visit-1', display_order: 1, created_at: 'x' },
+        { id: 'entry-2', schedule_of_assessment_id: 'soa-common', form_definition_id: null, procedure_name: 'ECG', visit_definition_id: 'visit-2', display_order: 2, created_at: 'x' },
+      ],
+    }
+    vi.mocked(api.get).mockImplementation((url: string, config?: unknown) => {
+      const armDefinitionId = (config as { params?: { arm_definition_id?: string } } | undefined)?.params?.arm_definition_id
+      if (url === '/studies/study-1/versions') return Promise.resolve({ data: DRAFT_VERSIONS })
+      if (url === '/designer/versions/ver-draft/visits') return Promise.resolve({ data: VISITS })
+      if (url === '/designer/studies/study-1/forms') return Promise.resolve({ data: FORMS })
+      if (url === '/designer/versions/ver-draft/arms') return Promise.resolve({ data: [{
+        id: 'arm-a', study_version_id: 'ver-draft', name: 'Arm A', display_order: 1,
+        description: null, created_at: 'x',
+      }] })
+      if (url === '/designer/versions/ver-draft/schedule-of-assessment') {
+        if (armDefinitionId === 'arm-a') return Promise.reject({ response: { status: 404 } })
+        return Promise.resolve({ data: commonSoa })
+      }
+      return Promise.resolve({ data: [] })
+    })
+    vi.mocked(api.post).mockResolvedValue({ data: {
+      id: 'soa-arm-a', design_version_id: 'ver-draft', arm_definition_id: 'arm-a',
+      created_at: 'x', entries: [],
+    } } as never)
+
+    renderPage(<ScheduleOfAssessmentPage studyId="study-1" />)
+
+    fireEvent.change(await screen.findByLabelText('Schedule scope'), { target: { value: 'arm-a' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy from common' }))
+
+    expect(screen.getByRole('checkbox', { name: 'VITALS at Baseline' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('checkbox', { name: 'ECG at Week 2' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText(/unsaved draft/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save schedule' }))
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(
+      '/designer/versions/ver-draft/schedule-of-assessment',
+      { arm_definition_id: 'arm-a', entries: [
+        { form_definition_id: 'form-1', procedure_name: null, visit_definition_id: 'visit-1', display_order: 1 },
+        { form_definition_id: null, procedure_name: 'ECG', visit_definition_id: 'visit-2', display_order: 2 },
+      ] },
+    ))
   })
 
   it('keeps cycle-owned visits at the cycle hierarchy position between peer visits', async () => {

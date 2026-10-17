@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.database import Base
 from app.core.exceptions import ConflictError, ValidationError
-from app.models.ctms.entity_management import StudyEntityAssignment
 from app.models.ctms.reference_data import CTMSReferenceValue
 from app.models.edc.site import Site
 from app.models.edc.study import Study
@@ -107,7 +106,7 @@ def test_entity_contract_enforces_type_specific_required_fields():
 
 
 @pytest.mark.asyncio
-async def test_ctms_site_creation_generates_and_syncs_one_canonical_id():
+async def test_ctms_site_master_can_have_different_ids_and_numbers_in_each_study():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -129,13 +128,19 @@ async def test_ctms_site_creation_generates_and_syncs_one_canonical_id():
             created_by=actor.id,
             platform_managed=True,
         )
-        session.add(study)
+        other_study = Study(
+            study_code=f"OTHER-{uuid4()}",
+            title="Other study",
+            sponsor="Platform sponsor",
+            created_by=actor.id,
+            platform_managed=True,
+        )
+        session.add_all([study, other_study])
         await session.flush()
         service = EntityManagementService()
 
-        entity = await service.create_site(
+        entity = await service.create_site_entity(
             session,
-            study.id,
             {
                 "name": "General Hospital",
                 "country": "US",
@@ -146,33 +151,67 @@ async def test_ctms_site_creation_generates_and_syncs_one_canonical_id():
             actor_id=actor.id,
             correlation_id="site-create",
         )
-        canonical_site = await session.get(Site, entity.id)
-        assignment = await session.scalar(
-            select(StudyEntityAssignment).where(
-                StudyEntityAssignment.study_id == study.id,
-                StudyEntityAssignment.entity_id == entity.id,
-            )
+        assignment = await service.assign_site_to_study(
+            session,
+            study.id,
+            {"entity_id": entity.id, "site_number": "SITE-101"},
+            actor_id=actor.id,
+            correlation_id="site-assign-one",
         )
+        other_assignment = await service.assign_site_to_study(
+            session,
+            other_study.id,
+            {"entity_id": entity.id, "site_number": "2001"},
+            actor_id=actor.id,
+            correlation_id="site-assign-two",
+        )
+        with pytest.raises(ConflictError):
+            await service.assign_site_to_study(
+                session,
+                study.id,
+                {"entity_id": entity.id, "site_number": "SITE-102"},
+                actor_id=actor.id,
+                correlation_id="duplicate-site-assignment",
+            )
+        other_entity = await service.create_site_entity(
+            session,
+            {"name": "Other Hospital", "state": "New York", "city": "Albany"},
+            actor_id=actor.id,
+            correlation_id="other-site-create",
+        )
+        with pytest.raises(ConflictError):
+            await service.assign_site_to_study(
+                session,
+                study.id,
+                {"entity_id": other_entity.id, "site_number": "SITE-101"},
+                actor_id=actor.id,
+                correlation_id="duplicate-study-site-id",
+            )
+        canonical_site = await session.get(Site, assignment.site_id)
+        other_site = await session.get(Site, other_assignment.site_id)
         synchronization_audit = await session.scalar(
             select(AuditEvent).where(
                 AuditEvent.entity_type == "site",
-                AuditEvent.entity_id == entity.id,
+                AuditEvent.entity_id == assignment.site_id,
             )
         )
 
-        assert entity.id == entity.canonical_site_id
         assert canonical_site is not None
-        assert canonical_site.id == entity.id
+        assert other_site is not None
+        assert entity.id not in {canonical_site.id, other_site.id}
+        assert canonical_site.id != other_site.id
         assert canonical_site.study_id == study.id
+        assert other_site.study_id == other_study.id
+        assert canonical_site.site_number == "SITE-101"
+        assert other_site.site_number == "2001"
         assert canonical_site.name == "General Hospital"
         assert canonical_site.country == "US"
         assert canonical_site.region == "New York"
-        assert assignment is not None
         assert synchronization_audit is not None
         assert synchronization_audit.source_module == "CTMS"
         assert synchronization_audit.target_module == "PLATFORM"
         assert synchronization_audit.source_record_id == entity.id
-        assert synchronization_audit.target_record_id == entity.id
+        assert synchronization_audit.target_record_id == canonical_site.id
 
         updated = await service.update_entity(
             session,
@@ -190,6 +229,7 @@ async def test_ctms_site_creation_generates_and_syncs_one_canonical_id():
             correlation_id="site-update",
         )
         await session.refresh(canonical_site)
+        await session.refresh(other_site)
 
         assert updated.id == entity.id
         assert updated.name == "General Hospital Research Center"
@@ -197,6 +237,8 @@ async def test_ctms_site_creation_generates_and_syncs_one_canonical_id():
         assert canonical_site.country == "US"
         assert canonical_site.region == "New Jersey"
         assert canonical_site.address == "2 Research Way"
+        assert other_site.name == "General Hospital Research Center"
+        assert other_site.site_number == "2001"
 
     await engine.dispose()
 

@@ -9,10 +9,13 @@ Satisfies Requirements:
 
 Endpoints:
   - GET   /subjects/{subject_id}/visits               list visit instances (subject.read)
+  - GET   /subjects/{subject_id}/visits/addable       list addable definitions (subject.read)
+  - POST  /subjects/{subject_id}/visits/addable       add a defined visit (form.enter)
   - POST  /subjects/{subject_id}/visits/unscheduled   create unscheduled visit (form.enter)
   - GET   /visits/{visit_id}                          get visit instance (subject.read)
   - PATCH /visits/{visit_id}                           record visit date (form.enter)
   - POST  /visits/{visit_id}/mark-missed              mark missed (form.enter)
+  - POST  /visits/{visit_id}/mark-added-in-error      void a user-added visit (form.enter)
 """
 
 import logging
@@ -22,15 +25,20 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, require_permission
+from app.api.deps import get_current_user, get_db, get_permission_service
 from app.models.shared.identity import User
 from app.schemas.edc.visit import (
+    AddableVisitCreate,
+    AddableVisitDefinitionResponse,
     UnscheduledVisitCreate,
+    VisitAddedInErrorRequest,
     VisitDateRecord,
     VisitInstanceResponse,
 )
+from app.services.edc.scope_service import edc_scope_service
 from app.services.edc.subject_service import subject_service
 from app.services.edc.visit_service import visit_service
+from app.services.shared.permission_service import PermissionService
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +53,12 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 subject_visits_router = APIRouter(prefix="/subjects", tags=["visits"])
 
 
-@subject_visits_router.get(
-    "/{subject_id}/visits", response_model=list[VisitInstanceResponse]
-)
+@subject_visits_router.get("/{subject_id}/visits", response_model=list[VisitInstanceResponse])
 async def list_subject_visits(
     subject_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("subject.read"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> list[VisitInstanceResponse]:
     """List visit instances for a subject.
 
@@ -60,8 +67,55 @@ async def list_subject_visits(
     """
     # Validate the subject exists (and is not soft-deleted).
     subject = await subject_service.get_subject(session, subject_id)
+    edc_scope_service.require_subject(current_user, permission_service, "subject.read", subject)
     instances = await subject_service.list_visible_visits(session, subject)
     return [VisitInstanceResponse.model_validate(i) for i in instances]
+
+
+@subject_visits_router.get(
+    "/{subject_id}/visits/addable",
+    response_model=list[AddableVisitDefinitionResponse],
+)
+async def list_addable_visits(
+    subject_id: UUID,
+    session: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
+) -> list[AddableVisitDefinitionResponse]:
+    """List Designer-approved visit definitions that may be added for this subject."""
+    subject = await subject_service.get_subject(session, subject_id)
+    edc_scope_service.require_subject(current_user, permission_service, "subject.read", subject)
+    definitions = await visit_service.list_addable_definitions(
+        session,
+        subject,
+        allowed_definition_ids=await subject_service.visible_visit_definition_ids(session, subject),
+    )
+    return [AddableVisitDefinitionResponse.model_validate(item) for item in definitions]
+
+
+@subject_visits_router.post(
+    "/{subject_id}/visits/addable",
+    response_model=VisitInstanceResponse,
+    status_code=201,
+)
+async def create_addable_visit(
+    subject_id: UUID,
+    body: AddableVisitCreate,
+    session: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
+) -> VisitInstanceResponse:
+    """Create another instance of an addable real visit and its scheduled forms."""
+    subject = await subject_service.get_subject(session, subject_id)
+    edc_scope_service.require_subject(current_user, permission_service, "form.enter", subject)
+    instance = await visit_service.create_addable(
+        session,
+        subject,
+        body,
+        current_user.id,
+        allowed_definition_ids=await subject_service.visible_visit_definition_ids(session, subject),
+    )
+    return VisitInstanceResponse.model_validate(instance)
 
 
 @subject_visits_router.post(
@@ -73,7 +127,8 @@ async def create_unscheduled_visit(
     subject_id: UUID,
     body: UnscheduledVisitCreate,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.enter"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> VisitInstanceResponse:
     """Create an unscheduled visit instance for a subject.
 
@@ -81,6 +136,7 @@ async def create_unscheduled_visit(
     Requirement 8.4: Create an unscheduled Visit_Instance.
     """
     subject = await subject_service.get_subject(session, subject_id)
+    edc_scope_service.require_subject(current_user, permission_service, "form.enter", subject)
     instance = await visit_service.create_unscheduled(
         session=session,
         subject=subject,
@@ -101,13 +157,17 @@ router = APIRouter(prefix="/visits", tags=["visits"])
 async def get_visit(
     visit_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("subject.read"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> VisitInstanceResponse:
     """Get a visit instance by ID.
 
     Permission: subject.read
     """
     instance = await visit_service.get_instance(session, visit_id)
+    edc_scope_service.require_subject(
+        current_user, permission_service, "subject.read", instance.subject
+    )
     return VisitInstanceResponse.model_validate(instance)
 
 
@@ -116,7 +176,8 @@ async def record_visit_date(
     visit_id: UUID,
     body: VisitDateRecord,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.enter"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> VisitInstanceResponse:
     """Record a visit date and compute the window status.
 
@@ -125,6 +186,9 @@ async def record_visit_date(
     owning definition's target day and window bounds.
     """
     instance = await visit_service.get_instance(session, visit_id)
+    edc_scope_service.require_subject(
+        current_user, permission_service, "form.enter", instance.subject
+    )
     updated = await visit_service.record_visit_date(
         session=session,
         instance=instance,
@@ -139,7 +203,8 @@ async def record_visit_date(
 async def mark_visit_missed(
     visit_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.enter"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> VisitInstanceResponse:
     """Mark a visit instance as missed.
 
@@ -147,9 +212,34 @@ async def mark_visit_missed(
     Requirement 8.5: Set the visit instance status to missed.
     """
     instance = await visit_service.get_instance(session, visit_id)
+    edc_scope_service.require_subject(
+        current_user, permission_service, "form.enter", instance.subject
+    )
     updated = await visit_service.mark_missed(
         session=session,
         instance=instance,
         actor_id=current_user.id,
+    )
+    return VisitInstanceResponse.model_validate(updated)
+
+
+@router.post("/{visit_id}/mark-added-in-error", response_model=VisitInstanceResponse)
+async def mark_visit_added_in_error(
+    visit_id: UUID,
+    body: VisitAddedInErrorRequest,
+    session: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
+) -> VisitInstanceResponse:
+    """Retain but void a user-added visit that was created by mistake."""
+    instance = await visit_service.get_instance(session, visit_id)
+    edc_scope_service.require_subject(
+        current_user, permission_service, "form.enter", instance.subject
+    )
+    updated = await visit_service.mark_added_in_error(
+        session=session,
+        instance=instance,
+        actor_id=current_user.id,
+        reason=body.reason,
     )
     return VisitInstanceResponse.model_validate(updated)

@@ -32,7 +32,10 @@ export const PERMISSIONS = {
 
   // Subjects
   SUBJECT_CREATE: 'subject.create',
+  SUBJECT_DELETE: 'subject.delete',
   SUBJECT_READ: 'subject.read',
+  SUBJECT_RESTORE: 'subject.restore',
+  SUBJECT_TRANSFER: 'subject.transfer',
   SUBJECT_UPDATE: 'subject.update',
 
   // Forms & Data
@@ -64,6 +67,9 @@ export const PERMISSIONS = {
   DESIGNER_FIELD_CONFIGURE: 'designer.field.configure',
   DESIGNER_EDITCHECK_CONFIGURE: 'designer.editcheck.configure',
   DESIGNER_EDITCHECK_TEST: 'designer.editcheck.test',
+  DESIGNER_CUSTOM_FUNCTION_AUTHOR: 'designer.custom_function.author',
+  DESIGNER_CUSTOM_FUNCTION_APPROVE: 'designer.custom_function.approve',
+  DESIGNER_CUSTOM_FUNCTION_EXECUTE: 'designer.custom_function.execute',
   DESIGNER_VISIT_READ: 'designer.visit.read',
   DESIGNER_VISIT_CONFIGURE: 'designer.visit.configure',
   DESIGNER_CODELIST_READ: 'designer.codelist.read',
@@ -77,13 +83,23 @@ export const PERMISSIONS = {
   DESIGNER_CRF_ACCESS_CONFIGURE: 'designer.crf_access.configure',
   DESIGNER_RAW_DATA_VARIABLE_CONFIGURE: 'designer.raw_data_variable.configure',
   DESIGNER_CODING_SETTING_CONFIGURE: 'designer.coding_setting.configure',
+  DESIGNER_SDR_CONFIGURE: 'designer.sdr.configure',
 
   // SDV & Review
   SDV_MANAGE: 'sdv.manage',
   REVIEW_MANAGE: 'review.manage',
+  LISTING_READ: 'listing.read',
+  REVIEW_READ: 'review.read',
+  SDV_READ: 'sdv.read',
+  SDR_READ: 'sdr.read',
+  SDR_MANAGE: 'sdr.manage',
 
   // Lock
   LOCK_MANAGE: 'lock.manage',
+  LOCK_READ: 'lock.read',
+  LOCK_REQUEST: 'lock.request',
+  LOCK_APPROVE: 'lock.approve',
+  LOCK_EXECUTE: 'lock.execute',
 
   // Signatures
   SIGNATURE_SIGN: 'signature.sign',
@@ -105,6 +121,9 @@ export const PERMISSIONS = {
   CTMS_ENROLLMENT_MANAGEMENT: 'ctms.enrollment_management',
   CTMS_CONFLICT_MANAGEMENT: 'ctms.conflict_management',
   CTMS_COORDINATION_REPLAY: 'ctms.coordination_replay',
+  CTMS_TEMPLATE_RULE_MANAGEMENT: 'ctms.template_rule_management',
+  CTMS_CAPA_MANAGEMENT: 'ctms.capa_management',
+  CTMS_CAPACITY_OVERRIDE: 'ctms.capacity_override',
 
   // PV/Safety permissions (must match server permission codes)
   PV_SAFETY_CASE_READ: 'safety_case.read',

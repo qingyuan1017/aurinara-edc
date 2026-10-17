@@ -16,7 +16,7 @@ import enum
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -95,8 +95,8 @@ class FileAttachment(Base):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str] = mapped_column(String(255), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    storage_key: Mapped[str] = mapped_column(
-        Text, nullable=False, comment="S3 or local object-storage key"
+    storage_key: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Legacy S3/local key; nullable for Platform-only bytes"
     )
     platform_object_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
@@ -155,6 +155,10 @@ class FileAttachment(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "storage_key IS NOT NULL OR platform_object_id IS NOT NULL",
+            name="ck_file_attachments_storage_locator",
+        ),
         Index("ix_file_attachments_object_type_object_id", "object_type", "object_id"),
         Index("ix_file_attachments_study_id", "study_id"),
         Index("ix_file_attachments_site_id", "site_id"),

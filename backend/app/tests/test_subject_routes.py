@@ -16,6 +16,7 @@ Uses an in-memory SQLite database and HTTPX async client against the app.
 
 import uuid
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -155,7 +156,14 @@ async def db_session(async_engine):
 async def seeded(db_session: AsyncSession) -> dict:
     """Seed a user with subject permissions, a study, published version, and site."""
     # Permissions
-    perm_codes = ["subject.read", "subject.create", "subject.update"]
+    perm_codes = [
+        "subject.read",
+        "subject.create",
+        "subject.update",
+        "subject.delete",
+        "subject.restore",
+        "subject.transfer",
+    ]
     perms = {}
     for code in perm_codes:
         p = Permission(id=uuid.uuid4(), code=code, description=code)
@@ -376,6 +384,49 @@ class TestUpdateSubjectRoute:
         )
         assert resp.status_code == 200
         assert resp.json()["subject_number"] == "101-0001"
+
+
+class TestSubjectRemovalRoutes:
+    async def test_remove_hides_and_restore_subject(self, client, seeded, subject, monkeypatch):
+        from app.services.edc.lock_service import lock_service
+        from app.services.edc.subject_service import subject_service
+
+        monkeypatch.setattr(
+            lock_service,
+            "is_modification_blocked",
+            AsyncMock(return_value=False),
+        )
+        monkeypatch.setattr(
+            subject_service,
+            "_subject_removal_blockers",
+            AsyncMock(return_value=[]),
+        )
+
+        removed = await client.request(
+            "DELETE",
+            f"/api/v1/subjects/{subject.id}",
+            json={
+                "reason": "Duplicate subject created during setup",
+                "subject_number_confirmation": subject.subject_number,
+            },
+            headers=_auth(seeded["user"]),
+        )
+        assert removed.status_code == 200
+        assert removed.json()["deleted_at"] is not None
+
+        hidden = await client.get(
+            f"/api/v1/subjects/{subject.id}",
+            headers=_auth(seeded["user"]),
+        )
+        assert hidden.status_code == 404
+
+        restored = await client.post(
+            f"/api/v1/subjects/{subject.id}/restore",
+            json={"reason": "Confirmed the original subject is valid"},
+            headers=_auth(seeded["user"]),
+        )
+        assert restored.status_code == 200
+        assert restored.json()["deleted_at"] is None
 
 
 class TestSubjectPhaseRoutes:

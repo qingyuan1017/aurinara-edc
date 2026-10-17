@@ -1,8 +1,8 @@
 """Arm definition authoring routes — Designer-owned.
 
 Handlers for authoring ``Arm_Definition`` records (study arms / treatment
-groups) inside a Draft_Design, delegating to the Designer ``arm_service``. An
-arm declares which real visit leaves (standalone or cycle-owned) occur in it.
+groups) inside a Draft_Design, delegating to the Designer ``arm_service``.
+Visit and form scheduling is configured on the Schedule of Assessment page.
 
 Satisfies Requirements:
   - 4.5: Persist an Arm_Definition within a Draft_Design.
@@ -11,6 +11,7 @@ Endpoints:
   - GET  /versions/{version_id}/arms   list the version's arm definitions
   - POST /versions/{version_id}/arms   create an arm definition
   - PATCH /versions/{version_id}/arms/{arm_id} update an arm definition
+  - DELETE /versions/{version_id}/arms/{arm_id} remove a draft arm definition
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_permission
 from app.core.exceptions import NotFoundError
-from app.models.designer.arm_definition import ArmDefinition
 from app.models.shared.identity import User
 from app.schemas.designer.arm_definition import (
     ArmDefinitionCreate,
@@ -39,25 +39,6 @@ logger = logging.getLogger(__name__)
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 router = APIRouter(prefix="/versions", tags=["designer-arms"])
-
-
-def _to_response(arm: ArmDefinition) -> ArmDefinitionResponse:
-    """Build an arm response, populating member visit ids explicitly.
-
-    ``model_validate(arm)`` cannot populate ``visit_definition_ids`` because the
-    ORM relationship is named ``visits``; it is read from the eager-loaded
-    ``arm.visits`` collection (loaded by the service's flush / selectinload).
-    """
-    return ArmDefinitionResponse(
-        id=arm.id,
-        study_version_id=arm.study_version_id,
-        name=arm.name,
-        display_order=arm.display_order,
-        description=arm.description,
-        visit_definition_ids=[v.id for v in arm.visits],
-        created_at=arm.created_at,
-        updated_at=arm.updated_at,
-    )
 
 
 @router.post("/{version_id}/arms", response_model=ArmDefinitionResponse, status_code=201)
@@ -80,10 +61,9 @@ async def create_arm(
         name=body.name,
         display_order=body.display_order,
         description=body.description,
-        visit_definition_ids=body.visit_definition_ids,
         actor_id=current_user.id,
     )
-    return _to_response(arm)
+    return ArmDefinitionResponse.model_validate(arm)
 
 
 @router.get("/{version_id}/arms", response_model=list[ArmDefinitionResponse])
@@ -98,7 +78,8 @@ async def list_arms(
     """
     version = await study_version_service.get_version(session, version_id)
     return [
-        _to_response(arm) for arm in await arm_service.list_arm_definitions(session, version.id)
+        ArmDefinitionResponse.model_validate(arm)
+        for arm in await arm_service.list_arm_definitions(session, version.id)
     ]
 
 
@@ -119,14 +100,28 @@ async def update_arm(
             "Arm definition not found",
             details={"arm_id": str(arm_id)},
         )
-    return _to_response(
-        await arm_service.update_arm_definition(
-            session,
-            arm_id,
-            body,
-            actor_id=current_user.id,
-        )
+    return ArmDefinitionResponse.model_validate(
+        await arm_service.update_arm_definition(session, arm_id, body, actor_id=current_user.id)
     )
+
+
+@router.delete("/{version_id}/arms/{arm_id}", status_code=204)
+async def delete_arm(
+    version_id: UUID,
+    arm_id: UUID,
+    session: DbSession,
+    current_user: Annotated[User, Depends(require_permission("designer.arm.configure"))],
+) -> None:
+    """Remove an arm and its arm-specific schedule from a draft version."""
+    version = await study_version_service.get_version(session, version_id)
+    study_version_service.guard_mutable(version)
+    arm = await arm_service.get_arm_definition(session, arm_id)
+    if arm.study_version_id != version.id:
+        raise NotFoundError(
+            "Arm definition not found",
+            details={"arm_id": str(arm_id)},
+        )
+    await arm_service.delete_arm_definition(session, arm.id, actor_id=current_user.id)
 
 
 __all__ = ["router"]

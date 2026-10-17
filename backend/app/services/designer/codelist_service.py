@@ -142,6 +142,7 @@ class CodelistService:
             display_order=data.display_order,
             normal_low=data.normal_low,
             normal_high=data.normal_high,
+            specify=data.specify,
         )
         session.add(item)
         await session.flush()

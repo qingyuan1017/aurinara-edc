@@ -19,6 +19,7 @@ Satisfies Requirements:
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -38,6 +39,7 @@ from app.models.designer.study_version import (
     StudyVersionStatus,
 )
 from app.models.edc.study import Study
+from app.models.edc.subject import Subject
 from app.repositories.designer.study_version_repository import StudyVersionRepository
 from app.services.designer.design_clone_service import (
     DesignCloneService,
@@ -46,6 +48,10 @@ from app.services.designer.design_clone_service import (
 from app.services.designer.design_validation_service import (
     DesignValidationService,
     design_validation_service,
+)
+from app.services.designer.subject_phase_service import (
+    SubjectPhaseService,
+    subject_phase_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,10 +69,12 @@ class StudyVersionService:
         *,
         validation_service: DesignValidationService | None = None,
         clone_service: DesignCloneService | None = None,
+        phase_service: SubjectPhaseService | None = None,
     ) -> None:
         self.repository = repository or StudyVersionRepository()
         self.validation_service = validation_service or design_validation_service
         self.clone_service = clone_service or design_clone_service
+        self.phase_service = phase_service or subject_phase_service
 
     # ------------------------------------------------------------------
     # Amendment creation (Requirements 2.9, 2.10, 2.11)
@@ -123,10 +131,21 @@ class StudyVersionService:
                 },
             )
 
+        # Version numbers are retained across the complete history, including
+        # abandoned drafts. Deriving only from the latest published version can
+        # therefore collide with a retained abandoned successor (for example,
+        # published 3.0 plus abandoned 4.0). Always advance beyond every
+        # recognizable version number already owned by the study.
+        version_history = await self.repository.list_for_study(session, study.id)
+
         version = StudyVersion(
             study_id=study.id,
-            version_number=self._next_version_number(source.version_number),
+            version_number=self._next_available_version_number(
+                source.version_number,
+                [item.version_number for item in version_history],
+            ),
             status=StudyVersionStatus.draft,
+            odm_study_oid=source.odm_study_oid,
             amendment_reason=normalized_reason,
             amended_from_version_id=source.id,
         )
@@ -170,15 +189,112 @@ class StudyVersionService:
 
     @staticmethod
     def _next_version_number(source_version_number: str) -> str:
-        """Return the next major version while preserving a stable ``N.0`` shape."""
-        try:
-            major = int(source_version_number.split(".", 1)[0])
-        except (ValueError, TypeError):
+        """Return the next major version for native and imported draft labels."""
+        return StudyVersionService._next_available_version_number(
+            source_version_number,
+            (),
+        )
+
+    @staticmethod
+    def _next_available_version_number(
+        source_version_number: str,
+        existing_version_numbers: list[str] | tuple[str, ...],
+    ) -> str:
+        """Return a major version above the source and all retained history."""
+
+        major_versions: list[int] = []
+        for version_number in (source_version_number, *existing_version_numbers):
+            match = re.match(
+                r"^\s*(?:draft\s+)?v?(\d+)(?:\.\d+)?",
+                version_number,
+                flags=re.IGNORECASE,
+            )
+            if match is not None:
+                major_versions.append(int(match.group(1)))
+
+        if not major_versions:
             raise ValidationError(
-                "Published version number must start with an integer",
+                "Published version number must include a recognizable major version",
                 details={"version_number": source_version_number},
-            ) from None
-        return f"{major + 1}.0"
+            )
+
+        return f"{max(major_versions) + 1}.0"
+
+    async def abandon_draft(
+        self,
+        session: AsyncSession,
+        version: StudyVersion,
+        reason: str,
+        actor_id: UUID,
+    ) -> StudyVersion:
+        """Retain a draft as immutable abandoned history.
+
+        Published versions and drafts already referenced by operational subject
+        records cannot be abandoned. The required reason and lifecycle change
+        are retained both on the version and in the immutable audit trail.
+        """
+        normalized_reason = reason.strip()
+        if not normalized_reason:
+            raise ValidationError(
+                "Abandonment reason is required",
+                details={"field": "reason"},
+            )
+        if len(normalized_reason) > AMENDMENT_REASON_MAX_LENGTH:
+            raise ValidationError(
+                f"Abandonment reason must not exceed {AMENDMENT_REASON_MAX_LENGTH} characters",
+                details={
+                    "field": "reason",
+                    "max_length": AMENDMENT_REASON_MAX_LENGTH,
+                    "length": len(normalized_reason),
+                },
+            )
+        if version.status != StudyVersionStatus.draft:
+            raise BusinessRuleError(
+                "Only a draft study version can be abandoned",
+                details={"version_id": str(version.id), "current_status": version.status},
+            )
+
+        referenced_subject_id = await session.scalar(
+            select(Subject.id).where(Subject.study_version_id == version.id).limit(1)
+        )
+        if referenced_subject_id is not None:
+            raise ConflictError(
+                "A study version referenced by operational subjects cannot be abandoned",
+                details={
+                    "version_id": str(version.id),
+                    "subject_id": str(referenced_subject_id),
+                },
+            )
+
+        abandoned_at = datetime.now(UTC)
+        old_status = version.status
+        version.status = StudyVersionStatus.abandoned
+        version.abandoned_at = abandoned_at
+        version.abandoned_by = actor_id
+        version.abandonment_reason = normalized_reason
+
+        await audit_service.record(
+            session,
+            entity_type="study_version",
+            entity_id=version.id,
+            action="abandon",
+            module=Module.DESIGNER,
+            study_id=version.study_id,
+            field_name="status",
+            old_value=old_status,
+            new_value=StudyVersionStatus.abandoned,
+            actor_id=actor_id,
+            reason=normalized_reason,
+        )
+        await session.flush()
+
+        logger.info(
+            "Study version abandoned: version_id=%s study_id=%s actor=%s",
+            version.id,
+            version.study_id,
+            actor_id,
+        )
+        return version
 
     # ------------------------------------------------------------------
     # Publish (Requirements 2.1, 2.2, 2.3)
@@ -249,7 +365,7 @@ class StudyVersionService:
     # ------------------------------------------------------------------
 
     def guard_mutable(self, version: StudyVersion) -> None:
-        """Block writes to a published Design_Version and its children.
+        """Allow writes only to an active draft and block retained history.
 
         This method is called by Form_Metadata_Service, Visit_Service, and
         Edit_Check_Engine before any metadata write to child entities.
@@ -258,11 +374,16 @@ class StudyVersionService:
             version: The StudyVersion to check.
 
         Raises:
-            BusinessRuleError: If the version is published.
+            BusinessRuleError: If the version is published or abandoned.
         """
         if version.status == StudyVersionStatus.published:
             raise BusinessRuleError(
                 "Cannot modify a published study version",
+                details={"version_id": str(version.id), "status": version.status},
+            )
+        if version.status != StudyVersionStatus.draft:
+            raise BusinessRuleError(
+                "Cannot modify an abandoned study version",
                 details={"version_id": str(version.id), "status": version.status},
             )
 
@@ -299,6 +420,13 @@ class StudyVersionService:
 
         session.add(version)
         await session.flush()
+
+        await self.phase_service.seed_default_phase_flow(
+            session,
+            design_version_id=version.id,
+            study_id=study_id,
+            actor_id=actor_id,
+        )
 
         await audit_service.record(
             session,

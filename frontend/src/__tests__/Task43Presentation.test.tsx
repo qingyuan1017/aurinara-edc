@@ -126,28 +126,57 @@ describe('task 4.3 export and edit-check composition', () => {
   })
 
   it('preserves export status labels, completed downloads, and create payloads', async () => {
-    const get = vi.spyOn(api, 'get').mockResolvedValue({
-      data: {
+    const get = vi.spyOn(api, 'get').mockImplementation((url: string) => {
+      if (url === '/exports/export-1/download') {
+        return Promise.resolve({ data: new Blob(['dataset package']), headers: { 'content-disposition': 'attachment; filename="actual-export.csv"' } } as never)
+      }
+      if (url === '/studies/study-1/exports/datasets') {
+        return Promise.resolve({ data: [{ name: 'DM', label: 'DM', design_version_ids: ['ver-1'], form_definition_ids: ['form-1'] }], headers: {} } as never)
+      }
+      if (url === '/studies/study-1/sites') {
+        return Promise.resolve({ data: { items: [{ id: 'site-1', site_number: '101', name: 'Central Hospital' }], page: 1, page_size: 100, total: 1 }, headers: {} } as never)
+      }
+      if (url === '/studies/study-1/subjects') {
+        return Promise.resolve({ data: { items: [{ id: 'subject-1', subject_number: '001' }], page: 1, page_size: 100, total: 1 }, headers: {} } as never)
+      }
+      if (url === '/subjects/subject-1/visits') {
+        return Promise.resolve({ data: [{ id: 'visit-1', name: 'Baseline', visit_date: '2026-01-02' }], headers: {} } as never)
+      }
+      return Promise.resolve({ data: {
         items: [{ id: 'export-1', export_type: 'csv', status: 'Completed', created_at: '2026-01-01T10:00:00Z', completed_at: '2026-01-01T10:01:00Z' }],
         page: 1,
         page_size: 20,
         total: 1,
-      },
-    } as never)
+      }, headers: {} } as never)
+    })
     const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {} } as never)
-    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:edc-export')
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
     renderWithQueryClient(<ExportCenterPage studyId="study-1" />)
 
     expect(await screen.findByRole('status', { name: 'Export status: Completed' })).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: 'CSV' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Download' }))
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/exports/export-1/download'))
-    expect(open).toHaveBeenCalled()
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/exports/export-1/download', { responseType: 'blob' }))
+    expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob))
+    expect(anchorClick).toHaveBeenCalled()
+    expect(anchorClick.mock.contexts[0]).toHaveProperty('download', 'actual-export.csv')
+    await waitFor(() => expect(revokeObjectUrl).toHaveBeenCalledWith('blob:edc-export'))
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Export' }))
-    fireEvent.change(screen.getByLabelText('Site Filter (optional)'), { target: { value: 'site-1' } })
+    expect(await screen.findByLabelText('All datasets')).toBeChecked()
+    fireEvent.change(await screen.findByLabelText('Site (optional)'), { target: { value: 'site-1' } })
+    await screen.findByRole('option', { name: '001' })
+    fireEvent.change(screen.getByLabelText('Subject (optional)'), { target: { value: 'subject-1' } })
+    await screen.findByRole('option', { name: 'Baseline — 2026-01-02' })
+    fireEvent.change(screen.getByLabelText('Visit (optional)'), { target: { value: 'visit-1' } })
+    expect(screen.queryByLabelText('Domain (optional)')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Start Export' }))
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/studies/study-1/exports', { export_type: 'csv', filters: { site_id: 'site-1' } }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/studies/study-1/exports', {
+      export_type: 'csv',
+      filters: { site_id: 'site-1', subject_id: 'subject-1', visit_id: 'visit-1' },
+    }))
   })
 
   it('preserves edit-check JSON validation and clinical validation payloads', async () => {

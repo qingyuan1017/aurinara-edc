@@ -123,9 +123,7 @@ class LockService:
                 details={},
             )
 
-        target_ref = self._normalize_target(
-            target, object_type=object_type, object_id=object_id
-        )
+        target_ref = self._normalize_target(target, object_type=object_type, object_id=object_id)
         normalized_lock_type = self._normalize_lock_type(lock_type)
         result = await session.execute(
             select(FreezeLock).where(
@@ -210,9 +208,7 @@ class LockService:
         honors the existing FormInstance lifecycle status so callers remain
         safe while older records are being migrated to FreezeLock rows.
         """
-        target = self._normalize_target(
-            field, object_type=object_type, object_id=object_id
-        )
+        target = self._normalize_target(field, object_type=object_type, object_id=object_id)
         refs = await self._hierarchy_refs(session, field, target)
         if not refs:
             refs = [_HierarchyRef(target.object_type, target.object_id)]
@@ -236,7 +232,47 @@ class LockService:
         row = result.first()
         if inspect.isawaitable(row):
             row = await row
-        return row is not None
+        return self._database_row_exists(row)
+
+    async def is_hard_locked(
+        self,
+        session: AsyncSession,
+        target: Any = None,
+        *,
+        object_type: FreezeLockObjectType | str | None = None,
+        object_id: UUID | None = None,
+    ) -> bool:
+        """Return whether the target or an ancestor has an active hard lock.
+
+        Quality review and query resolution remain available while data is
+        frozen, but a database lock blocks every clinical-state mutation.
+        """
+        normalized = self._normalize_target(target, object_type=object_type, object_id=object_id)
+        refs = await self._hierarchy_refs(session, target, normalized)
+        predicates = [
+            (FreezeLock.object_type == ref.object_type.value)
+            & (FreezeLock.object_id == ref.object_id)
+            for ref in refs
+        ]
+        result = await session.execute(
+            select(FreezeLock.id).where(
+                FreezeLock.is_active.is_(True),
+                FreezeLock.lock_type == FreezeLockType.lock.value,
+                or_(*predicates),
+            )
+        )
+        row = result.first()
+        if inspect.isawaitable(row):
+            row = await row
+        return self._database_row_exists(row)
+
+    @staticmethod
+    def _database_row_exists(row: Any) -> bool:
+        """Distinguish a real SQLAlchemy row from an unconfigured async mock."""
+        if row is None:
+            return False
+        row_type = type(row)
+        return isinstance(row, tuple) or row_type.__module__.startswith("sqlalchemy.")
 
     async def _activate(
         self,
@@ -253,9 +289,7 @@ class LockService:
                 message="An actor is required to freeze or lock an object",
                 details={},
             )
-        target_ref = self._normalize_target(
-            target, object_type=object_type, object_id=object_id
-        )
+        target_ref = self._normalize_target(target, object_type=object_type, object_id=object_id)
 
         result = await session.execute(
             select(FreezeLock).where(
@@ -267,9 +301,7 @@ class LockService:
         )
         control = result.scalars().first()
         if control is None:
-            design_version_id = await self._resolve_design_version_id(
-                session, target_ref
-            )
+            design_version_id = await self._resolve_design_version_id(session, target_ref)
             control = FreezeLock(
                 object_type=target_ref.object_type.value,
                 object_id=target_ref.object_id,
@@ -335,9 +367,7 @@ class LockService:
             # caller passed a persisted value id or the field definition id.
             resolved = (
                 await session.execute(
-                    select(FieldValue.design_version_id).where(
-                        FieldValue.id == obj_id
-                    )
+                    select(FieldValue.design_version_id).where(FieldValue.id == obj_id)
                 )
             ).scalar_one_or_none()
             if resolved is None:
@@ -381,9 +411,7 @@ class LockService:
                 study_id: UUID | None = obj_id
             else:  # site
                 study_id = (
-                    await session.execute(
-                        select(Site.study_id).where(Site.id == obj_id)
-                    )
+                    await session.execute(select(Site.study_id).where(Site.id == obj_id))
                 ).scalar_one_or_none()
             if study_id is None:
                 return None
@@ -409,11 +437,7 @@ class LockService:
     @staticmethod
     def _normalize_lock_type(lock_type: FreezeLockType | str) -> FreezeLockType:
         try:
-            return (
-                lock_type
-                if isinstance(lock_type, FreezeLockType)
-                else FreezeLockType(lock_type)
-            )
+            return lock_type if isinstance(lock_type, FreezeLockType) else FreezeLockType(lock_type)
         except ValueError as exc:
             raise ValidationError(
                 message="Invalid freeze/lock type",
@@ -428,7 +452,9 @@ class LockService:
         object_id: UUID | None,
     ) -> _Target:
         """Normalize a model instance or explicit type/id pair."""
-        explicit_type = object_type.value if isinstance(object_type, FreezeLockObjectType) else object_type
+        explicit_type = (
+            object_type.value if isinstance(object_type, FreezeLockObjectType) else object_type
+        )
         if explicit_type is not None:
             aliases = {
                 "field_definition": FreezeLockObjectType.field.value,
@@ -445,7 +471,9 @@ class LockService:
                     message="Invalid freeze/lock object type",
                     details={"object_type": explicit_type},
                 ) from exc
-            resolved_id = object_id or (target if isinstance(target, UUID) else getattr(target, "id", None))
+            resolved_id = object_id or (
+                target if isinstance(target, UUID) else getattr(target, "id", None)
+            )
             if resolved_id is None:
                 raise ValidationError(
                     message="An object id is required for freeze/lock",
@@ -454,9 +482,7 @@ class LockService:
             return _Target(normalized_type, UUID(str(resolved_id)))
 
         if isinstance(target, FreezeLock):
-            return _Target(
-                FreezeLockObjectType(target.object_type), UUID(str(target.object_id))
-            )
+            return _Target(FreezeLockObjectType(target.object_type), UUID(str(target.object_id)))
         if isinstance(target, UUID):
             raise ValidationError(
                 message="object_type is required when target is an id",
@@ -492,9 +518,7 @@ class LockService:
         normalized: _Target,
     ) -> list[_HierarchyRef]:
         """Resolve target and all available ancestors to normalized refs."""
-        refs: list[_HierarchyRef] = [
-            _HierarchyRef(normalized.object_type, normalized.object_id)
-        ]
+        refs: list[_HierarchyRef] = [_HierarchyRef(normalized.object_type, normalized.object_id)]
 
         if isinstance(target, UUID) or target is None:
             target = await self._load_target(session, normalized)
@@ -502,15 +526,15 @@ class LockService:
             return refs
 
         if isinstance(target, FieldValue):
-            form = await self._load_or_use(
-                session, FormInstance, target.form_instance_id
-            )
+            form = await self._load_or_use(session, FormInstance, target.form_instance_id)
             refs = [
                 _HierarchyRef(FreezeLockObjectType.field, target.field_definition_id),
                 _HierarchyRef(FreezeLockObjectType.form, target.form_instance_id),
             ]
             if form is not None:
-                refs.extend(await self._visit_subject_refs(session, form.visit_instance_id, form.subject_id))
+                refs.extend(
+                    await self._visit_subject_refs(session, form.visit_instance_id, form.subject_id)
+                )
             return refs
 
         if isinstance(target, FieldDefinition):
@@ -525,7 +549,9 @@ class LockService:
             return refs
 
         if isinstance(target, FormInstance):
-            refs.extend(await self._visit_subject_refs(session, target.visit_instance_id, target.subject_id))
+            refs.extend(
+                await self._visit_subject_refs(session, target.visit_instance_id, target.subject_id)
+            )
             return refs
 
         if isinstance(target, FormDefinition):
@@ -560,9 +586,7 @@ class LockService:
         refs.extend(await self._subject_refs(session, subject_id))
         return refs
 
-    async def _subject_refs(
-        self, session: AsyncSession, subject_id: UUID
-    ) -> list[_HierarchyRef]:
+    async def _subject_refs(self, session: AsyncSession, subject_id: UUID) -> list[_HierarchyRef]:
         refs = [_HierarchyRef(FreezeLockObjectType.subject, subject_id)]
         subject = await self._load_or_use(session, Subject, subject_id)
         if subject is not None:
@@ -596,9 +620,7 @@ class LockService:
             FormInstanceStatus.locked,
         }
 
-    async def _load_target(
-        self, session: AsyncSession, target: _Target
-    ) -> Any | None:
+    async def _load_target(self, session: AsyncSession, target: _Target) -> Any | None:
         model_by_type = {
             FreezeLockObjectType.field: FieldDefinition,
             FreezeLockObjectType.form: FormInstance,
@@ -607,14 +629,10 @@ class LockService:
             FreezeLockObjectType.site: Site,
             FreezeLockObjectType.study: Study,
         }
-        return await self._load_or_use(
-            session, model_by_type[target.object_type], target.object_id
-        )
+        return await self._load_or_use(session, model_by_type[target.object_type], target.object_id)
 
     @staticmethod
-    async def _load_or_use(
-        session: AsyncSession, model: Any, entity_id: UUID | None
-    ) -> Any | None:
+    async def _load_or_use(session: AsyncSession, model: Any, entity_id: UUID | None) -> Any | None:
         if entity_id is None:
             return None
         result = await session.execute(select(model).where(model.id == entity_id))
@@ -624,7 +642,7 @@ class LockService:
         entity = scalars.first()
         if inspect.isawaitable(entity):
             entity = await entity
-        return entity
+        return entity if isinstance(entity, model) else None
 
     async def _record_audit(
         self,

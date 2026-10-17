@@ -147,9 +147,7 @@ async def get_enrollment_status(
     Requirement 9.8/9.9: Only in-scope records; empty when nothing is in scope.
     An out-of-scope study yields an empty report rather than disclosing it.
     """
-    return await report_service.enrollment_status(
-        session, current_user, study_id=study_id
-    )
+    return await report_service.enrollment_status(session, current_user, study_id=study_id)
 
 
 @study_reports_router.get(

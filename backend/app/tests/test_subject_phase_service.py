@@ -18,9 +18,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.database import Base
 from app.core.exceptions import ConflictError, ValidationError
-from app.models.designer.subject_phase_definition import SubjectPhaseDefinition
+from app.models.designer.subject_phase_definition import (
+    SubjectPhaseDefinition,
+    SubjectPhaseType,
+)
+from app.models.designer.subject_phase_transition import SubjectPhaseTransition
+from app.models.designer.visit import VisitDefinition
 from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
-from app.services.designer.subject_phase_service import SubjectPhaseService
+from app.services.designer.subject_phase_service import (
+    DEFAULT_SUBJECT_PHASE_TRANSITIONS,
+    DEFAULT_SUBJECT_PHASES,
+    SubjectPhaseService,
+)
 
 
 @pytest.fixture
@@ -60,6 +69,70 @@ async def _make_draft_version(session: AsyncSession) -> StudyVersion:
     return version
 
 
+class TestDefaultPhaseFlow:
+    async def test_seeds_standard_phases_and_transitions(self, service, db_session):
+        version = await _make_draft_version(db_session)
+
+        phases = await service.seed_default_phase_flow(
+            db_session,
+            design_version_id=version.id,
+            study_id=version.study_id,
+        )
+
+        assert [(phase.name, phase.phase_type) for phase in phases] == list(DEFAULT_SUBJECT_PHASES)
+        assert phases[0].phase_type == SubjectPhaseType.registered
+
+        stored_transitions = list(
+            (
+                await db_session.execute(
+                    select(SubjectPhaseTransition).where(
+                        SubjectPhaseTransition.design_version_id == version.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        phase_name_by_id = {phase.id: phase.name for phase in phases}
+        assert {
+            (
+                phase_name_by_id[transition.from_phase_id],
+                phase_name_by_id[transition.to_phase_id],
+            )
+            for transition in stored_transitions
+        } == set(DEFAULT_SUBJECT_PHASE_TRANSITIONS)
+
+    async def test_does_not_mix_defaults_into_existing_phase_flow(self, service, db_session):
+        version = await _make_draft_version(db_session)
+        await service.create_phase_definition(
+            db_session,
+            design_version_id=version.id,
+            name="Custom screening",
+            phase_type=SubjectPhaseType.registered,
+            display_order=1,
+        )
+
+        phases = await service.seed_default_phase_flow(
+            db_session,
+            design_version_id=version.id,
+            study_id=version.study_id,
+        )
+
+        assert phases == []
+        stored_names = set(
+            (
+                await db_session.execute(
+                    select(SubjectPhaseDefinition.name).where(
+                        SubjectPhaseDefinition.design_version_id == version.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert stored_names == {"Custom screening"}
+
+
 class TestCreatePhaseDefinition:
     """SubjectPhaseService.create_phase_definition()."""
 
@@ -83,12 +156,45 @@ class TestCreatePhaseDefinition:
 
         stored = (
             await db_session.execute(
-                select(SubjectPhaseDefinition).where(
-                    SubjectPhaseDefinition.id == phase.id
-                )
+                select(SubjectPhaseDefinition).where(SubjectPhaseDefinition.id == phase.id)
             )
         ).scalar_one()
         assert stored.name == "Screening"
+
+    async def test_complete_phase_accepts_ordered_visit_membership(self, service, db_session):
+        version = await _make_draft_version(db_session)
+        visit = VisitDefinition(
+            study_version_id=version.id,
+            name="End of study",
+            visit_number=99,
+            display_order=99,
+        )
+        db_session.add(visit)
+        await db_session.flush()
+
+        phase = await service.create_phase_definition(
+            db_session,
+            design_version_id=version.id,
+            name="Completed",
+            phase_type=SubjectPhaseType.complete,
+            display_order=9,
+            visit_definition_ids=[visit.id],
+        )
+
+        assert phase.visit_definition_ids == [visit.id]
+
+    async def test_arm_phase_still_rejects_visit_membership(self, service, db_session):
+        version = await _make_draft_version(db_session)
+
+        with pytest.raises(ValidationError, match="Arm subject phases"):
+            await service.create_phase_definition(
+                db_session,
+                design_version_id=version.id,
+                name="Arm selection",
+                phase_type=SubjectPhaseType.arm,
+                display_order=2,
+                visit_definition_ids=[uuid4()],
+            )
 
     async def test_rejects_duplicate_name_returning_duplicate(self, service, db_session):
         """A duplicate name is rejected and the error names the duplicate (R3.2)."""
@@ -175,9 +281,7 @@ class TestCreatePhaseDefinition:
             )
 
     @pytest.mark.parametrize("display_order", [0, 1000])
-    async def test_rejects_out_of_range_display_order(
-        self, service, db_session, display_order
-    ):
+    async def test_rejects_out_of_range_display_order(self, service, db_session, display_order):
         """Display order outside 1-999 is rejected (R3.1)."""
         version = await _make_draft_version(db_session)
 
@@ -190,9 +294,7 @@ class TestCreatePhaseDefinition:
             )
 
     @pytest.mark.parametrize("display_order", [1, 999])
-    async def test_accepts_display_order_bounds(
-        self, service, db_session, display_order
-    ):
+    async def test_accepts_display_order_bounds(self, service, db_session, display_order):
         """Display order at the 1 and 999 bounds is accepted (R3.1)."""
         version = await _make_draft_version(db_session)
 

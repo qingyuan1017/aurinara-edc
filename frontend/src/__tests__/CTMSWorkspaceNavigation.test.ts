@@ -37,7 +37,7 @@ describe('CTMS workspace navigation architecture', () => {
       'Financial Operations', 'Tasks & Issues', 'Entities', 'Documents', 'Reports', 'Administration',
     ])
     expect(study.map((section) => section.label)).toEqual([
-      'Overview', 'Study Management', 'Sites', 'Monitoring', 'Contracts', 'Financials', 'Tasks & Issues', 'Documents', 'Reports',
+      'Overview', 'Study Management', 'Sites', 'Monitoring', 'Operational Compliance', 'Contracts', 'Financials', 'Tasks & Issues', 'Documents', 'Reports',
     ])
     const globalItems = global.flatMap((section) => section.items).map((item) => item.label)
     expect(globalItems).toContain('CRA Calendar & Workload')
@@ -49,6 +49,8 @@ describe('CTMS workspace navigation architecture', () => {
     expect(globalItems).not.toContain('Organizations & Users')
     expect(globalItems).not.toContain('Contract Requests')
     expect(globalItems).not.toContain('Contract Templates')
+    expect(globalItems).not.toContain('Roles & Permissions')
+    expect(globalItems).not.toContain('Integrations')
     expect(globalItems).toEqual(expect.arrayContaining([
       'Overdue Visits', 'Reviews & Approvals', 'Payables & Settlement', 'Invoice Queue',
     ]))
@@ -56,6 +58,9 @@ describe('CTMS workspace navigation architecture', () => {
       'allMonitoringVisits', 'craCalendarWorkload', 'overdueVisits', 'crossStudyFindings',
       'allContracts', 'contractApprovals', 'expiringContracts', 'portfolioFinancialDashboard',
       'payablesSettlement', 'invoiceQueue', 'budgetFinancialReports',
+      'myWork', 'studyTemplates', 'feasibilityPipeline', 'crossStudySitePerformance',
+      'myTasks', 'allIssues', 'escalationsCapa', 'correctiveActionPlans',
+      'craAssignments', 'capacityUtilization', 'workflowRules', 'templates',
     ])
     expect(global.flatMap((section) => section.items).filter((item) => deliveredPortfolioIds.has(item.id)).every((item) => !item.planned)).toBe(true)
     const studyItems = study.flatMap((section) => section.items).map((item) => item.label)
@@ -63,6 +68,15 @@ describe('CTMS workspace navigation architecture', () => {
     expect(studyItems).toContain('Study Plans')
     expect(studyItems).not.toContain('Key Milestones')
     expect(studyItems).not.toContain('Milestones & Timeline')
+    expect(studyItems).toEqual(expect.arrayContaining(['RACT', 'Key Risk Indicators', 'Protocol Deviations', 'ICF Rollout', 'Tracking Logs']))
+    expect(studyItems).not.toContain('Sponsor Billing')
+    expect(studyItems).not.toContain('Financial Forecast')
+    const deliveredStudyIds = new Set([
+      'recentActivity', 'studyAmendments', 'studySiteList', 'siteSelectionFeasibility',
+      'siteStartupActivation', 'sitePerformance', 'siteCloseout', 'actionItems', 'capa',
+      'ract', 'kri', 'protocolDeviations', 'icfRollout', 'trackingLogs',
+    ])
+    expect(study.flatMap((section) => section.items).filter((item) => deliveredStudyIds.has(item.id)).every((item) => !item.planned)).toBe(true)
   })
 
   it('matches breadcrumbs and planned pages from the same navigation source', () => {

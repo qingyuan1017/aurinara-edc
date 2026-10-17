@@ -51,12 +51,15 @@ def _methods(paths: dict[str, dict], path: str) -> set[str]:
         (f"{API_V1}/designer/studies/{{study_id}}/versions", "post"),
         (f"{API_V1}/designer/studies/{{study_id}}/amend", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/publish", "post"),
+        (f"{API_V1}/designer/versions/{{version_id}}/abandon", "post"),
         # Form / field metadata authoring
         (f"{API_V1}/designer/studies/{{study_id}}/forms", "post"),
         (f"{API_V1}/designer/forms/{{form_id}}/fields", "post"),
         (f"{API_V1}/designer/edit-checks/{{edit_check_id}}", "delete"),
         # Edit-check authoring and design-time testing
         (f"{API_V1}/designer/edit-checks/{{edit_check_id}}/test", "post"),
+        (f"{API_V1}/designer/edit-checks/{{edit_check_id}}/retest", "post"),
+        (f"{API_V1}/designer/studies/{{study_id}}/edit-checks/retest-all", "post"),
         # Additional designer definition surfaces
         (f"{API_V1}/designer/studies/{{study_id}}/codelists", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/subject-phases", "post"),
@@ -69,6 +72,7 @@ def _methods(paths: dict[str, dict], path: str) -> set[str]:
         (f"{API_V1}/designer/versions/{{version_id}}/arms", "post"),
         (f"{API_V1}/designer/versions/{{version_id}}/arms", "get"),
         (f"{API_V1}/designer/versions/{{version_id}}/arms/{{arm_id}}", "patch"),
+        (f"{API_V1}/designer/versions/{{version_id}}/arms/{{arm_id}}", "delete"),
         # Form / visit dependency authoring
         (f"{API_V1}/designer/forms/{{form_id}}/dependencies", "post"),
         (f"{API_V1}/designer/forms/{{form_id}}/dependencies", "get"),

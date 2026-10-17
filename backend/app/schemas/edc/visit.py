@@ -59,9 +59,29 @@ class UnscheduledVisitCreate(BaseCreateSchema):
     """Request body for creating an unscheduled visit instance (Requirement 8.4)."""
 
     name: str = Field(..., min_length=1, max_length=255)
-    visit_date: date | None = Field(
-        None, description="Optional date of the unscheduled visit"
-    )
+    visit_date: date | None = Field(None, description="Optional date of the unscheduled visit")
+
+
+class AddableVisitCreate(BaseCreateSchema):
+    """Request body for adding another instance of a Designer-approved visit."""
+
+    visit_definition_id: UUID
+    visit_date: date | None = Field(None, description="Optional date of the added visit")
+
+
+class VisitAddedInErrorRequest(BaseCreateSchema):
+    """Required justification for voiding a user-added visit occurrence."""
+
+    reason: str = Field(..., min_length=1, max_length=1000)
+
+
+class AddableVisitDefinitionResponse(BaseSchema):
+    """A real visit leaf that the bound design permits EDC users to add."""
+
+    id: UUID
+    name: str
+    visit_type: str
+    definition_kind: str
 
 
 class VisitInstanceResponse(BaseSchema):
@@ -74,12 +94,16 @@ class VisitInstanceResponse(BaseSchema):
     visit_date: date | None = None
     window_status: str | None = None
     status: VisitInstanceStatus
+    is_user_added: bool = False
     created_at: UtcDatetime
     updated_at: UtcDatetime | None = None
 
 
 __all__ = [
+    "AddableVisitCreate",
+    "AddableVisitDefinitionResponse",
     "UnscheduledVisitCreate",
+    "VisitAddedInErrorRequest",
     "VisitDateRecord",
     "VisitDefinitionCreate",
     "VisitDefinitionResponse",

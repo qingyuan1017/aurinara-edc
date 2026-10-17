@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -67,6 +68,12 @@ class CodingSetting(Base):
     # Coding dictionary reference and optional rule (R4.8)
     dictionary_reference: Mapped[str] = mapped_column(String(255), nullable=False)
     coding_rule: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dictionary_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    coding_level: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    locale: Mapped[str | None] = mapped_column(String(35), nullable=True)
+    priority: Mapped[int] = mapped_column(nullable=False, default=100)
+    approval_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    auto_approval: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Timestamps (timezone-aware)
     created_at: Mapped[datetime] = mapped_column(

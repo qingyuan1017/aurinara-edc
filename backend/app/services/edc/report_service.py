@@ -93,9 +93,7 @@ class ReportService:
         universe = list(result.scalars().all())
         return self._permissions.filter_studies(user, universe)
 
-    def _empty_meta(
-        self, report_key: str, report_group: str, study_ids: list[UUID]
-    ) -> ReportMeta:
+    def _empty_meta(self, report_key: str, report_group: str, study_ids: list[UUID]) -> ReportMeta:
         return ReportMeta(
             report_key=report_key,
             report_group=report_group,

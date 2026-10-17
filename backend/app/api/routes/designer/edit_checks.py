@@ -31,8 +31,12 @@ from app.models.edc.form_metadata import FormDefinition
 from app.models.edc.subject import Subject
 from app.models.shared.identity import User
 from app.schemas.edc.edit_check import (
+    EditCheckBulkRetestRequest,
+    EditCheckBulkRetestResponse,
     EditCheckCreate,
     EditCheckResponse,
+    EditCheckRetestRequest,
+    EditCheckRetestResponse,
     EditCheckRunRequest,
     EditCheckRunResponse,
     EditCheckTestRequest,
@@ -228,6 +232,84 @@ async def test_edit_check(
         matched=result.matched,
         passed=result.passed,
         persisted=result.persisted,
+    )
+
+
+@router.post("/{edit_check_id}/retest", response_model=EditCheckRetestResponse)
+async def retest_edit_check(
+    edit_check_id: UUID,
+    body: EditCheckRetestRequest,
+    session: DbSession,
+    current_user: CurrentUser,
+    permission_service: PermissionSvc,
+) -> EditCheckRetestResponse:
+    """Clear a draft rule's retesting hold after an audited evidence check."""
+
+    check, version = await _get_check_version(session, edit_check_id)
+    _require_access(current_user, permission_service, version.study_id)
+    _require_access(
+        current_user,
+        permission_service,
+        version.study_id,
+        permission="designer.editcheck.test",
+    )
+    result = await edit_check_service.retest_edit_check(
+        session,
+        version,
+        check,
+        sample_data=body.sample_data,
+        expected_matched=body.expected_matched,
+        review_note=body.review_note,
+        actor_id=current_user.id,
+    )
+    return EditCheckRetestResponse(
+        edit_check_id=check.id,
+        outcome=result.matched,
+        matched=result.matched,
+        passed=result.passed,
+        persisted=result.persisted,
+        needs_retesting=check.needs_retesting,
+    )
+
+
+@study_router.post(
+    "/{study_id}/edit-checks/retest-all",
+    response_model=EditCheckBulkRetestResponse,
+)
+async def bulk_retest_edit_checks(
+    study_id: UUID,
+    body: EditCheckBulkRetestRequest,
+    session: DbSession,
+    current_user: CurrentUser,
+    permission_service: PermissionSvc,
+    study_version_id: Annotated[
+        UUID | None,
+        Query(description="Target draft version; defaults to the latest draft."),
+    ] = None,
+) -> EditCheckBulkRetestResponse:
+    """Bulk-clear retesting holds after rule validation and explicit attestation."""
+
+    await study_service.get_study(session, study_id)
+    _require_access(current_user, permission_service, study_id)
+    _require_access(
+        current_user,
+        permission_service,
+        study_id,
+        permission="designer.editcheck.test",
+    )
+    version = await _get_version(session, study_id, study_version_id)
+    checks = await edit_check_service.list_edit_checks(session, version.id)
+    reviewed_count = await edit_check_service.bulk_retest_edit_checks(
+        session,
+        version,
+        checks,
+        review_note=body.review_note,
+        actor_id=current_user.id,
+    )
+    return EditCheckBulkRetestResponse(
+        study_version_id=version.id,
+        reviewed_count=reviewed_count,
+        remaining_count=0,
     )
 
 

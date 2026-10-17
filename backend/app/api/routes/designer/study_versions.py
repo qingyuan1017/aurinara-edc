@@ -32,6 +32,7 @@ from app.models.shared.identity import User
 from app.schemas.designer.study_version import (
     DesignValidationResponse,
     StudyAmendmentCreate,
+    StudyVersionAbandon,
     StudyVersionCreate,
     StudyVersionResponse,
 )
@@ -128,6 +129,30 @@ async def publish_version(
     return StudyVersionResponse.model_validate(published)
 
 
+@versions_router.post("/{version_id}/abandon", response_model=StudyVersionResponse)
+async def abandon_version(
+    version_id: UUID,
+    body: StudyVersionAbandon,
+    session: DbSession,
+    current_user: CurrentUser,
+    permission_service: PermissionSvc,
+) -> StudyVersionResponse:
+    """Abandon a draft version while retaining its definitions and audit history."""
+    version = await study_version_service.get_version(session, version_id)
+    permission_service.require(
+        current_user,
+        "designer.study_version.amend",
+        study_id=version.study_id,
+    )
+    abandoned = await study_version_service.abandon_draft(
+        session=session,
+        version=version,
+        reason=body.reason,
+        actor_id=current_user.id,
+    )
+    return StudyVersionResponse.model_validate(abandoned)
+
+
 @versions_router.get("/{version_id}/validation", response_model=DesignValidationResponse)
 async def validate_version_for_publication(
     version_id: UUID,
@@ -144,8 +169,6 @@ async def validate_version_for_publication(
         study_id=version.study_id,
     )
     return await design_validation_service.validate(session, version)
-
-
 
 
 __all__ = ["study_versions_router", "versions_router"]

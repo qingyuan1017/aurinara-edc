@@ -26,6 +26,10 @@ from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
 from app.schemas.edc.study import StudyCreate
 from app.schemas.shared.base import PaginatedResponse
+from app.services.designer.subject_phase_service import (
+    SubjectPhaseService,
+    subject_phase_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +46,9 @@ _LEGAL_TRANSITIONS: dict[StudyStatus, set[StudyStatus]] = {
 
 class StudyService:
     """Manages study creation, retrieval, listing, and status transitions."""
+
+    def __init__(self, phase_service: SubjectPhaseService | None = None) -> None:
+        self._phase_service = phase_service or subject_phase_service
 
     # ------------------------------------------------------------------
     # Create (Req 4.1, 4.2, 4.5)
@@ -115,6 +122,13 @@ class StudyService:
         )
         session.add(version)
         await session.flush()
+
+        await self._phase_service.seed_default_phase_flow(
+            session,
+            design_version_id=version.id,
+            study_id=study.id,
+            actor_id=actor_id,
+        )
 
         # Write Audit_Event (Req 4.5)
         await audit_service.record(

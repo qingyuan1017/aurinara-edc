@@ -16,7 +16,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import PaginationParams, get_db, require_permission
+from app.api.deps import (
+    PaginationParams,
+    get_current_user,
+    get_db,
+    get_permission_service,
+)
 from app.core.audit import audit_service
 from app.models.shared.identity import User
 from app.schemas.edc.site import (
@@ -26,12 +31,32 @@ from app.schemas.edc.site import (
     SiteUserResponse,
 )
 from app.schemas.shared.base import PaginatedResponse
+from app.services.edc.scope_service import edc_scope_service
 from app.services.edc.site_service import site_service
+from app.services.shared.permission_service import PermissionService
 
 logger = logging.getLogger(__name__)
 
 # Reusable annotated dependency for DB session
 DbSession = Annotated[AsyncSession, Depends(get_db)]
+
+
+async def _authorized_site(
+    session: AsyncSession,
+    site_id: UUID,
+    current_user: User,
+    permission_service: PermissionService,
+    permission: str,
+):
+    site = await site_service.get_site(session, site_id)
+    edc_scope_service.require_scope(
+        current_user,
+        permission_service,
+        permission,
+        study_id=site.study_id,
+        site_id=site.id,
+    )
+    return site
 
 
 # ---------------------------------------------------------------------------
@@ -45,15 +70,24 @@ study_sites_router = APIRouter(prefix="/studies", tags=["sites"])
 async def list_sites(
     study_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("site.read"))],
+    current_user: Annotated[User, Depends(get_current_user)],
     pagination: Annotated[PaginationParams, Depends()],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> PaginatedResponse[SiteResponse]:
     """List sites for a study (paginated).
 
     Permission: site.read
     Requirement 21.2: Paginated response envelope.
     """
-    result = await site_service.list_sites(session, study_id, pagination)
+    authorized_site_ids = edc_scope_service.authorized_site_ids(
+        current_user, permission_service, "site.read", study_id
+    )
+    result = await site_service.list_sites(
+        session,
+        study_id,
+        pagination,
+        authorized_site_ids=authorized_site_ids,
+    )
     return PaginatedResponse[SiteResponse](
         items=[SiteResponse.model_validate(s) for s in result.items],
         page=result.page,
@@ -73,13 +107,16 @@ router = APIRouter(prefix="/sites", tags=["sites"])
 async def get_site(
     site_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("site.read"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> SiteResponse:
     """Get a site by ID.
 
     Permission: site.read
     """
-    site = await site_service.get_site(session, site_id)
+    site = await _authorized_site(
+        session, site_id, current_user, permission_service, "site.read"
+    )
     return SiteResponse.model_validate(site)
 
 
@@ -88,14 +125,17 @@ async def update_site(
     site_id: UUID,
     body: SiteUpdate,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("site.manage"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> SiteResponse:
     """Update site metadata (partial PATCH).
 
     Permission: site.manage
     Requirement 6.1: Site metadata changes write Audit_Events.
     """
-    site = await site_service.get_site(session, site_id)
+    site = await _authorized_site(
+        session, site_id, current_user, permission_service, "site.manage"
+    )
 
     update_data = body.model_dump(exclude_unset=True)
     if not update_data:
@@ -130,14 +170,17 @@ async def update_site(
 async def deactivate_site(
     site_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("site.manage"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> SiteResponse:
     """Deactivate a site (set status inactive, retain the record).
 
     Permission: site.manage
     Requirement 6.4: Deactivation retains the record.
     """
-    site = await site_service.get_site(session, site_id)
+    site = await _authorized_site(
+        session, site_id, current_user, permission_service, "site.manage"
+    )
     deactivated = await site_service.deactivate_site(
         session=session, site=site, actor_id=current_user.id
     )
@@ -149,14 +192,17 @@ async def assign_user_to_site(
     site_id: UUID,
     body: SiteUserAssign,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("site.manage"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> SiteUserResponse:
     """Assign a user to a site within its study.
 
     Permission: site.manage
     Requirement 6.5: Record site-level user assignment.
     """
-    site = await site_service.get_site(session, site_id)
+    site = await _authorized_site(
+        session, site_id, current_user, permission_service, "site.manage"
+    )
     assignment = await site_service.assign_user(
         session=session,
         study_id=site.study_id,

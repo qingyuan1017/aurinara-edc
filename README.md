@@ -1,10 +1,28 @@
 # Clinical EDC System - AWS Kiro Implementation Package
 
+Production AWS deployment as an Aurinara Platform consumer is documented in
+[`docs/aws-deployment.md`](docs/aws-deployment.md).
+
 This package contains implementation-ready requirements for building a clinical Electronic Data Capture system using:
 
 - Backend: FastAPI, Python, PostgreSQL, SQLAlchemy, Alembic
 - Frontend: React, TypeScript, Vite, shadcn/ui, Tailwind CSS
 - Optional infrastructure: AWS ECS/Lambda, RDS PostgreSQL, S3, Cognito, CloudWatch
+
+## Central Repository
+
+Repository navigation calls Aurinara Platform directly with the signed-in user's
+token, so results are filtered by the source product's study/site permission
+envelope. “Attach to study” creates a new EDC attachment and active Platform
+reference for the selected immutable version; it does not copy bytes or replace an
+existing attachment. Set `VITE_PLATFORM_API_BASE_URL` to the Platform origin.
+Platform-only attachments have a null legacy `storage_key` and never fall back to
+local storage.
+
+The shared folder taxonomy is `Study / Module / Solution / Purpose / File`.
+Clinical attachments publish under an EDC module and Data Capture solution, while
+CTMS and PV entries retain their own module and workflow solution. The folders are
+organizational and never replace parent-resource authorization.
 
 The system is intended for clinical trial data collection, review, query management, SDV, audit trail, data locking, and export.
 

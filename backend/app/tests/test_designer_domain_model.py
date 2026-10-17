@@ -24,7 +24,6 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -33,13 +32,11 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.database import Base
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
-from app.models.designer.arm_definition import ArmDefinition
 from app.models.designer.form_metadata import FormDefinition
 from app.models.designer.study_version import StudyVersion, StudyVersionStatus
 from app.models.designer.subject_phase_definition import SubjectPhaseType
 from app.models.designer.visit import VisitDefinition
 from app.models.edc.study import Study, StudyStatus
-from app.schemas.designer.arm_definition import ArmDefinitionUpdate
 from app.schemas.designer.form_metadata import (
     FieldDefinitionCreate,
     FieldDefinitionUpdate,
@@ -515,153 +512,55 @@ async def test_folder_cycle_membership_and_soa_real_visit_guard():
 
 
 # ---------------------------------------------------------------------------
-# arm_service — arm/visit mapping and same-version guard
+# arm_service / schedule_of_assessment_service — independent arm schedules
 # ---------------------------------------------------------------------------
 
 
-async def test_arm_attaches_member_visits_and_dedupes():
+async def test_arm_is_simple_and_owns_an_independent_schedule():
     engine, factory = await _session_factory()
     try:
         async with factory() as session:
             version = await _make_version(session)
-            v1 = await _make_visit(session, version.id, 1)
-            v2 = await _make_visit(
-                session,
-                version.id,
-                2,
-                definition_kind="cycle_visit",
-            )
+            visit = await _make_visit(session, version.id, 1)
             arm = await ArmService().create_arm_definition(
                 session,
                 design_version_id=version.id,
                 name="Arm A",
                 display_order=1,
-                visit_definition_ids=[v1.id, v2.id, v1.id],  # duplicate v1
                 actor_id=uuid.uuid4(),
             )
-            assert {v.id for v in arm.visits} == {v1.id, v2.id}
-
-            arms = await ArmService().list_arm_definitions(session, version.id)
-            assert len(arms) == 1
-            assert {v.id for v in arms[0].visits} == {v1.id, v2.id}
-    finally:
-        await engine.dispose()
-
-
-async def test_arm_rejects_folder_and_cycle_container_membership():
-    engine, factory = await _session_factory()
-    try:
-        async with factory() as session:
-            version = await _make_version(session)
-            folder = await _make_visit(
+            soa_service = ScheduleOfAssessmentService()
+            common = await soa_service.create_schedule_of_assessment(
                 session,
-                version.id,
-                1,
-                visit_type="folder",
-                definition_kind="folder",
-            )
-            cycle = await _make_visit(
-                session,
-                version.id,
-                2,
-                visit_type="cycle",
-                definition_kind="cycle",
-            )
-
-            with pytest.raises(ValidationError) as exc:
-                await ArmService().create_arm_definition(
-                    session,
-                    design_version_id=version.id,
-                    name="Arm A",
-                    display_order=1,
-                    visit_definition_ids=[folder.id, cycle.id],
-                    actor_id=uuid.uuid4(),
-                )
-
-            assert set(exc.value.details["container_visit_definition_ids"]) == {
-                str(folder.id),
-                str(cycle.id),
-            }
-    finally:
-        await engine.dispose()
-
-
-async def test_arm_update_replaces_legacy_cycle_container_with_real_visit_leaf():
-    engine, factory = await _session_factory()
-    try:
-        async with factory() as session:
-            version = await _make_version(session)
-            cycle = await _make_visit(
-                session,
-                version.id,
-                1,
-                visit_type="cycle",
-                definition_kind="cycle",
-            )
-            cycle_visit = await _make_visit(
-                session,
-                version.id,
-                2,
-                definition_kind="cycle_visit",
-            )
-            arm = ArmDefinition(
-                study_version_id=version.id,
-                name="Legacy arm",
-                display_order=1,
-            )
-            arm.visits = [cycle]
-            session.add(arm)
-            await session.flush()
-
-            updated = await ArmService().update_arm_definition(
-                session,
-                arm.id,
-                ArmDefinitionUpdate(visit_definition_ids=[cycle_visit.id]),
+                design_version_id=version.id,
+                entries=[
+                    ScheduleEntryInput(
+                        procedure_name="Consent",
+                        visit_definition_id=visit.id,
+                    )
+                ],
                 actor_id=uuid.uuid4(),
             )
-
-            assert [visit.id for visit in updated.visits] == [cycle_visit.id]
-            assert updated.updated_at is not None
-    finally:
-        await engine.dispose()
-
-
-async def test_arm_rejects_missing_visit_id():
-    engine, factory = await _session_factory()
-    try:
-        async with factory() as session:
-            version = await _make_version(session)
-            with pytest.raises(ValidationError) as exc:
-                await ArmService().create_arm_definition(
-                    session,
-                    design_version_id=version.id,
-                    name="Arm A",
-                    display_order=1,
-                    visit_definition_ids=[uuid.uuid4()],
-                    actor_id=uuid.uuid4(),
-                )
-            assert "missing_visit_definition_ids" in exc.value.details
-    finally:
-        await engine.dispose()
-
-
-async def test_arm_rejects_cross_version_visit():
-    engine, factory = await _session_factory()
-    try:
-        async with factory() as session:
-            version_a = await _make_version(session)
-            version_b = await _make_version(session)
-            other_visit = await _make_visit(session, version_b.id, 1)
-            with pytest.raises(ValidationError) as exc:
-                await ArmService().create_arm_definition(
-                    session,
-                    design_version_id=version_a.id,
-                    name="Arm A",
-                    display_order=1,
-                    visit_definition_ids=[other_visit.id],
-                    actor_id=uuid.uuid4(),
-                )
-            assert str(other_visit.id) in exc.value.details["cross_version_visit_ids"]
+            schedule = await soa_service.create_schedule_of_assessment(
+                session,
+                design_version_id=version.id,
+                arm_definition_id=arm.id,
+                entries=[
+                    ScheduleEntryInput(
+                        procedure_name="Vitals",
+                        visit_definition_id=visit.id,
+                    )
+                ],
+                actor_id=uuid.uuid4(),
+            )
+            assert schedule.arm_definition_id == arm.id
+            assert schedule.entries[0].visit_definition_id == visit.id
+            assert (
+                await soa_service.get_schedule_of_assessment(session, version.id)
+            ).id == common.id
+            assert (
+                await soa_service.get_schedule_of_assessment(session, version.id, arm.id)
+            ).id == schedule.id
     finally:
         await engine.dispose()
 
@@ -851,9 +750,10 @@ async def test_raw_dataset_variables_include_fixed_and_special_field_companions(
             raw_service = RawDataVariableService()
             datasets = await raw_service.build_dataset_definitions(session, version.id)
             names = [variable.name for variable in datasets[0].variables]
-            assert names[:12] == [
+            assert names[:13] == [
                 "PROTOCOL",
                 "SITE",
+                "SUBJID",
                 "SUBJINIT",
                 "VISIT",
                 "FORM",
@@ -985,37 +885,5 @@ async def test_visit_dependency_cross_version_rejected():
                     visit_definition_id=va.id,
                     depends_on_visit_definition_id=va.id,
                 )
-    finally:
-        await engine.dispose()
-
-
-async def test_arm_visits_cascade_delete_on_visit_removal():
-    """Deleting a member visit prunes the arm_definition_visits edge (ON DELETE
-    CASCADE), so the arm no longer lists it."""
-    engine, factory = await _session_factory()
-    try:
-        async with factory() as session:
-            version = await _make_version(session)
-            v1 = await _make_visit(session, version.id, 1)
-            arm = await ArmService().create_arm_definition(
-                session,
-                design_version_id=version.id,
-                name="Arm A",
-                display_order=1,
-                visit_definition_ids=[v1.id],
-                actor_id=uuid.uuid4(),
-            )
-            arm_id = arm.id
-            await session.commit()
-
-        async with factory() as session:
-            v1_db = await session.get(VisitDefinition, v1.id)
-            await session.delete(v1_db)
-            await session.commit()
-
-        async with factory() as read:
-            result = await read.execute(select(ArmDefinition).where(ArmDefinition.id == arm_id))
-            arm_db = result.scalars().one()
-            assert [v.id for v in arm_db.visits] == []
     finally:
         await engine.dispose()

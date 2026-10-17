@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PaginationParams, get_db, require_ctms_permission
+from app.core.exceptions import BusinessRuleError
 from app.core.request_context import get_correlation_id
 from app.models.ctms.study_operation import StudyOperationRecord, StudyOperationResource
 from app.models.shared.identity import User
@@ -23,6 +24,21 @@ router = APIRouter(tags=["ctms-study-operations"])
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 ReadGuard = Annotated[User, Depends(require_ctms_permission("ctms.operational-data-read"))]
 WriteGuard = Annotated[User, Depends(require_ctms_permission("ctms.operational-study-management"))]
+DEDICATED_RESOURCES = {
+    StudyOperationResource.RACT,
+    StudyOperationResource.KRI,
+    StudyOperationResource.PROTOCOL_DEVIATION,
+    StudyOperationResource.ICF,
+    StudyOperationResource.TRACKING_LOG,
+}
+
+
+def _require_legacy_write_compatibility(resource: StudyOperationResource) -> None:
+    if resource in DEDICATED_RESOURCES:
+        raise BusinessRuleError(
+            "This resource now uses its dedicated versioned study workspace service",
+            {"reason": "DEDICATED_WORKFLOW_REQUIRED", "resource": resource.value},
+        )
 
 
 @router.get(
@@ -86,6 +102,7 @@ async def create_study_operation_record(
     session: DbSession,
     current_user: WriteGuard,
 ):
+    _require_legacy_write_compatibility(resource)
     record = await study_operation_service.create(
         session,
         study_id,
@@ -125,6 +142,7 @@ async def update_study_operation_record(
     session: DbSession,
     current_user: WriteGuard,
 ):
+    _require_legacy_write_compatibility(resource)
     return StudyOperationResponse.model_validate(
         await study_operation_service.update(
             session,

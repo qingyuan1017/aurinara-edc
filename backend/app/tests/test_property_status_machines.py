@@ -28,7 +28,7 @@ from hypothesis import strategies as st
 
 from app.core.exceptions import BusinessRuleError
 from app.models.edc.query import Query, QueryStatus
-from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
+from app.models.edc.study import Study, StudyStatus
 from app.models.edc.subject import Subject, SubjectStatus
 from app.models.shared.export import Export, ExportStatus
 from app.services.edc.query_service import QueryService
@@ -50,24 +50,39 @@ STUDY_LEGAL_TRANSITIONS: dict[StudyStatus, set[StudyStatus]] = {
 }
 
 SUBJECT_LEGAL_TRANSITIONS: dict[SubjectStatus, set[SubjectStatus]] = {
-    SubjectStatus.screening: {SubjectStatus.screen_failed, SubjectStatus.enrolled},
+    SubjectStatus.screening: {
+        SubjectStatus.screen_failed,
+        SubjectStatus.enrolled,
+        SubjectStatus.inactive,
+        SubjectStatus.discontinued,
+    },
     SubjectStatus.enrolled: {
         SubjectStatus.randomized,
         SubjectStatus.withdrawn,
         SubjectStatus.early_terminated,
+        SubjectStatus.inactive,
+        SubjectStatus.discontinued,
     },
-    SubjectStatus.randomized: {SubjectStatus.on_treatment},
+    SubjectStatus.randomized: {
+        SubjectStatus.on_treatment,
+        SubjectStatus.inactive,
+        SubjectStatus.discontinued,
+    },
     SubjectStatus.on_treatment: {
         SubjectStatus.completed,
         SubjectStatus.early_terminated,
         SubjectStatus.lost_to_follow_up,
         SubjectStatus.withdrawn,
+        SubjectStatus.inactive,
+        SubjectStatus.discontinued,
     },
     SubjectStatus.screen_failed: set(),
     SubjectStatus.completed: set(),
     SubjectStatus.early_terminated: set(),
     SubjectStatus.lost_to_follow_up: set(),
     SubjectStatus.withdrawn: set(),
+    SubjectStatus.inactive: {SubjectStatus.discontinued},
+    SubjectStatus.discontinued: set(),
 }
 
 # Query transitions are action-based: respond, close, reopen, cancel
@@ -299,7 +314,7 @@ class TestSubjectStatusMachineProperty:
         with patch("app.services.edc.subject_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             result = await service.transition_status(
-                session, subject, target_status, actor_id
+                session, subject, target_status, actor_id, reason="Property transition"
             )
 
         assert result.status == target_status

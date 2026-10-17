@@ -301,6 +301,8 @@ class ExportService:
         session: AsyncSession,
         study_id: UUID,
         pagination: PaginationParams | None = None,
+        *,
+        authorized_site_ids: set[UUID] | None = None,
     ) -> PaginatedResponse:
         """List export jobs for a study with pagination.
 
@@ -317,6 +319,12 @@ class ExportService:
             .where(Export.study_id == study_id)
             .order_by(Export.created_at.desc())
         )
+        if authorized_site_ids is not None:
+            stmt = stmt.where(
+                Export.filters["site_id"].as_string().in_(
+                    [str(site_id) for site_id in authorized_site_ids]
+                )
+            )
 
         if pagination is None:
             pagination = PaginationParams(page=1, page_size=25)

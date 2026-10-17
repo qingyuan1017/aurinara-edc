@@ -20,6 +20,7 @@ from app.main import create_app
 from app.models.designer.study_version import StudyVersion, StudyVersionStatus
 from app.models.designer.subject_phase_definition import SubjectPhaseDefinition
 from app.models.designer.subject_phase_transition import SubjectPhaseTransition
+from app.models.designer.visit import VisitDefinition
 from app.models.edc.study import Study, StudyStatus
 from app.models.shared.audit import AuditEvent
 from app.models.shared.identity import (
@@ -337,17 +338,30 @@ class TestSoAIdempotency:
             ScheduleOfAssessmentEntry,
         )
 
+        visits = [
+            VisitDefinition(
+                study_version_id=version.id,
+                name=f"Visit {index}",
+                visit_number=index,
+                display_order=index,
+                is_required=True,
+            )
+            for index in range(1, 4)
+        ]
+        db_session.add_all(visits)
+        await db_session.flush()
+
         first = await schedule_of_assessment_service.create_schedule_of_assessment(
             db_session,
             design_version_id=version.id,
-            entries=[ScheduleEntryInput(procedure_name="Vitals", visit_definition_id=uuid.uuid4())],
+            entries=[ScheduleEntryInput(procedure_name="Vitals", visit_definition_id=visits[0].id)],
         )
         second = await schedule_of_assessment_service.create_schedule_of_assessment(
             db_session,
             design_version_id=version.id,
             entries=[
-                ScheduleEntryInput(procedure_name="Labs", visit_definition_id=uuid.uuid4()),
-                ScheduleEntryInput(procedure_name="ECG", visit_definition_id=uuid.uuid4()),
+                ScheduleEntryInput(procedure_name="Labs", visit_definition_id=visits[1].id),
+                ScheduleEntryInput(procedure_name="ECG", visit_definition_id=visits[2].id),
             ],
         )
 
@@ -401,10 +415,20 @@ class TestSoAIdempotency:
         version = await _make_draft_version(db_session)
         from app.models.designer.schedule_of_assessment import ScheduleOfAssessment
 
+        visit = VisitDefinition(
+            study_version_id=version.id,
+            name="Visit 1",
+            visit_number=1,
+            display_order=1,
+            is_required=True,
+        )
+        db_session.add(visit)
+        await db_session.flush()
+
         first = await schedule_of_assessment_service.create_schedule_of_assessment(
             db_session,
             design_version_id=version.id,
-            entries=[ScheduleEntryInput(procedure_name="Vitals", visit_definition_id=uuid.uuid4())],
+            entries=[ScheduleEntryInput(procedure_name="Vitals", visit_definition_id=visit.id)],
         )
 
         # Invalid: entry maps neither a form nor a procedure.
@@ -412,7 +436,7 @@ class TestSoAIdempotency:
             await schedule_of_assessment_service.create_schedule_of_assessment(
                 db_session,
                 design_version_id=version.id,
-                entries=[ScheduleEntryInput(visit_definition_id=uuid.uuid4())],
+                entries=[ScheduleEntryInput(visit_definition_id=visit.id)],
             )
 
         live = (

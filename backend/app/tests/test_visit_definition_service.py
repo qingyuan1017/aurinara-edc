@@ -58,9 +58,7 @@ def _make_version(
 
 
 class TestDefineVisit:
-    async def test_define_visit_persists_definition(
-        self, service, mock_session, actor_id
-    ):
+    async def test_define_visit_persists_definition(self, service, mock_session, actor_id):
         version = _make_version(StudyVersionStatus.draft)
         data = VisitDefinitionCreate(
             name="Screening",
@@ -73,13 +71,9 @@ class TestDefineVisit:
             is_required=True,
         )
 
-        with patch(
-            "app.services.designer.visit_definition_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.designer.visit_definition_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            definition = await service.define_visit(
-                mock_session, version, data, actor_id
-            )
+            definition = await service.define_visit(mock_session, version, data, actor_id)
 
         assert definition.study_version_id == version.id
         assert definition.name == "Screening"
@@ -89,11 +83,40 @@ class TestDefineVisit:
         assert definition.window_after == 3
         assert definition.display_order == 1
         assert definition.is_required is True
+        assert definition.addable is False
         mock_session.add.assert_called_once()
 
-    async def test_define_visit_blocked_on_published_version(
+    async def test_define_visit_persists_addable_for_real_visit(
         self, service, mock_session, actor_id
     ):
+        version = _make_version(StudyVersionStatus.draft)
+        data = VisitDefinitionCreate(
+            name="Optional follow-up",
+            visit_number=2,
+            visit_type="unscheduled",
+            display_order=2,
+            addable=True,
+        )
+
+        with patch("app.services.designer.visit_definition_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            definition = await service.define_visit(mock_session, version, data, actor_id)
+
+        assert definition.definition_kind == "visit"
+        assert definition.addable is True
+
+    @pytest.mark.parametrize("definition_kind", ["folder", "cycle"])
+    def test_container_cannot_be_addable(self, definition_kind):
+        with pytest.raises(ValueError, match="Only a visit can be addable"):
+            VisitDefinitionCreate(
+                name="Container",
+                definition_kind=definition_kind,
+                visit_type="cycle" if definition_kind == "cycle" else "common",
+                display_order=1,
+                addable=True,
+            )
+
+    async def test_define_visit_blocked_on_published_version(self, service, mock_session, actor_id):
         version = _make_version(StudyVersionStatus.published)
         data = VisitDefinitionCreate(
             name="Visit 1",
@@ -107,9 +130,7 @@ class TestDefineVisit:
 
         mock_session.add.assert_not_called()
 
-    async def test_define_visit_writes_audit_event(
-        self, service, mock_session, actor_id
-    ):
+    async def test_define_visit_writes_audit_event(self, service, mock_session, actor_id):
         version = _make_version(StudyVersionStatus.draft)
         data = VisitDefinitionCreate(
             name="Visit 1",
@@ -118,9 +139,7 @@ class TestDefineVisit:
             display_order=1,
         )
 
-        with patch(
-            "app.services.designer.visit_definition_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.designer.visit_definition_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
             await service.define_visit(mock_session, version, data, actor_id)
 
@@ -135,9 +154,7 @@ class TestDefineVisit:
 class TestWindowValidation:
     """Requirement 4.3 — reject an inverted window, identifying it in the error."""
 
-    async def test_equal_window_bounds_are_accepted(
-        self, service, mock_session, actor_id
-    ):
+    async def test_equal_window_bounds_are_accepted(self, service, mock_session, actor_id):
         # lower edge == upper edge at the target day (both bounds zero).
         version = _make_version(StudyVersionStatus.draft)
         data = VisitDefinitionCreate(
@@ -150,13 +167,9 @@ class TestWindowValidation:
             display_order=1,
         )
 
-        with patch(
-            "app.services.designer.visit_definition_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.designer.visit_definition_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            definition = await service.define_visit(
-                mock_session, version, data, actor_id
-            )
+            definition = await service.define_visit(mock_session, version, data, actor_id)
 
         assert definition.window_before == 0
         assert definition.window_after == 0
@@ -175,13 +188,9 @@ class TestWindowValidation:
             display_order=2,
         )
 
-        with patch(
-            "app.services.designer.visit_definition_service.audit_service"
-        ) as mock_audit:
+        with patch("app.services.designer.visit_definition_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            definition = await service.define_visit(
-                mock_session, version, data, actor_id
-            )
+            definition = await service.define_visit(mock_session, version, data, actor_id)
 
         assert definition.window_before == 3
         assert definition.window_after == 5

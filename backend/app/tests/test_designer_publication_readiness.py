@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.api.routes.designer.study_versions import (
+    abandon_version,
     publish_version,
     validate_version_for_publication,
 )
@@ -23,10 +24,16 @@ from app.models.designer.schedule_of_assessment import (
     ScheduleOfAssessmentEntry,
 )
 from app.models.designer.study_version import StudyVersion, StudyVersionStatus
+from app.models.designer.subject_phase_definition import (
+    SubjectPhaseDefinition,
+    SubjectPhaseType,
+)
 from app.models.designer.visit import VisitDefinition
 from app.models.edc.study import Study, StudyStatus
+from app.schemas.designer.study_version import StudyVersionAbandon
 from app.services.designer.design_clone_service import DesignCloneService
 from app.services.designer.design_validation_service import DesignValidationService
+from app.services.designer.subject_phase_service import subject_phase_service
 
 pytestmark = pytest.mark.anyio
 
@@ -64,7 +71,12 @@ async def _make_version(
     return version
 
 
-async def _add_minimal_complete_design(session: AsyncSession, version: StudyVersion) -> None:
+async def _add_minimal_complete_design(
+    session: AsyncSession,
+    version: StudyVersion,
+    *,
+    seed_subject_phases: bool = True,
+) -> None:
     codelist = Codelist(study_version_id=version.id, name="Yes / No", code="YN")
     visit = VisitDefinition(
         study_version_id=version.id,
@@ -122,6 +134,12 @@ async def _add_minimal_complete_design(session: AsyncSession, version: StudyVers
         )
     )
     await session.flush()
+    if seed_subject_phases:
+        await subject_phase_service.seed_default_phase_flow(
+            session,
+            design_version_id=version.id,
+            study_id=version.study_id,
+        )
 
 
 async def test_readiness_blocks_empty_design_with_actionable_issues():
@@ -136,6 +154,7 @@ async def test_readiness_blocks_empty_design_with_actionable_issues():
                 "NO_FORMS",
                 "NO_VISITS",
                 "NO_SCHEDULE_OF_ASSESSMENT",
+                "NO_SUBJECT_PHASES",
             }
     finally:
         await engine.dispose()
@@ -159,34 +178,111 @@ async def test_readiness_accepts_complete_vertical_slice():
         await engine.dispose()
 
 
-async def test_readiness_rejects_legacy_arm_container_membership():
+async def test_readiness_requires_registered_subject_phase():
+    engine, factory = await _session_factory()
+    try:
+        async with factory() as session:
+            version = await _make_version(session)
+            await _add_minimal_complete_design(
+                session,
+                version,
+                seed_subject_phases=False,
+            )
+            session.add(
+                SubjectPhaseDefinition(
+                    design_version_id=version.id,
+                    name="Treatment",
+                    phase_type=SubjectPhaseType.common,
+                    display_order=1,
+                )
+            )
+            await session.flush()
+
+            report = await DesignValidationService().validate(session, version)
+
+            assert report.valid is False
+            assert "NO_REGISTERED_SUBJECT_PHASE" in {
+                issue.code for issue in report.issues if issue.severity == "error"
+            }
+    finally:
+        await engine.dispose()
+
+
+async def test_readiness_accepts_boolean_checkbox_without_codelist():
     engine, factory = await _session_factory()
     try:
         async with factory() as session:
             version = await _make_version(session)
             await _add_minimal_complete_design(session, version)
-            folder = VisitDefinition(
-                study_version_id=version.id,
-                name="Screening folder",
-                visit_number=2,
-                visit_type="folder",
-                definition_kind="folder",
-                display_order=2,
-                is_required=False,
-            )
+            field = (
+                await session.execute(
+                    select(FieldDefinition)
+                    .join(FormSection)
+                    .join(FormDefinition)
+                    .where(FormDefinition.study_version_id == version.id)
+                )
+            ).scalar_one()
+            field.control_type = "checkbox"
+            field.data_type = "boolean"
+            field.codelist_id = None
+            await session.flush()
+
+            report = await DesignValidationService().validate(session, version)
+
+            assert report.valid is True
+            assert "FIELD_CODELIST_REQUIRED" not in {issue.code for issue in report.issues}
+    finally:
+        await engine.dispose()
+
+
+async def test_readiness_requires_schedule_for_each_treatment_arm():
+    engine, factory = await _session_factory()
+    try:
+        async with factory() as session:
+            version = await _make_version(session)
+            await _add_minimal_complete_design(session, version)
             arm = ArmDefinition(
                 study_version_id=version.id,
                 name="Arm A",
                 display_order=1,
             )
-            arm.visits.append(folder)
-            session.add_all([folder, arm])
+            session.add(arm)
             await session.flush()
 
             report = await DesignValidationService().validate(session, version)
 
-            assert "ARM_CONTAINER_MEMBER" in {issue.code for issue in report.issues}
+            assert "ARM_HAS_NO_SCHEDULE" in {issue.code for issue in report.issues}
             assert report.valid is False
+
+            form_id = (
+                await session.execute(
+                    select(FormDefinition.id).where(FormDefinition.study_version_id == version.id)
+                )
+            ).scalar_one()
+            visit_id = (
+                await session.execute(
+                    select(VisitDefinition.id).where(VisitDefinition.study_version_id == version.id)
+                )
+            ).scalar_one()
+            arm_schedule = ScheduleOfAssessment(
+                design_version_id=version.id,
+                arm_definition_id=arm.id,
+            )
+            session.add(arm_schedule)
+            await session.flush()
+            session.add(
+                ScheduleOfAssessmentEntry(
+                    schedule_of_assessment_id=arm_schedule.id,
+                    form_definition_id=form_id,
+                    visit_definition_id=visit_id,
+                    display_order=1,
+                )
+            )
+            await session.flush()
+
+            ready = await DesignValidationService().validate(session, version)
+            assert "ARM_HAS_NO_SCHEDULE" not in {issue.code for issue in ready.issues}
+            assert ready.valid is True
     finally:
         await engine.dispose()
 
@@ -348,3 +444,38 @@ async def test_publish_scope_denial_happens_before_design_mutation():
         study_id=version.study_id,
     )
     publish.assert_not_awaited()
+
+
+async def test_abandon_scope_denial_happens_before_design_mutation():
+    version = MagicMock(spec=StudyVersion)
+    version.id = uuid.uuid4()
+    version.study_id = uuid.uuid4()
+    user = MagicMock()
+    permission_service = MagicMock()
+    permission_service.require.side_effect = PermissionError("out of scope")
+
+    with (
+        patch(
+            "app.api.routes.designer.study_versions.study_version_service.get_version",
+            new=AsyncMock(return_value=version),
+        ),
+        patch(
+            "app.api.routes.designer.study_versions.study_version_service.abandon_draft",
+            new=AsyncMock(),
+        ) as abandon,
+        pytest.raises(PermissionError, match="out of scope"),
+    ):
+        await abandon_version(
+            version.id,
+            StudyVersionAbandon(reason="Superseded draft"),
+            AsyncMock(),
+            user,
+            permission_service,
+        )
+
+    permission_service.require.assert_called_once_with(
+        user,
+        "designer.study_version.amend",
+        study_id=version.study_id,
+    )
+    abandon.assert_not_awaited()

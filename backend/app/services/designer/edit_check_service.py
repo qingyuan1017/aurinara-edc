@@ -12,6 +12,7 @@ query-severity matches to Query_Service.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from collections.abc import Mapping
@@ -129,6 +130,157 @@ class EditCheckService:
         """
         return EditCheckService.evaluate(rule, sample_data)
 
+    async def retest_edit_check(
+        self,
+        session: AsyncSession,
+        version: StudyVersion,
+        edit_check: EditCheck,
+        *,
+        sample_data: Mapping[str, Any],
+        expected_matched: bool,
+        review_note: str,
+        actor_id: UUID,
+    ) -> RuleTestResult:
+        """Evaluate evidence and clear a draft rule's retesting hold atomically.
+
+        The sample payload is never persisted. Only its canonical SHA-256 hash,
+        the expected/actual outcome, and the reviewer's note enter the audit
+        trail so regulated evidence is attributable without retaining clinical
+        test data in metadata or logs.
+        """
+
+        study_version_service.guard_mutable(version)
+        note = review_note.strip()
+        if not note:
+            raise ConflictError("A review note is required to mark an edit check retested")
+        if not edit_check.needs_retesting:
+            raise ConflictError(
+                "Edit check does not require retesting",
+                details={"edit_check_id": str(edit_check.id)},
+            )
+
+        result = self.test_edit_check(edit_check, sample_data)
+        if result.matched is not expected_matched:
+            raise ConflictError(
+                "Retest outcome did not match the expected result",
+                details={
+                    "edit_check_id": str(edit_check.id),
+                    "expected_matched": expected_matched,
+                    "actual_matched": result.matched,
+                },
+            )
+
+        sample_hash = hashlib.sha256(
+            json.dumps(
+                sample_data,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()
+        old_reason = edit_check.retesting_reason
+        edit_check.needs_retesting = False
+        edit_check.retesting_reason = None
+        edit_check.updated_at = datetime.now(UTC)
+        await self.repository.flush(session)
+        await audit_service.record(
+            session,
+            entity_type="edit_check",
+            entity_id=edit_check.id,
+            action="retest",
+            module=Module.DESIGNER,
+            study_id=version.study_id,
+            actor_id=actor_id,
+            old_value=json.dumps(
+                {"needs_retesting": True, "retesting_reason": old_reason},
+                sort_keys=True,
+            ),
+            new_value=json.dumps(
+                {
+                    "needs_retesting": False,
+                    "review_note": note,
+                    "sample_data_sha256": sample_hash,
+                    "expected_matched": expected_matched,
+                    "actual_matched": result.matched,
+                },
+                sort_keys=True,
+            ),
+        )
+        return result
+
+    async def bulk_retest_edit_checks(
+        self,
+        session: AsyncSession,
+        version: StudyVersion,
+        edit_checks: list[EditCheck],
+        *,
+        review_note: str,
+        actor_id: UUID,
+    ) -> int:
+        """Validate and atomically clear every pending retest hold in a draft.
+
+        This is an explicit reviewer attestation, not a substitute for
+        per-rule sample execution. Each rule is revalidated against the current
+        DSL contract and receives its own immutable audit event containing the
+        rule hash and review note.
+        """
+
+        study_version_service.guard_mutable(version)
+        note = review_note.strip()
+        if not note:
+            raise ConflictError("A review note is required for bulk retesting")
+        pending = [check for check in edit_checks if check.needs_retesting]
+        if not pending:
+            raise ConflictError(
+                "No edit checks require retesting",
+                details={"study_version_id": str(version.id)},
+            )
+
+        now = datetime.now(UTC)
+        evidence: list[tuple[EditCheck, str, str | None]] = []
+        for check in pending:
+            canonical_rule = validate_rule(check.rule_json)
+            rule_hash = hashlib.sha256(
+                json.dumps(
+                    canonical_rule,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ).encode("utf-8")
+            ).hexdigest()
+            evidence.append((check, rule_hash, check.retesting_reason))
+            check.needs_retesting = False
+            check.retesting_reason = None
+            check.updated_at = now
+
+        await self.repository.flush(session)
+        for check, rule_hash, old_reason in evidence:
+            await audit_service.record(
+                session,
+                entity_type="edit_check",
+                entity_id=check.id,
+                action="retest_bulk",
+                module=Module.DESIGNER,
+                study_id=version.study_id,
+                actor_id=actor_id,
+                old_value=json.dumps(
+                    {"needs_retesting": True, "retesting_reason": old_reason},
+                    sort_keys=True,
+                ),
+                new_value=json.dumps(
+                    {
+                        "needs_retesting": False,
+                        "review_note": note,
+                        "rule_json_sha256": rule_hash,
+                        "bulk_attestation": True,
+                        "sample_execution_performed": False,
+                    },
+                    sort_keys=True,
+                ),
+            )
+        return len(pending)
+
     @staticmethod
     def test_edit_check(
         edit_check: EditCheck | Any,
@@ -203,8 +355,36 @@ class EditCheckService:
             if sample_data is not None
             else await self._form_context(session, form_instance)
         )
+        existing = (
+            await session.execute(
+                select(ValidationResult).where(
+                    ValidationResult.edit_check_id == edit_check.id,
+                    ValidationResult.form_instance_id == form_instance.id,
+                    ValidationResult.is_resolved.is_(False),
+                )
+            )
+        ).scalars().first()
         if not evaluate_rule(edit_check.rule_json, context):
+            if existing is not None and persist:
+                existing.is_resolved = True
+                await session.flush()
+                study_id, site_id, subject_id = await self._scope(session, form_instance)
+                await audit_service.record(
+                    session,
+                    entity_type="validation_result",
+                    entity_id=existing.id,
+                    action="resolve",
+                    study_id=study_id,
+                    site_id=site_id,
+                    subject_id=subject_id,
+                    actor_id=actor_id,
+                    old_value="unresolved",
+                    new_value="resolved",
+                )
             return None
+
+        if existing is not None and persist:
+            return existing
 
         severity = self._severity(edit_check.severity)
         message = edit_check.description or f"Edit check '{edit_check.name}' failed"
@@ -313,8 +493,11 @@ class EditCheckService:
             name=payload["name"],
             description=payload.get("description"),
             rule_json=canonical_rule,
+            schema_version=int(canonical_rule.get("schemaVersion", 1)),
             severity=severity,
             is_active=payload.get("is_active", True),
+            needs_retesting=payload.get("needs_retesting", False),
+            retesting_reason=payload.get("retesting_reason"),
         )
         await self.repository.add(session, edit_check)
         await audit_service.record(
@@ -350,6 +533,7 @@ class EditCheckService:
         )
         if "rule_json" in changes:
             changes["rule_json"] = validate_rule(changes["rule_json"])
+            changes["schema_version"] = int(changes["rule_json"].get("schemaVersion", 1))
         if "severity" in changes:
             changes["severity"] = self._severity(changes["severity"])
 
@@ -496,6 +680,7 @@ class EditCheckService:
                 continue
             value = self._parse_value(field_value.value, field.data_type)
             context[field.variable_name] = value
+            context[field.odm_oid] = value
             context[str(field.id)] = value
 
         for field in definitions:

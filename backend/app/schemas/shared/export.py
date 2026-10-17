@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.models.shared.export import ExportType
 from app.schemas.shared.base import BaseCreateSchema, BaseSchema, UtcDatetime
@@ -38,6 +38,27 @@ class ExportFilters(BaseSchema):
     changed_since: UtcDatetime | None = None
     locked_only: bool | None = None
     clean_only: bool | None = None
+    datasets: list[str] | None = Field(None, max_length=100)
+    dataset: str | None = Field(None, max_length=100)
+
+    @field_validator("datasets")
+    @classmethod
+    def validate_datasets(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        normalized = [item.strip() for item in value if item.strip()]
+        if any(len(item) > 100 for item in normalized):
+            raise ValueError("Dataset names must not exceed 100 characters")
+        return list(dict.fromkeys(normalized)) or None
+
+
+class ExportDatasetOption(BaseSchema):
+    """One selectable, version-merged raw dataset."""
+
+    name: str
+    label: str
+    design_version_ids: list[UUID] = Field(default_factory=list)
+    form_definition_ids: list[UUID] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +114,9 @@ class ExportListResponse(BaseSchema):
     correlation_id: str | None = None
     export_type: str
     status: str
+    filters: dict | None = None
     file_size: int | None = None
+    error_message: str | None = None
     requested_by: UUID
     created_at: UtcDatetime
     started_at: UtcDatetime | None = None

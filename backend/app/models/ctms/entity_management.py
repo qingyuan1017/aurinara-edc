@@ -38,21 +38,25 @@ class ManagedEntity(Base):
     entity_type: Mapped[str] = mapped_column(String(40), nullable=False)
     code: Mapped[str] = mapped_column(String(100), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    canonical_site_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("sites.id", ondelete="RESTRICT"), nullable=True
-    )
     attributes: Mapped[dict[str, Any]] = mapped_column(JSONBType, nullable=False, default=dict)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
-    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     correlation_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("entity_type", "code", name="uq_ctms_managed_entities_type_code"),
-        UniqueConstraint("canonical_site_id", name="uq_ctms_managed_entities_canonical_site"),
         Index("ix_ctms_managed_entities_type_active", "entity_type", "active"),
     )
 
@@ -63,20 +67,37 @@ class StudyEntityAssignment(Base):
     __tablename__ = "ctms_study_entity_assignments"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    study_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("studies.id", ondelete="RESTRICT"), nullable=False)
-    entity_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("ctms_managed_entities.id", ondelete="RESTRICT"), nullable=False)
+    study_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("studies.id", ondelete="RESTRICT"), nullable=False
+    )
+    entity_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("ctms_managed_entities.id", ondelete="RESTRICT"), nullable=False
+    )
+    site_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("sites.id", ondelete="RESTRICT"), nullable=True
+    )
     attributes: Mapped[dict[str, Any]] = mapped_column(JSONBType, nullable=False, default=dict)
-    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_by: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
     correlation_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     entity: Mapped[ManagedEntity] = relationship(lazy="selectin")
+    site: Mapped[Site | None] = relationship(lazy="selectin")  # noqa: F821
 
     __table_args__ = (
         UniqueConstraint("study_id", "entity_id", name="uq_ctms_study_entity_assignment"),
+        UniqueConstraint("site_id", name="uq_ctms_study_entity_assignment_site"),
         Index("ix_ctms_study_entity_assignments_study", "study_id", "deleted_at"),
     )
+
+    @property
+    def site_number(self) -> str | None:
+        return self.site.site_number if self.site is not None else None
 
 
 __all__ = ["ManagedEntity", "ManagedEntityType", "StudyEntityAssignment"]

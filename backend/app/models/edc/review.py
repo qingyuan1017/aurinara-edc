@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     UniqueConstraint,
     Uuid,
 )
@@ -48,6 +49,7 @@ class ReviewStatus(Base):
 
     # Review state
     is_reviewed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reviewed_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Who performed the review (nullable until actually reviewed)
     reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
@@ -55,17 +57,13 @@ class ReviewStatus(Base):
     )
 
     # When the review was performed
-    reviewed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     form_instance: Mapped["FormInstance"] = relationship(  # noqa: F821

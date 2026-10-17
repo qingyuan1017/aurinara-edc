@@ -4,6 +4,7 @@ import {
   ClipboardCheck,
   Database,
   FileInput,
+  FolderKanban,
   LayoutDashboard,
   MessageCircleQuestion,
   Stethoscope,
@@ -37,6 +38,12 @@ export interface ResolvedEDCNavigationSection extends Omit<EDCNavigationSectionD
 }
 
 export const EDC_NAVIGATION_DEFINITIONS: readonly EDCNavigationSectionDefinition[] = [
+  {
+    id: 'repository',
+    label: 'Repository',
+    icon: FolderKanban,
+    items: [{ id: 'repository', label: 'Repository', path: '/repository' }],
+  },
   {
     id: 'overview',
     label: 'Overview',

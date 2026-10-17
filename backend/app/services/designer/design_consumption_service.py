@@ -168,6 +168,7 @@ class DesignConsumptionService:
             window_after=visit.window_after,
             display_order=visit.display_order,
             is_required=visit.is_required,
+            addable=visit.addable,
             repeat_min=visit.repeat_min,
             repeat_max=visit.repeat_max,
             cycle_length=visit.cycle_length,
@@ -175,16 +176,12 @@ class DesignConsumptionService:
 
     @staticmethod
     def _build_arm_view(arm: ArmDefinition) -> ArmDefinitionView:
-        visit_ids = tuple(
-            v.id for v in sorted(arm.visits, key=lambda v: (v.display_order, str(v.id)))
-        )
         return ArmDefinitionView(
             id=arm.id,
             design_version_id=arm.study_version_id,
             name=arm.name,
             display_order=arm.display_order,
             description=arm.description,
-            visit_definition_ids=visit_ids,
         )
 
     @staticmethod
@@ -265,6 +262,7 @@ class DesignConsumptionService:
         )
         return ScheduleOfAssessmentView(
             design_version_id=soa.design_version_id,
+            arm_definition_id=soa.arm_definition_id,
             entries=entries,
         )
 
@@ -417,9 +415,7 @@ class DesignConsumptionService:
     ) -> list[ArmDefinitionView]:
         """List the arm definitions of a published design as frozen views.
 
-        Each arm view exposes its member ``visit_definition_ids`` (which visits
-        occur in the arm). The ``visits`` relationship is eager-loaded so the
-        view can serialize the member ids without an async lazy load.
+        Visit/form scheduling is exposed separately through arm-scoped SoAs.
         """
         await self._require_published_version(session, design_version_id)
         result = await session.execute(
@@ -428,7 +424,6 @@ class DesignConsumptionService:
                 ArmDefinition.study_version_id == design_version_id,
                 ArmDefinition.deleted_at.is_(None),
             )
-            .options(selectinload(ArmDefinition.visits))
             .order_by(ArmDefinition.display_order, ArmDefinition.id)
         )
         return [self._build_arm_view(a) for a in result.scalars().all()]
@@ -542,9 +537,12 @@ class DesignConsumptionService:
         return [self._build_subject_phase_transition_view(t) for t in result.scalars().all()]
 
     async def get_schedule_of_assessment(
-        self, session: AsyncSession, design_version_id: UUID
+        self,
+        session: AsyncSession,
+        design_version_id: UUID,
+        arm_definition_id: UUID | None = None,
     ) -> ScheduleOfAssessmentView:
-        """Return the schedule of assessment of a published design as a view.
+        """Return one common or arm-scoped schedule as a frozen view.
 
         When the design declares no schedule of assessment, returns an empty
         view (same ``design_version_id``, no entries) so consumers get a stable
@@ -554,13 +552,37 @@ class DesignConsumptionService:
         result = await session.execute(
             select(ScheduleOfAssessment).where(
                 ScheduleOfAssessment.design_version_id == design_version_id,
+                ScheduleOfAssessment.arm_definition_id == arm_definition_id,
                 ScheduleOfAssessment.deleted_at.is_(None),
             )
         )
         soa = result.scalars().first()
         if soa is None:
-            return ScheduleOfAssessmentView(design_version_id=design_version_id, entries=())
+            return ScheduleOfAssessmentView(
+                design_version_id=design_version_id,
+                arm_definition_id=arm_definition_id,
+                entries=(),
+            )
         return self._build_schedule_view(soa)
+
+    async def list_schedule_of_assessments(
+        self, session: AsyncSession, design_version_id: UUID
+    ) -> list[ScheduleOfAssessmentView]:
+        """Return every common and arm-scoped schedule in a published design."""
+        await self._require_published_version(session, design_version_id)
+        result = await session.execute(
+            select(ScheduleOfAssessment)
+            .where(
+                ScheduleOfAssessment.design_version_id == design_version_id,
+                ScheduleOfAssessment.deleted_at.is_(None),
+            )
+            .order_by(
+                ScheduleOfAssessment.arm_definition_id.asc().nullsfirst(),
+                ScheduleOfAssessment.created_at.desc(),
+                ScheduleOfAssessment.id.desc(),
+            )
+        )
+        return [self._build_schedule_view(soa) for soa in result.scalars().all()]
 
     async def list_crf_access_definitions(
         self, session: AsyncSession, design_version_id: UUID

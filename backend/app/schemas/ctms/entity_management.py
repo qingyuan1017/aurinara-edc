@@ -88,7 +88,6 @@ class ManagedEntityCreate(BaseCreateSchema):
     entity_type: ManagedEntityType
     code: str = Field(min_length=1, max_length=100)
     name: str = Field(min_length=1, max_length=255)
-    canonical_site_id: UUID | None = None
     attributes: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -98,7 +97,7 @@ class ManagedEntityCreate(BaseCreateSchema):
 
 
 class ManagedSiteCreate(BaseCreateSchema):
-    """CTMS-owned Site input; the canonical identifier is generated server-side."""
+    """Reusable CTMS Site master-data input."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -127,7 +126,6 @@ class ManagedEntityResponse(BaseSchema):
     entity_type: ManagedEntityType
     code: str
     name: str
-    canonical_site_id: UUID | None = None
     attributes: dict[str, Any]
     active: bool
     created_by: UUID
@@ -144,10 +142,21 @@ class StudyEntityAssignmentCreate(BaseCreateSchema):
     attributes: dict[str, Any] = Field(default_factory=dict)
 
 
+class StudySiteAssignmentCreate(BaseCreateSchema):
+    """Add an available Site to a Study using that Study's Site identifier."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entity_id: UUID
+    site_number: str = Field(min_length=1, max_length=50)
+
+
 class StudyEntityAssignmentResponse(BaseSchema):
     id: UUID
     study_id: UUID
     entity_id: UUID
+    site_id: UUID | None = None
+    site_number: str | None = None
     entity: ManagedEntityResponse
     attributes: dict[str, Any]
     created_by: UUID
@@ -167,5 +176,6 @@ __all__ = [
     "StaffAttributes",
     "StudyEntityAssignmentCreate",
     "StudyEntityAssignmentResponse",
+    "StudySiteAssignmentCreate",
     "validate_managed_entity_attributes",
 ]

@@ -201,6 +201,16 @@ class FileAttachmentService:
             content=content,
             content_type=content_type,
             classification=f"{context.object_type.value}-attachment",
+            filename=filename,
+            module=FileAttachmentModule.EDC.value,
+            solution="data-capture",
+            purpose=f"{context.object_type.value}-attachments",
+            source_type=context.object_type.value,
+            source_id=str(context.object_id),
+            source_status="active",
+            read_action=f"edc.{self._READ_PERMISSIONS.get(context.object_type, 'study.read')}",
+            write_action="edc.file.upload",
+            site_id=context.site_id,
         )
         storage_key = f"files/{context.study_id}/{attachment_id}/{filename}"
         # The object is written before the metadata row so a storage failure
@@ -252,6 +262,85 @@ class FileAttachmentService:
         )
         return attachment
 
+    async def bind_repository_study_attachment(
+        self,
+        session: AsyncSession,
+        *,
+        study_id: UUID,
+        version_id: UUID,
+        expected_sha256: str,
+        user_access_token: str,
+        actor_id: UUID,
+        user: Any,
+    ) -> FileAttachment:
+        """Attach an exact Repository version at study scope without copying bytes."""
+
+        context = await self._resolve_parent(
+            session,
+            study_id,
+            object_type=FileAttachmentObjectType.study,
+            object_id=study_id,
+            study_id=study_id,
+        )
+        self.permission_service.require(user, "file.upload", study_id=study_id, site_id=None)
+        if await self.lock_service.is_modification_blocked(
+            session, context.parent, object_type="study", object_id=study_id
+        ):
+            raise ConflictError(
+                message="The study is frozen or locked",
+                details={"code": "OBJECT_LOCKED", "study_id": str(study_id)},
+            )
+        gateway = get_platform_objects()
+        version = await gateway.resolve_repository_version(version_id, user_access_token)
+        if version.study_id != study_id:
+            raise ValidationError(
+                message="The Repository version does not belong to this study",
+                details={"version_id": str(version_id)},
+            )
+        if version.sha256 != expected_sha256:
+            raise ConflictError(
+                message="The Repository version changed; refresh and select it again",
+                details={"version_id": str(version_id)},
+            )
+        if version.source_status in {"deleted", "rejected", "purged"}:
+            raise ConflictError(
+                message="The Repository source is not available for attachment",
+                details={"source_status": version.source_status},
+            )
+        attachment_id = uuid.uuid4()
+        registration = await gateway.bind_repository_object(
+            object_id=version.object_id,
+            external_reference=f"file_attachment:{attachment_id}",
+        )
+        attachment = FileAttachment(
+            id=attachment_id,
+            module=FileAttachmentModule.EDC.value,
+            attachment_type="Clinical_Attachment",
+            object_type=FileAttachmentObjectType.study.value,
+            object_id=study_id,
+            study_id=study_id,
+            filename=version.filename,
+            content_type=version.media_type,
+            size_bytes=version.size,
+            storage_key=None,
+            platform_object_id=registration.object_id,
+            platform_reference_id=registration.reference_id,
+            uploaded_by=actor_id,
+            uploaded_at=datetime.now(UTC),
+        )
+        session.add(attachment)
+        await session.flush()
+        await audit_service.record(
+            session,
+            entity_type="file_attachment",
+            entity_id=attachment.id,
+            action="repository_bind",
+            study_id=study_id,
+            actor_id=actor_id,
+            new_value=f"repository_version_id={version.id}",
+        )
+        return attachment
+
     async def upload_operational(
         self,
         session: AsyncSession,
@@ -297,6 +386,16 @@ class FileAttachmentService:
             content_type=content_type,
             classification="ctms-operational-attachment",
             retention_until=retention_until,
+            filename=filename,
+            module=FileAttachmentModule.CTMS.value,
+            solution="study-operations",
+            purpose=f"{normalized_parent}-attachments",
+            source_type=normalized_parent,
+            source_id=str(parent_id),
+            source_status="active",
+            read_action=f"ctms.{self._OPERATIONAL_WRITE_PERMISSIONS[normalized_parent].removeprefix('ctms.')}",
+            write_action=f"ctms.{self._OPERATIONAL_WRITE_PERMISSIONS[normalized_parent].removeprefix('ctms.')}",
+            site_id=site_id,
         )
         # Do not put the submitted name in the key. The UUID namespace and a
         # short validated extension make traversal and key injection impossible.
@@ -353,6 +452,16 @@ class FileAttachmentService:
         content: bytes,
         content_type: str,
         classification: str,
+        filename: str,
+        module: str,
+        solution: str,
+        purpose: str,
+        source_type: str,
+        source_id: str,
+        source_status: str,
+        read_action: str,
+        write_action: str,
+        site_id: UUID | None,
         retention_until: datetime | None = None,
     ) -> PlatformObjectRegistration | None:
         gateway = get_platform_objects()
@@ -366,6 +475,27 @@ class FileAttachmentService:
                 classification=classification,
                 external_reference=f"file_attachment:{attachment_id}",
                 retention_until=retention_until,
+                repository={
+                    "filename": filename,
+                    "source_type": source_type,
+                    "source_id": source_id,
+                    "source_status": source_status,
+                    "module": module.lower(),
+                    "solution": solution,
+                    "purpose": purpose,
+                    "classification": classification,
+                    "access": {
+                        "read_action": read_action,
+                        "write_action": write_action,
+                        "site_id": str(site_id) if site_id else None,
+                    },
+                    "retention_metadata": {
+                        "retention_until": retention_until.isoformat()
+                        if retention_until
+                        else None
+                    },
+                    "provenance": {"attachment_id": str(attachment_id)},
+                },
             )
         except ServiceUnavailableError:
             if gateway.mode == "enforced":

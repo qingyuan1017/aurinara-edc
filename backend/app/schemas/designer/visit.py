@@ -106,6 +106,10 @@ class VisitDefinitionCreate(BaseCreateSchema):
     )
     display_order: int = Field(..., description="Sort order within the schedule")
     is_required: bool = Field(True, description="Whether the visit is required")
+    addable: bool = Field(
+        False,
+        description="Whether EDC users may add another instance of this visit",
+    )
     repeat_min: int | None = Field(None, ge=0, description="Cycle-only: minimum repeat count")
     repeat_max: int | None = Field(None, ge=0, description="Cycle-only: maximum repeat count")
     cycle_length: int | None = Field(
@@ -126,6 +130,11 @@ class VisitDefinitionCreate(BaseCreateSchema):
             raise ValueError("visit_number is required for a visit or cycle visit")
         if kind != VisitDefinitionKind.visit and self.parent_folder_id is not None:
             raise ValueError("Only a visit can have a parent folder")
+        if self.addable and kind not in {
+            VisitDefinitionKind.visit,
+            VisitDefinitionKind.cycle_visit,
+        }:
+            raise ValueError("Only a visit can be addable")
         if self.member_visit_ids:
             raise ValueError("Cycle visits must be created inside their owning cycle")
         return self
@@ -143,6 +152,7 @@ class VisitDefinitionUpdate(BaseUpdateSchema):
     window_after: int | None = Field(None, ge=WINDOW_BOUND_MIN, le=WINDOW_BOUND_MAX)
     display_order: int | None = None
     is_required: bool | None = None
+    addable: bool | None = None
     repeat_min: int | None = Field(None, ge=0)
     repeat_max: int | None = Field(None, ge=0)
     cycle_length: int | None = Field(None, ge=0)
@@ -158,6 +168,7 @@ class VisitDefinitionResponse(BaseSchema):
 
     id: UUID
     study_version_id: UUID
+    odm_oid: str | None = None
     name: str
     visit_number: int
     visit_type: str
@@ -170,6 +181,7 @@ class VisitDefinitionResponse(BaseSchema):
     window_after: int | None = None
     display_order: int
     is_required: bool
+    addable: bool = False
     repeat_min: int | None = None
     repeat_max: int | None = None
     cycle_length: int | None = None

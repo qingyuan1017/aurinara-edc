@@ -60,6 +60,7 @@ class CodelistItemCreate(BaseCreateSchema):
     display_order: int = Field(..., description="Sort order within the code list")
     normal_low: Decimal | None = None
     normal_high: Decimal | None = None
+    specify: bool = False
 
 
 class CodelistItemResponse(BaseSchema):
@@ -72,6 +73,7 @@ class CodelistItemResponse(BaseSchema):
     display_order: int
     normal_low: Decimal | None = None
     normal_high: Decimal | None = None
+    specify: bool = False
 
 
 class CodelistCreate(BaseCreateSchema):
@@ -89,6 +91,7 @@ class CodelistResponse(BaseSchema):
 
     id: UUID
     study_version_id: UUID
+    odm_oid: str | None = None
     name: str
     code: str
     items: list[CodelistItemResponse] = Field(default_factory=list)

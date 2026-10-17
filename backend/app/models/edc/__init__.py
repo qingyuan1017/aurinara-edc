@@ -11,6 +11,16 @@ from app.models.edc.form_metadata import (
 )
 from app.models.edc.form_record import FormRecord
 from app.models.edc.lock import FreezeLock, FreezeLockObjectType, FreezeLockType
+from app.models.edc.operations import (
+    ClinicalControlAction,
+    ClinicalControlRequest,
+    ClinicalControlRequestStatus,
+    SDRResult,
+    SDRSelection,
+    SDRSelectionStrategy,
+    SDRSetting,
+    SDRStatus,
+)
 from app.models.edc.query import (
     Query,
     QueryMessage,
@@ -30,6 +40,9 @@ EDC_MODEL_PACKAGE = "app.models.edc"
 
 __all__ = [
     "EDC_MODEL_PACKAGE",
+    "ClinicalControlAction",
+    "ClinicalControlRequest",
+    "ClinicalControlRequestStatus",
     "Codelist",
     "CodelistItem",
     "EditCheck",
@@ -49,6 +62,11 @@ __all__ = [
     "QueryTargetType",
     "QueryType",
     "ReviewStatus",
+    "SDRResult",
+    "SDRSelection",
+    "SDRSelectionStrategy",
+    "SDRSetting",
+    "SDRStatus",
     "SDVScopeType",
     "SDVStatus",
     "Signature",

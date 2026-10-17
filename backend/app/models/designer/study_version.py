@@ -7,12 +7,13 @@ lifecycle metadata (``Design_Version``) lives in the Designer package.
 
 The ``StudyVersion`` ORM class is reused directly as ``Design_Version``: its
 existing ``status`` of ``draft``/``published`` maps to ``Draft_Design`` /
-``Published_Design``, ``amended_from_version_id`` models amendment lineage, and
-``published_at`` / ``published_by`` capture the publication actor and timestamp.
+``Published_Design``, while ``abandoned`` retains an intentionally discarded
+draft as immutable history. ``amended_from_version_id`` models amendment
+lineage, and ``published_at`` / ``published_by`` capture the publication actor
+and timestamp.
 
-The move is a code-layer ownership change only — the backing table
-(``study_versions``) and all columns are unchanged, so stored values are
-preserved and the migration is purely additive.
+The move is a code-layer ownership change; abandonment metadata is added
+without replacing or deleting any stored version.
 
 Satisfies Requirements:
   - 1.1: Design-time version metadata owned by the Designer module.
@@ -44,6 +45,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.odm_oid import new_odm_oid
 
 if TYPE_CHECKING:  # avoid a runtime import cycle; Study identity stays in edc
     from app.models.edc.study import Study
@@ -58,6 +60,7 @@ class StudyVersionStatus(enum.StrEnum):
 
     draft = "draft"
     published = "published"
+    abandoned = "abandoned"
 
 
 class StudyVersion(Base):
@@ -83,8 +86,12 @@ class StudyVersion(Base):
     )
 
     # Version identifier
-    version_number: Mapped[str] = mapped_column(
-        String(20), nullable=False, comment="e.g. 1.0, 2.0"
+    version_number: Mapped[str] = mapped_column(String(20), nullable=False, comment="e.g. 1.0, 2.0")
+    odm_study_oid: Mapped[str] = mapped_column(
+        String(255), nullable=False, default=lambda: new_odm_oid("STUDY")
+    )
+    odm_metadata_version_oid: Mapped[str] = mapped_column(
+        String(255), nullable=False, default=lambda: new_odm_oid("MDV")
     )
 
     # Lifecycle
@@ -102,12 +109,17 @@ class StudyVersion(Base):
     )
 
     # Publication (Requirement 2.2)
-    published_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     published_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+    # Abandoned drafts remain retained and immutable for traceability.
+    abandoned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    abandoned_by: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    abandonment_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -130,6 +142,9 @@ class StudyVersion(Base):
 
     __table_args__ = (
         UniqueConstraint("study_id", "version_number", name="uq_study_version_number"),
+        UniqueConstraint(
+            "study_id", "odm_metadata_version_oid", name="uq_study_version_odm_mdv_oid"
+        ),
         Index("ix_study_versions_study_id", "study_id"),
         Index("ix_study_versions_status", "status"),
         Index("ix_study_versions_amended_from_version_id", "amended_from_version_id"),

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import ValidationError
+from app.core.odm_oid import is_valid_odm_oid
 from app.models.designer.arm_definition import ArmDefinition
 from app.models.designer.codelist import Codelist, CodelistItem
 from app.models.designer.coding_setting import CodingSetting
@@ -24,6 +25,7 @@ from app.models.designer.crf_access_definition import CrfAccessDefinition
 from app.models.designer.edit_check import EditCheck
 from app.models.designer.form_dependency import FormDefinitionDependency
 from app.models.designer.form_metadata import FieldDefinition, FormDefinition, FormSection
+from app.models.designer.odm_metadata import DerivationDefinition, MeasurementUnitDefinition
 from app.models.designer.schedule_of_assessment import ScheduleOfAssessment
 from app.models.designer.study_version import StudyVersion
 from app.models.designer.subject_phase_definition import (
@@ -38,6 +40,7 @@ from app.schemas.designer.study_version import (
     DesignValidationIssue,
     DesignValidationResponse,
 )
+from app.services.designer.rule_engine_v2 import validate_derivation_expression
 
 
 class DesignValidationService:
@@ -129,6 +132,28 @@ class DesignValidationService:
             .scalars()
             .all()
         )
+        derivations = list(
+            (
+                await session.execute(
+                    select(DerivationDefinition).where(
+                        DerivationDefinition.study_version_id == version_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        measurement_units = list(
+            (
+                await session.execute(
+                    select(MeasurementUnitDefinition).where(
+                        MeasurementUnitDefinition.study_version_id == version_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
         phases = list(
             (
                 await session.execute(
@@ -181,12 +206,10 @@ class DesignValidationService:
         arms = list(
             (
                 await session.execute(
-                    select(ArmDefinition)
-                    .where(
+                    select(ArmDefinition).where(
                         ArmDefinition.study_version_id == version_id,
                         ArmDefinition.deleted_at.is_(None),
                     )
-                    .options(selectinload(ArmDefinition.visits))
                 )
             )
             .scalars()
@@ -265,6 +288,39 @@ class DesignValidationService:
         if not visits:
             add("NO_VISITS", "error", "Add at least one visit before publishing.")
 
+        oid_rows = [
+            ("study_version", version.id, version.odm_study_oid),
+            ("metadata_version", version.id, version.odm_metadata_version_oid),
+            *(("form_definition", row.id, row.odm_oid) for row in forms),
+            *(("form_section", row.id, row.odm_oid) for row in sections),
+            *(("field_definition", row.id, row.odm_oid) for row in fields),
+            *(("visit_definition", row.id, row.odm_oid) for row in visits),
+            *(("codelist", row.id, row.odm_oid) for row in codelists),
+            *(("edit_check", row.id, row.odm_oid) for row in edit_checks),
+            *(("derivation", row.id, row.odm_oid) for row in derivations),
+            *(("measurement_unit", row.id, row.odm_oid) for row in measurement_units),
+        ]
+        seen_oids: dict[str, tuple[str, UUID]] = {}
+        for entity_type, entity_id, oid in oid_rows:
+            if not is_valid_odm_oid(oid):
+                add(
+                    "ODM_OID_INVALID",
+                    "error",
+                    f"{entity_type} has an invalid ODM OID.",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                )
+            elif oid in seen_oids:
+                add(
+                    "ODM_OID_DUPLICATE",
+                    "error",
+                    f"ODM OID {oid} is used by more than one definition.",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                )
+            else:
+                seen_oids[oid] = (entity_type, entity_id)
+
         for form in forms:
             form_sections = sections_by_form.get(form.id, [])
             if not form_sections:
@@ -308,6 +364,7 @@ class DesignValidationService:
                 field.control_type
                 in {"radio", "checkbox", "dropdown", "multi-select", "coded_term"}
                 and field.codelist_id is None
+                and not (field.control_type == "checkbox" and field.data_type == "boolean")
             ):
                 add(
                     "FIELD_CODELIST_REQUIRED",
@@ -348,10 +405,7 @@ class DesignValidationService:
                 )
 
         for phase in phases:
-            if (
-                phase.phase_type in {SubjectPhaseType.arm, SubjectPhaseType.complete}
-                and phase.visits
-            ):
+            if phase.phase_type == SubjectPhaseType.arm and phase.visits:
                 add(
                     "PHASE_TYPE_DISALLOWS_VISITS",
                     "error",
@@ -366,24 +420,6 @@ class DesignValidationService:
                     f"Arm phase {phase.name} requires at least one configured arm.",
                     entity_type="subject_phase_definition",
                     entity_id=phase.id,
-                )
-
-        for arm in arms:
-            if any(visit.id not in visit_ids for visit in arm.visits):
-                add(
-                    "ARM_VISIT_OUTSIDE_VERSION",
-                    "error",
-                    f"Arm {arm.name} references a visit outside this version.",
-                    entity_type="arm_definition",
-                    entity_id=arm.id,
-                )
-            if any(visit.definition_kind not in {"visit", "cycle_visit"} for visit in arm.visits):
-                add(
-                    "ARM_CONTAINER_MEMBER",
-                    "error",
-                    f"Arm {arm.name} references a folder or cycle container instead of real visits.",
-                    entity_type="arm_definition",
-                    entity_id=arm.id,
                 )
 
         for access in access_rows:
@@ -420,18 +456,59 @@ class DesignValidationService:
                     entity_id=setting.id,
                 )
 
-        if not schedules:
+        arm_ids = {arm.id for arm in arms}
+        common_schedules = [
+            schedule for schedule in schedules if schedule.arm_definition_id is None
+        ]
+        arm_schedules = [
+            schedule for schedule in schedules if schedule.arm_definition_id is not None
+        ]
+
+        if not common_schedules:
             add(
                 "NO_SCHEDULE_OF_ASSESSMENT",
                 "error",
-                "Create and save a schedule of assessment before publishing.",
+                "Create and save the common schedule of assessment before publishing.",
             )
-        elif len(schedules) > 1:
+        elif len(common_schedules) > 1:
             add(
-                "MULTIPLE_ACTIVE_SCHEDULES",
+                "MULTIPLE_ACTIVE_COMMON_SCHEDULES",
                 "error",
-                "Only one active schedule of assessment may exist for a design version.",
+                "Only one active common schedule of assessment may exist for a design version.",
             )
+
+        schedules_by_arm: dict[UUID, list[ScheduleOfAssessment]] = {}
+        for schedule in arm_schedules:
+            arm_id = schedule.arm_definition_id
+            if arm_id not in arm_ids:
+                add(
+                    "SCHEDULE_ARM_OUTSIDE_VERSION",
+                    "error",
+                    "A schedule of assessment references an arm outside this version.",
+                    entity_type="schedule_of_assessment",
+                    entity_id=schedule.id,
+                )
+                continue
+            schedules_by_arm.setdefault(arm_id, []).append(schedule)
+
+        for arm in arms:
+            scoped = schedules_by_arm.get(arm.id, [])
+            if not scoped:
+                add(
+                    "ARM_HAS_NO_SCHEDULE",
+                    "error",
+                    f"Treatment arm {arm.name} requires its own schedule of assessment.",
+                    entity_type="arm_definition",
+                    entity_id=arm.id,
+                )
+            elif len(scoped) > 1:
+                add(
+                    "MULTIPLE_ACTIVE_ARM_SCHEDULES",
+                    "error",
+                    f"Treatment arm {arm.name} has more than one active schedule of assessment.",
+                    entity_type="arm_definition",
+                    entity_id=arm.id,
+                )
 
         mapped_form_ids: set[UUID] = set()
         for entry in schedule_entries:
@@ -480,6 +557,7 @@ class DesignValidationService:
             for field in fields
             for reference in (
                 field.variable_name,
+                field.odm_oid,
                 str(field.id),
                 f"{field.variable_name}.normal_low",
                 f"{field.variable_name}.normal_high",
@@ -488,6 +566,56 @@ class DesignValidationService:
         for rule in edit_checks:
             if not rule.is_active:
                 continue
+            if rule.needs_retesting:
+                add(
+                    "EDIT_CHECK_NEEDS_RETESTING",
+                    "error",
+                    f"Edit check {rule.name} must be retested before publication.",
+                    entity_type="edit_check",
+                    entity_id=rule.id,
+                )
+
+        known_field_oids = {field.odm_oid for field in fields}
+        for derivation in derivations:
+            if not derivation.is_active:
+                continue
+            if derivation.needs_retesting:
+                add(
+                    "DERIVATION_NEEDS_RETESTING",
+                    "error",
+                    f"Derivation {derivation.name} must be retested before publication.",
+                    entity_type="derivation_definition",
+                    entity_id=derivation.id,
+                )
+            if derivation.target_field_definition_id not in field_ids:
+                add(
+                    "DERIVATION_TARGET_OUTSIDE_VERSION",
+                    "error",
+                    f"Derivation {derivation.name} targets a field outside this version.",
+                    entity_type="derivation_definition",
+                    entity_id=derivation.id,
+                )
+            try:
+                missing = (
+                    validate_derivation_expression(derivation.expression_json) - known_field_oids
+                )
+            except (TypeError, ValueError) as exc:
+                add(
+                    "DERIVATION_INVALID",
+                    "error",
+                    f"Derivation {derivation.name} is invalid: {exc}.",
+                    entity_type="derivation_definition",
+                    entity_id=derivation.id,
+                )
+            else:
+                if missing:
+                    add(
+                        "DERIVATION_FIELD_NOT_FOUND",
+                        "error",
+                        f"Derivation {derivation.name} references unknown field(s): {', '.join(sorted(missing))}.",
+                        entity_type="derivation_definition",
+                        entity_id=derivation.id,
+                    )
             missing = sorted(self._field_references(rule.rule_json) - known_variables)
             if missing:
                 add(
@@ -507,8 +635,14 @@ class DesignValidationService:
         if not phases:
             add(
                 "NO_SUBJECT_PHASES",
-                "warning",
-                "No subject phases are configured for this design.",
+                "error",
+                "Configure at least one subject phase before publishing.",
+            )
+        elif not any(phase.phase_type == SubjectPhaseType.registered for phase in phases):
+            add(
+                "NO_REGISTERED_SUBJECT_PHASE",
+                "error",
+                "Configure at least one registered subject phase to initialize new subjects.",
             )
 
         counts = DesignValidationCounts(
@@ -520,6 +654,8 @@ class DesignValidationService:
             codelists=len(codelists),
             codelist_items=len(codelist_items),
             edit_checks=len(edit_checks),
+            derivations=len(derivations),
+            measurement_units=len(measurement_units),
             subject_phases=len(phases),
         )
         return DesignValidationResponse(
@@ -556,7 +692,7 @@ class DesignValidationService:
         references: set[str] = set()
         if isinstance(value, Mapping):
             for key, child in value.items():
-                if key in {"field", "value_field"} and isinstance(child, str):
+                if key in {"field", "value_field", "itemOID"} and isinstance(child, str):
                     references.add(child)
                 else:
                     references.update(cls._field_references(child))

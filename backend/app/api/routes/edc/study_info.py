@@ -123,9 +123,7 @@ async def get_edit_check_testing_cases(
     current_user: Annotated[User, Depends(require_permission("study.read"))],
 ) -> EditCheckTestingCases:
     """Edit Check Testing Case list for a design version (R8.2, R8.14)."""
-    return await study_info_service.get_edit_check_testing_cases(
-        session, design_version_id
-    )
+    return await study_info_service.get_edit_check_testing_cases(session, design_version_id)
 
 
 @design_version_router.get(

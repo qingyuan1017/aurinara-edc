@@ -20,6 +20,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     Uuid,
@@ -93,6 +94,12 @@ class FormInstance(Base):
     status: Mapped[FormInstanceStatus] = mapped_column(
         String(20), nullable=False, default=FormInstanceStatus.not_started
     )
+    # Canonical data-entry dimension. ``status`` remains as a compatibility
+    # alias for one release and is no longer used for review/lock/signature.
+    data_entry_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=FormInstanceStatus.not_started.value
+    )
+    data_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Hybrid storage — full JSON payload for fast read
     data_jsonb: Mapped[dict | None] = mapped_column(JSONBType, nullable=True)
@@ -101,12 +108,8 @@ class FormInstance(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    submitted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Submitted by
     submitted_by: Mapped[uuid.UUID | None] = mapped_column(
@@ -177,17 +180,14 @@ class FieldValue(Base):
     value: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Not-applicable marker (Requirement 10.6)
-    is_not_applicable: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    is_not_applicable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    data_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Last updater
     updated_by: Mapped[uuid.UUID | None] = mapped_column(

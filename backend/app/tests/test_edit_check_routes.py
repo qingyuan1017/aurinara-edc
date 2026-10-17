@@ -306,6 +306,138 @@ class TestEditCheckRoutes:
         assert response.json()["persisted"] is False
         assert (await db_session.execute(select(ValidationResult))).scalars().all() == []
 
+    async def test_retest_endpoint_clears_hold_and_records_hashed_evidence(
+        self, client, seeded, db_session
+    ):
+        check = EditCheck(
+            id=uuid.uuid4(),
+            study_version_id=seeded["version"].id,
+            name="Imported adult age",
+            rule_json=RULE,
+            severity="warning",
+            is_active=True,
+            needs_retesting=True,
+            retesting_reason="Imported rule requires review",
+            created_at=datetime.now(UTC),
+        )
+        db_session.add(check)
+        await db_session.flush()
+
+        response = await client.post(
+            f"/api/v1/designer/edit-checks/{check.id}/retest",
+            json={
+                "sample_data": {"age": 21},
+                "expected_matched": True,
+                "review_note": "Verified the imported comparison and warning behavior.",
+            },
+            headers=auth(seeded["user"]),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["matched"] is True
+        assert response.json()["needs_retesting"] is False
+        await db_session.refresh(check)
+        assert check.needs_retesting is False
+        assert check.retesting_reason is None
+        event = (
+            await db_session.execute(
+                select(AuditEvent).where(
+                    AuditEvent.entity_type == "edit_check",
+                    AuditEvent.entity_id == check.id,
+                    AuditEvent.action == "retest",
+                )
+            )
+        ).scalar_one()
+        assert "sample_data_sha256" in (event.new_value or "")
+        assert '"age": 21' not in (event.new_value or "")
+
+    async def test_retest_endpoint_preserves_hold_when_outcome_differs(
+        self, client, seeded, db_session
+    ):
+        check = EditCheck(
+            id=uuid.uuid4(),
+            study_version_id=seeded["version"].id,
+            name="Imported adult age",
+            rule_json=RULE,
+            severity="warning",
+            is_active=True,
+            needs_retesting=True,
+            created_at=datetime.now(UTC),
+        )
+        db_session.add(check)
+        await db_session.flush()
+        await db_session.commit()
+
+        response = await client.post(
+            f"/api/v1/designer/edit-checks/{check.id}/retest",
+            json={
+                "sample_data": {"age": 21},
+                "expected_matched": False,
+                "review_note": "Expected this sample not to match.",
+            },
+            headers=auth(seeded["user"]),
+        )
+
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "ConflictError"
+        await db_session.refresh(check)
+        assert check.needs_retesting is True
+
+    async def test_bulk_retest_clears_all_pending_holds_with_per_rule_audit(
+        self, client, seeded, db_session
+    ):
+        pending = [
+            EditCheck(
+                id=uuid.uuid4(),
+                study_version_id=seeded["version"].id,
+                name=f"Imported check {index}",
+                rule_json={"field": "age", "operator": ">", "value": index},
+                severity="warning",
+                is_active=True,
+                needs_retesting=True,
+                retesting_reason="Imported rule requires review",
+                created_at=datetime.now(UTC),
+            )
+            for index in (18, 21)
+        ]
+        already_reviewed = EditCheck(
+            id=uuid.uuid4(),
+            study_version_id=seeded["version"].id,
+            name="Previously reviewed check",
+            rule_json=RULE,
+            severity="warning",
+            is_active=True,
+            needs_retesting=False,
+            created_at=datetime.now(UTC),
+        )
+        db_session.add_all([*pending, already_reviewed])
+        await db_session.flush()
+
+        response = await client.post(
+            f"/api/v1/designer/studies/{seeded['study'].id}/edit-checks/retest-all",
+            params={"study_version_id": str(seeded["version"].id)},
+            json={
+                "review_note": "Reviewed imported rules against the approved specification.",
+                "acknowledge_without_individual_samples": True,
+            },
+            headers=auth(seeded["user"]),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["reviewed_count"] == 2
+        assert response.json()["remaining_count"] == 0
+        for check in pending:
+            await db_session.refresh(check)
+            assert check.needs_retesting is False
+            assert check.retesting_reason is None
+        events = (
+            await db_session.execute(
+                select(AuditEvent).where(AuditEvent.action == "retest_bulk")
+            )
+        ).scalars().all()
+        assert {event.entity_id for event in events} == {check.id for check in pending}
+        assert all("rule_json_sha256" in (event.new_value or "") for event in events)
+
     async def test_run_evaluates_forms_and_persists_failures(self, client, seeded, db_session):
         check = EditCheck(
             id=uuid.uuid4(),

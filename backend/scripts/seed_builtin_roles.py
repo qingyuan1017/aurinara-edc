@@ -1,30 +1,33 @@
-"""Seed built-in roles and synchronize the complete catalog with Platform."""
+"""Seed standalone roles or register EDC capabilities with Platform."""
 
 import asyncio
 
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.core.database import async_session_factory
-from app.core.permissions import seed_roles_and_permissions
+from app.core.permissions import (
+    permission_catalog,
+    seed_permission_catalog,
+    seed_roles_and_permissions,
+)
 from app.models.edc.site import Site
 from app.models.edc.study import Study
-from app.models.shared.identity import Role, RolePermission
 from app.services.shared.platform_authorization import (
     PlatformAuthorizationClient,
     namespaced_permission,
 )
 
-PLATFORM_ROLE_NAMES = {"System Administrator": "EDC System Administrator"}
-
 
 async def seed() -> None:
+    settings = get_settings()
     async with async_session_factory() as session:
-        await seed_roles_and_permissions(session)
+        if settings.platform_authorization_mode == "disabled":
+            await seed_roles_and_permissions(session)
+        else:
+            await seed_permission_catalog(session)
         await session.commit()
 
-    settings = get_settings()
     can_sync = all(
         (
             settings.platform_control_plane_url,
@@ -34,39 +37,19 @@ async def seed() -> None:
         )
     )
     if settings.platform_authorization_mode == "enforced" and not can_sync:
-        raise RuntimeError("Enforced Platform authorization requires role-sync credentials")
+        raise RuntimeError("Enforced Platform authorization requires permission-sync credentials")
     if can_sync:
-        async with async_session_factory() as session:
-            roles = list(
-                (
-                    await session.scalars(
-                        select(Role)
-                        .options(
-                            selectinload(Role.role_permissions).selectinload(
-                                RolePermission.permission
-                            )
-                        )
-                        .order_by(Role.name)
-                    )
-                ).all()
-            )
         catalog = [
             {
-                "source_role_id": str(role.id),
-                "name": PLATFORM_ROLE_NAMES.get(role.name, role.name),
-                "description": role.description,
-                "scope_level": str(role.scope_level),
-                "permissions": sorted(
-                    namespaced_permission(item.permission.code) for item in role.role_permissions
-                ),
+                **definition,
+                "code": namespaced_permission(str(definition["code"])),
             }
-            for role in roles
+            for definition in permission_catalog()
         ]
         platform = PlatformAuthorizationClient(settings)
-        registered = platform.sync_roles(catalog)
-        local_ids = {role.id for role in roles}
-        if {item.id for item in registered} != local_ids:
-            raise RuntimeError("Platform did not preserve the EDC role IDs")
+        registered = platform.sync_permissions(catalog)
+        if set(registered) != {str(item["code"]) for item in catalog}:
+            raise RuntimeError("Platform did not preserve the EDC permission catalog")
         async with async_session_factory() as session:
             sites = list(
                 (

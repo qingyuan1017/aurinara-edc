@@ -143,23 +143,19 @@ async def list_subject_signatures(
     _require_subject_access(current_user, permission_service, subject, "form.read")
 
     object_ids = select(FormInstance.id).where(FormInstance.subject_id == subject.id)
-    query = select(Signature).where(
-        (Signature.object_type == "subject")
-        & (Signature.object_id == subject.id)
-        | (
-            (Signature.object_type == "form")
-            & Signature.object_id.in_(object_ids)
+    query = (
+        select(Signature)
+        .where(
+            (Signature.object_type == "subject") & (Signature.object_id == subject.id)
+            | ((Signature.object_type == "form") & Signature.object_id.in_(object_ids))
         )
-    ).order_by(Signature.signed_at.desc())
-    total = await session.scalar(
-        select(func.count()).select_from(query.subquery())
+        .order_by(Signature.signed_at.desc())
     )
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
     signatures = list(
-        (
-            await session.execute(
-                query.offset(pagination.offset).limit(pagination.page_size)
-            )
-        ).scalars().all()
+        (await session.execute(query.offset(pagination.offset).limit(pagination.page_size)))
+        .scalars()
+        .all()
     )
     return {
         "items": [SignatureResponse.model_validate(signature) for signature in signatures],

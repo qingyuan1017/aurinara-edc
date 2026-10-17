@@ -172,6 +172,7 @@ export function StudyDetailPage({ studyId }: { studyId: string }) {
                     <TableCell>
                       {canPublish && version.status === 'draft' ? (
                         <PublishDesignDialog
+                          studyId={studyId}
                           versionId={version.id}
                           versionNumber={version.version_number}
                           onPublished={() => queryClient.invalidateQueries({ queryKey: ['study-versions', studyId] })}

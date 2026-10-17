@@ -26,7 +26,12 @@ def service():
     """Fresh StudyVersionService instance for each test."""
     validation_service = MagicMock()
     validation_service.require_publishable = AsyncMock()
-    return StudyVersionService(validation_service=validation_service)
+    phase_service = MagicMock()
+    phase_service.seed_default_phase_flow = AsyncMock()
+    return StudyVersionService(
+        validation_service=validation_service,
+        phase_service=phase_service,
+    )
 
 
 @pytest.fixture
@@ -203,6 +208,26 @@ class TestCreateVersion:
         assert call_kwargs["study_id"] == study_id
         assert call_kwargs["actor_id"] == actor_id
 
+    async def test_create_version_seeds_default_subject_phase_flow(self, service, mock_session):
+        study_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            version = await service.create_version(
+                mock_session,
+                study_id,
+                "1.0",
+                actor_id=actor_id,
+            )
+
+        service.phase_service.seed_default_phase_flow.assert_awaited_once_with(
+            mock_session,
+            design_version_id=version.id,
+            study_id=study_id,
+            actor_id=actor_id,
+        )
+
     async def test_create_version_adds_to_session(self, service, mock_session):
         """create_version() should add the version to the session and flush."""
         study_id = uuid.uuid4()
@@ -274,6 +299,7 @@ class TestCreateAmendment:
         repository = MagicMock()
         repository.latest_published = AsyncMock(return_value=published_source)
         repository.draft_for_study = AsyncMock(return_value=None)
+        repository.list_for_study = AsyncMock(return_value=[published_source])
         repository.add = AsyncMock(side_effect=lambda session, version: version)
         return repository
 
@@ -354,6 +380,109 @@ class TestCreateAmendment:
         assert published_source.status == StudyVersionStatus.published
         assert published_source.published_by is not None
         amendment_repository.add.assert_not_awaited()
+
+    def test_next_version_number_supports_imported_draft_label(self):
+        assert StudyVersionService._next_version_number("Draft V2.0_11-416545") == "3.0"
+
+    async def test_create_amendment_skips_retained_abandoned_version_number(
+        self, mock_session, published_source, amendment_repository, clone_service
+    ):
+        published_source.version_number = "3.0"
+        abandoned = StudyVersion(
+            id=uuid.uuid4(),
+            study_id=published_source.study_id,
+            version_number="4.0",
+            status=StudyVersionStatus.abandoned,
+            abandonment_reason="Superseded draft",
+            abandoned_at=datetime.now(UTC),
+            abandoned_by=uuid.uuid4(),
+        )
+        amendment_repository.list_for_study.return_value = [published_source, abandoned]
+        study = Study(
+            id=published_source.study_id,
+            study_code="STUDY-001",
+            title="Test Study",
+            created_by=uuid.uuid4(),
+        )
+        service = StudyVersionService(amendment_repository, clone_service=clone_service)
+
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            result = await service.create_amendment(
+                mock_session,
+                study,
+                "Replacement amendment",
+                uuid.uuid4(),
+            )
+
+        assert result.version_number == "5.0"
+        amendment_repository.add.assert_awaited_once_with(mock_session, result)
+
+
+class TestAbandonDraft:
+    """Tests for retained, audited draft abandonment."""
+
+    async def test_abandon_draft_records_reason_actor_timestamp_and_audit(
+        self, service, mock_session, draft_version
+    ):
+        actor_id = uuid.uuid4()
+        mock_session.scalar.return_value = None
+
+        with patch("app.services.designer.study_version_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            result = await service.abandon_draft(
+                mock_session,
+                draft_version,
+                "Superseded by a validated import",
+                actor_id,
+            )
+
+        assert result.status == StudyVersionStatus.abandoned
+        assert result.abandoned_by == actor_id
+        assert result.abandoned_at is not None
+        assert result.abandonment_reason == "Superseded by a validated import"
+        mock_audit.record.assert_awaited_once()
+        assert mock_audit.record.call_args.kwargs["action"] == "abandon"
+        assert mock_audit.record.call_args.kwargs["reason"] == result.abandonment_reason
+        mock_session.flush.assert_awaited_once()
+
+    async def test_abandon_rejects_blank_reason_without_mutation(
+        self, service, mock_session, draft_version
+    ):
+        with pytest.raises(ValidationError, match="Abandonment reason is required"):
+            await service.abandon_draft(mock_session, draft_version, "  ", uuid.uuid4())
+
+        assert draft_version.status == StudyVersionStatus.draft
+        mock_session.scalar.assert_not_awaited()
+
+    async def test_abandon_rejects_published_version(
+        self, service, mock_session, published_version
+    ):
+        with pytest.raises(BusinessRuleError, match="Only a draft"):
+            await service.abandon_draft(
+                mock_session,
+                published_version,
+                "No longer needed",
+                uuid.uuid4(),
+            )
+
+        assert published_version.status == StudyVersionStatus.published
+        mock_session.scalar.assert_not_awaited()
+
+    async def test_abandon_rejects_version_referenced_by_subject(
+        self, service, mock_session, draft_version
+    ):
+        mock_session.scalar.return_value = uuid.uuid4()
+
+        with pytest.raises(ConflictError, match="operational subjects"):
+            await service.abandon_draft(
+                mock_session,
+                draft_version,
+                "No longer needed",
+                uuid.uuid4(),
+            )
+
+        assert draft_version.status == StudyVersionStatus.draft
 
 
 # ---------------------------------------------------------------------------
@@ -457,6 +586,7 @@ class TestAmendmentReasonBounds:
         repository = MagicMock()
         repository.latest_published = AsyncMock(return_value=published_source)
         repository.draft_for_study = AsyncMock(return_value=None)
+        repository.list_for_study = AsyncMock(return_value=[published_source])
         repository.add = AsyncMock(side_effect=lambda session, version: version)
         return repository
 

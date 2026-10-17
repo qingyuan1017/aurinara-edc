@@ -7,7 +7,7 @@ import { EmptyState, MetricCard, PageContainer, PageHeader, StatusBadge } from '
 import { PERMISSIONS, usePermission } from '@/lib/permissions'
 import { useCTMSCapabilityState } from './capabilities'
 import { findCTMSNavigationMatch, getCTMSWorkspaceFromPath } from './navigation'
-import { useWorkspaceStudies } from './workspace-studies'
+import { usePortfolioStudies, usePortfolioSummary } from './portfolio-management-api'
 
 function CapabilityBoundary({ children }: { children: React.ReactNode }) {
   const state = useCTMSCapabilityState()
@@ -18,10 +18,9 @@ function CapabilityBoundary({ children }: { children: React.ReactNode }) {
 }
 
 export function CTMSPortfolioWorkspacePage({ portfolioOnly = false }: { portfolioOnly?: boolean }) {
-  const studies = useWorkspaceStudies()
+  const studies = usePortfolioStudies({ page: 1, page_size: 100 })
+  const summary = usePortfolioSummary()
   const items = studies.data?.items ?? []
-  const active = items.filter((study) => String(study.status).toLowerCase() === 'active').length
-  const statusCount = new Set(items.map((study) => study.status)).size
 
   return <CapabilityBoundary><PageContainer wide className="space-y-6">
     <PageHeader
@@ -30,10 +29,10 @@ export function CTMSPortfolioWorkspacePage({ portfolioOnly = false }: { portfoli
       actions={<Button asChild variant="outline"><Link to="/ctms/studies">View study portfolio <ArrowRight className="size-4" /></Link></Button>}
     />
     {!portfolioOnly ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <MetricCard label="Accessible studies" value={studies.isLoading ? '—' : items.length} description="Server-authorized study records" icon={<BookOpen className="size-4" />} loading={studies.isLoading} />
-      <MetricCard label="Active studies" value={studies.isLoading ? '—' : active} description="Canonical status is Active" icon={<ShieldCheck className="size-4" />} loading={studies.isLoading} />
-      <MetricCard label="Lifecycle states" value={studies.isLoading ? '—' : statusCount} description="Statuses represented in this portfolio" icon={<Layers className="size-4" />} loading={studies.isLoading} />
-      <MetricCard label="Workspace scope" value="Portfolio" description="Cross-study, permission-filtered context" icon={<Building2 className="size-4" />} />
+      <MetricCard label="Accessible studies" value={summary.isLoading ? '—' : summary.data?.studies ?? 0} description="Server-authorized study records" icon={<BookOpen className="size-4" />} loading={summary.isLoading} />
+      <MetricCard label="Open work" value={summary.isLoading ? '—' : summary.data?.open_work ?? 0} description={`${summary.data?.overdue_work ?? 0} overdue`} icon={<ShieldCheck className="size-4" />} loading={summary.isLoading} />
+      <MetricCard label="Operational issues" value={summary.isLoading ? '—' : (summary.data?.open_findings ?? 0) + (summary.data?.open_capas ?? 0)} description="Open findings and CAPA" icon={<Layers className="size-4" />} loading={summary.isLoading} />
+      <MetricCard label="Resource exceptions" value={summary.isLoading ? '—' : summary.data?.overloaded_cras ?? 0} description="CRAs above available capacity" icon={<Building2 className="size-4" />} loading={summary.isLoading} />
     </div> : null}
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-3"><div><CardTitle>{portfolioOnly ? 'All accessible studies' : 'Study workspaces'}</CardTitle><p className="mt-1 text-sm text-muted-foreground">Select a study to move from portfolio oversight into detailed operational execution.</p></div><span className="text-xs text-muted-foreground">{studies.data ? `${studies.data.total} total` : 'Loading…'}</span></CardHeader>
@@ -41,16 +40,16 @@ export function CTMSPortfolioWorkspacePage({ portfolioOnly = false }: { portfoli
         {studies.isError ? <EmptyState title="Study portfolio could not be loaded" description="Retry when the study service is available." action={<Button variant="outline" onClick={() => void studies.refetch()}>Retry</Button>} /> : null}
         {!studies.isLoading && !studies.isError && items.length === 0 ? <EmptyState title="No accessible studies" description="No studies are available for the current server-authorized scope." /> : null}
         {items.length ? <div className="divide-y rounded-lg border">
-          {items.map((study) => <Link key={study.id} to="/studies/$studyId/ctms" params={{ studyId: study.id }} className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {items.map((study) => <Link key={study.study_id} to="/studies/$studyId/ctms" params={{ studyId: study.study_id }} className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">{study.study_code.slice(0, 2).toUpperCase()}</span>
-            <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-foreground">{study.study_code}</span><span className="block truncate text-sm text-muted-foreground">{study.title}</span></span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-foreground">{study.study_code}</span><span className="block truncate text-sm text-muted-foreground">{study.study_title}</span><span className="block text-xs text-muted-foreground">{study.site_count} sites · {study.open_work} open tasks · {study.open_findings} findings</span></span>
             <StatusBadge status={study.status} label="Study status" />
             <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
           </Link>)}
         </div> : null}
       </CardContent>
     </Card>
-    {!portfolioOnly ? <div className="rounded-xl border border-dashed bg-muted/25 p-5"><h2 className="text-sm font-semibold">Portfolio operations</h2><p className="mt-1 max-w-3xl text-sm text-muted-foreground">Cross-study monitoring, contracts, finance, tasks, resources, documents, and analytics are represented in the workspace navigation. Pages without a delivered aggregate API show an explicit planned-feature state rather than fabricated operational data.</p></div> : null}
+    {!portfolioOnly ? <div className="rounded-xl border bg-muted/25 p-5"><h2 className="text-sm font-semibold">Portfolio operations</h2><p className="mt-1 max-w-3xl text-sm text-muted-foreground">Monitoring, contracts, finance, feasibility, work, CAPA, templates, and resource capacity are aggregated on the server after authorization scope is applied.</p></div> : null}
   </PageContainer></CapabilityBoundary>
 }
 

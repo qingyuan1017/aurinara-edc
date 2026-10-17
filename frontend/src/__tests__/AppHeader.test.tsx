@@ -198,4 +198,29 @@ describe('study and site selectors', () => {
     expect(useStudyContext.getState()).toMatchObject({ selectedStudyId: 'study-1', selectedSiteId: 'site-1' })
     expect(localStorage.getItem('edc-study-context')).toContain('site-1')
   })
+
+  it('clears a persisted site that is not part of the selected study', async () => {
+    useStudyContext.setState({
+      selectedStudyId: 'study-1',
+      selectedStudyName: 'Example Study',
+      selectedSiteId: 'site-from-another-study',
+      selectedSiteName: 'Wrong Site',
+    })
+    vi.spyOn(api, 'get').mockImplementation(async (url) => ({
+      data: String(url) === '/sites/site-from-another-study'
+        ? { id: 'site-from-another-study', study_id: 'other-study', site_number: '999', name: 'Wrong Site' }
+        : {
+            items: [{ id: 'site-1', site_number: '001', name: 'Example Site' }],
+            page: 1,
+            page_size: 100,
+            total: 1,
+          },
+    } as never))
+
+    renderWithQuery(<SiteSelector />)
+
+    await waitFor(() => expect(useStudyContext.getState().selectedSiteId).toBeNull())
+    expect(screen.queryByRole('option', { name: 'Wrong Site' })).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Select site' })).toHaveValue('')
+  })
 })

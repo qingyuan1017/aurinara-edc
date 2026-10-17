@@ -39,15 +39,10 @@ storage keys and credentials never reach the frontend.
      --output ..\migration\edc-platform-snapshot.json
    ```
 
-4. Import the snapshot into `aurinara-platform`. For every reviewed platform role, create
-   an explicit least-privilege mapping to an existing EDC role from `backend/`:
-
-   ```powershell
-   python -m scripts.map_platform_role PLATFORM_ROLE_UUID LOCAL_EDC_ROLE_UUID
-   ```
-
-   The command is idempotent and refuses implicit remapping. Unmapped roles cause their
-   membership event to fail safely instead of granting guessed permissions.
+4. Import the snapshot into `aurinara-platform`, then register the EDC permission catalog
+   and configure the reviewed least-privilege roles in Platform. Platform role events
+   project the exact role IDs and permission composition back to EDC; unknown permissions
+   fail safely instead of granting guessed access.
 5. Subscribe the projection worker to the platform event stream and run authorization in
    shadow mode.
 
@@ -64,7 +59,7 @@ After Cognito enrollment and shadow reconciliation are complete, set
 endpoints. Keep it enabled during shadow rollout so existing authorization behavior is
 unchanged.
 
-The service account needs `platform.authorization.decide`, `edc.role.sync`,
+The service account needs `platform.authorization.decide`, `edc.permission.sync`,
 `edc.site.sync`, and the applicable `aurinara-edc.object.*` permissions. End-user tokens
 are validated locally against JWKS; no per-request authentication callback is made to the
 identity provider.

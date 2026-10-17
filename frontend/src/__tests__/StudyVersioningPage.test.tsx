@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { StudyVersioningPage } from '@/features/studies/StudyVersioningPage'
 import { useAuthStore } from '@/lib/auth'
@@ -114,7 +114,10 @@ describe('StudyVersioningPage shared composition', () => {
         version_id: 'version-1',
         valid: false,
         counts: { forms: 1, sections: 1, fields: 2, visits: 1, scheduled_form_mappings: 0, codelists: 0, codelist_items: 0, edit_checks: 0, subject_phases: 0 },
-        issues: [{ code: 'FORM_NOT_SCHEDULED', severity: 'error', message: 'Form DM is not mapped to any visit.' }],
+        issues: [
+          { code: 'FORM_NOT_SCHEDULED', severity: 'error', message: 'Form DM is not mapped to any visit.' },
+          { code: 'NO_SUBJECT_PHASES', severity: 'error', message: 'Configure at least one subject phase before publishing.' },
+        ],
       } })
       return Promise.resolve({ data: [{ id: 'version-1', study_id: 'study-1', version_number: '1.0', status: 'draft', created_at: '2026-10-10T12:00:00Z' }] })
     })
@@ -123,6 +126,11 @@ describe('StudyVersioningPage shared composition', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Publish' }))
 
     expect(await screen.findByText('Form DM is not mapped to any visit.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Configure subject phases' })).toHaveAttribute(
+      'href',
+      '/studies/study-1/designer/subject-phases?design_version_id=version-1',
+    )
+    expect(screen.getByRole('region', { name: 'Publication readiness details' })).toHaveClass('overflow-y-auto')
     expect(screen.getByRole('button', { name: 'Publish version' })).toBeDisabled()
     expect(api.post).not.toHaveBeenCalledWith('/designer/versions/version-1/publish')
   })
@@ -136,5 +144,39 @@ describe('StudyVersioningPage shared composition', () => {
     renderPage()
 
     expect(await screen.findByRole('link', { name: 'View in Designer' })).toHaveAttribute('href', '/studies/study-1/designer/forms?design_version_id=version-1')
+  })
+
+  it('abandons a draft with a required reason and retains it in version history', async () => {
+    vi.mocked(api.get).mockImplementation((url) => {
+      if (url === '/studies/study-1') return Promise.resolve({ data: { id: 'study-1', study_code: 'EDC-001', title: 'Example study' } })
+      return Promise.resolve({ data: [
+        { id: 'version-1', study_id: 'study-1', version_number: '1.0', status: 'draft', created_at: '2026-10-10T10:00:00Z' },
+        { id: 'version-2', study_id: 'study-1', version_number: '2.0', status: 'published', published_at: '2026-10-10T12:00:00Z', created_at: '2026-10-10T11:00:00Z' },
+      ] })
+    })
+    vi.mocked(api.post).mockResolvedValue({ data: {
+      id: 'version-1',
+      study_id: 'study-1',
+      version_number: '1.0',
+      status: 'abandoned',
+      abandonment_reason: 'Superseded by the validated ODM import.',
+      abandoned_at: '2026-10-14T20:00:00Z',
+      created_at: '2026-10-10T10:00:00Z',
+    } })
+
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandon draft' }))
+
+    const dialog = screen.getByRole('dialog')
+    const submit = within(dialog).getByRole('button', { name: 'Abandon draft' })
+    expect(submit).toBeDisabled()
+    fireEvent.change(within(dialog).getByLabelText('Abandonment reason'), { target: { value: 'Superseded by the validated ODM import.' } })
+    fireEvent.click(submit)
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(
+      '/designer/versions/version-1/abandon',
+      { reason: 'Superseded by the validated ODM import.' },
+    ))
+    expect(await screen.findByText('Draft version 1.0 abandoned.')).toBeInTheDocument()
   })
 })

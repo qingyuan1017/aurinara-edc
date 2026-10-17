@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -37,10 +38,12 @@ function errorMessage(error: unknown, fallback: string): string {
 
 /** Review publication readiness and require explicit confirmation before publish. */
 export function PublishDesignDialog({
+  studyId,
   versionId,
   versionNumber,
   onPublished,
 }: {
+  studyId: string
   versionId: string
   versionNumber: string
   onPublished: () => void
@@ -66,12 +69,15 @@ export function PublishDesignDialog({
   const errors = report?.issues.filter((issue) => issue.severity === 'error') ?? []
   const warnings = report?.issues.filter((issue) => issue.severity === 'warning') ?? []
   const counts = report?.counts
+  const needsSubjectPhaseConfiguration = errors.some((issue) => (
+    issue.code === 'NO_SUBJECT_PHASES' || issue.code === 'NO_REGISTERED_SUBJECT_PHASE'
+  ))
 
   return (
     <>
       <Button type="button" variant="link" size="sm" onClick={() => setOpen(true)}>Publish</Button>
       <Dialog open={open} onOpenChange={(next) => { if (!publish.isPending) setOpen(next) }}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-h-[min(90vh,44rem)] max-w-xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Review and publish version {versionNumber}</DialogTitle>
             <DialogDescription>
@@ -79,45 +85,63 @@ export function PublishDesignDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {validation.isLoading ? <p className="text-sm text-muted-foreground" role="status">Validating the complete design…</p> : null}
-          {validation.isError ? (
-            <Alert variant="destructive"><AlertDescription>{errorMessage(validation.error, 'Could not validate this design.')}</AlertDescription></Alert>
-          ) : null}
+          <div
+            className="min-h-0 space-y-4 overflow-y-auto pr-2"
+            role="region"
+            aria-label="Publication readiness details"
+            tabIndex={0}
+          >
+            {validation.isLoading ? <p className="text-sm text-muted-foreground" role="status">Validating the complete design…</p> : null}
+            {validation.isError ? (
+              <Alert variant="destructive"><AlertDescription>{errorMessage(validation.error, 'Could not validate this design.')}</AlertDescription></Alert>
+            ) : null}
 
-          {counts ? (
-            <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/30 p-3 text-sm sm:grid-cols-4" aria-label="Design definition counts">
-              <span><strong>{counts.forms}</strong> forms</span>
-              <span><strong>{counts.fields}</strong> fields</span>
-              <span><strong>{counts.visits}</strong> visits</span>
-              <span><strong>{counts.scheduled_form_mappings}</strong> mappings</span>
-              <span><strong>{counts.codelists}</strong> codelists</span>
-              <span><strong>{counts.edit_checks}</strong> edit checks</span>
-              <span><strong>{counts.subject_phases}</strong> phases</span>
-            </div>
-          ) : null}
+            {counts ? (
+              <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/30 p-3 text-sm sm:grid-cols-4" aria-label="Design definition counts">
+                <span><strong>{counts.forms}</strong> forms</span>
+                <span><strong>{counts.fields}</strong> fields</span>
+                <span><strong>{counts.visits}</strong> visits</span>
+                <span><strong>{counts.scheduled_form_mappings}</strong> mappings</span>
+                <span><strong>{counts.codelists}</strong> codelists</span>
+                <span><strong>{counts.edit_checks}</strong> edit checks</span>
+                <span><strong>{counts.subject_phases}</strong> phases</span>
+              </div>
+            ) : null}
 
-          {errors.length ? (
-            <Alert variant="destructive">
-              <AlertDescription>
-                <p className="font-medium">Resolve these blocking issues before publishing:</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5">{errors.map((issue) => <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>)}</ul>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          {warnings.length ? (
-            <Alert variant="warning">
-              <AlertDescription>
-                <p className="font-medium">Review these warnings:</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5">{warnings.map((issue) => <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>)}</ul>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          {report?.valid ? (
-            <Alert variant="success"><AlertDescription>This design passed all blocking publication checks.</AlertDescription></Alert>
-          ) : null}
-          {publish.isError ? (
-            <Alert variant="destructive"><AlertDescription>{errorMessage(publish.error, 'Could not publish this design.')}</AlertDescription></Alert>
-          ) : null}
+            {errors.length ? (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  <p className="font-medium">Resolve these blocking issues before publishing:</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5">{errors.map((issue) => <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>)}</ul>
+                  {needsSubjectPhaseConfiguration ? (
+                    <Button asChild type="button" variant="outline" size="sm" className="mt-3">
+                      <Link
+                        to="/studies/$studyId/designer/subject-phases"
+                        params={{ studyId }}
+                        search={{ design_version_id: versionId }}
+                      >
+                        Configure subject phases
+                      </Link>
+                    </Button>
+                  ) : null}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {warnings.length ? (
+              <Alert variant="warning">
+                <AlertDescription>
+                  <p className="font-medium">Review these warnings:</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5">{warnings.map((issue) => <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>)}</ul>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {report?.valid ? (
+              <Alert variant="success"><AlertDescription>This design passed all blocking publication checks.</AlertDescription></Alert>
+            ) : null}
+            {publish.isError ? (
+              <Alert variant="destructive"><AlertDescription>{errorMessage(publish.error, 'Could not publish this design.')}</AlertDescription></Alert>
+            ) : null}
+          </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={publish.isPending}>Cancel</Button>

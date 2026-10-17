@@ -44,6 +44,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { DesignerJsonImport } from './DesignerJsonImport'
+import { DesignerOdm2Actions } from './DesignerOdm2Actions'
 import { DraftGate } from './shared'
 
 interface Field { id: string; label: string; question?: string | null; caption?: string | null; text_align: string; variable_name: string; record_id?: string | null; crf_id?: string | null; odm_id?: string | null; control_type: string; data_type: string; is_required: boolean; display_order: number; codelist_id?: string | null; form_section_id?: string; help_text?: string | null; max_length?: number | null; unit?: string | null; min_value?: number | string | null; max_value?: number | string | null; decimal_precision?: number | null }
@@ -621,7 +622,7 @@ function FormBuilderInner({ studyId, versionId, readOnly }: { studyId: string; v
 
   return (
     <PageContainer wide>
-      <PageHeader title="Form Builder" description={readOnly ? "Review forms, sections, fields, and settings from this published design version." : "Drag field types from the palette into sections, and reorder sections and fields. Configure eCRF definitions on the current draft study version."} ownership={<OwnershipBadge owner="Designer" />} actions={canConfigure ? <DesignerJsonImport studyId={studyId} /> : undefined} />
+      <PageHeader title="Form Builder" description={readOnly ? "Review forms, sections, fields, and settings from this published design version." : "Drag field types from the palette into sections, and reorder sections and fields. Configure eCRF definitions on the current draft study version."} ownership={<OwnershipBadge owner="Designer" />} actions={<div className="flex flex-wrap gap-2">{canConfigure ? <DesignerJsonImport studyId={studyId} /> : null}<DesignerOdm2Actions studyId={studyId} versionId={versionId} allowImport={canConfigure} /></div>} />
       {error ? <Alert variant="destructive" className="mb-6"><AlertDescription>{error}</AlertDescription></Alert> : null}
 
       <div className="grid gap-6 lg:grid-cols-[18rem_1fr]">

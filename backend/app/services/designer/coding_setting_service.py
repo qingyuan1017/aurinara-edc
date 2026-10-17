@@ -41,6 +41,12 @@ class CodingSettingService:
         dictionary_reference: str,
         coding_rule: str | None = None,
         field_definition_id: UUID | None = None,
+        dictionary_version: str | None = None,
+        coding_level: str | None = None,
+        locale: str | None = None,
+        priority: int = 100,
+        approval_required: bool = True,
+        auto_approval: bool = False,
         actor_id: UUID | None = None,
     ) -> CodingSetting:
         """Persist a Coding_Setting within one Design_Version.
@@ -75,6 +81,12 @@ class CodingSettingService:
             dictionary_reference=normalized_reference,
             coding_rule=coding_rule,
             field_definition_id=field_definition_id,
+            dictionary_version=dictionary_version,
+            coding_level=coding_level,
+            locale=locale,
+            priority=priority,
+            approval_required=approval_required,
+            auto_approval=auto_approval,
         )
         session.add(setting)
         await session.flush()

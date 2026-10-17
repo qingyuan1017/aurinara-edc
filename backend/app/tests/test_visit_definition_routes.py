@@ -153,6 +153,7 @@ VISIT_BODY = {
     "window_after": 3,
     "display_order": 1,
     "is_required": True,
+    "addable": True,
 }
 
 
@@ -173,6 +174,7 @@ class TestVisitDefinitionRoutes:
         assert payload["window_after"] == VISIT_BODY["window_after"]
         assert payload["display_order"] == VISIT_BODY["display_order"]
         assert payload["is_required"] == VISIT_BODY["is_required"]
+        assert payload["addable"] is True
         assert payload["study_version_id"] == str(seeded["version"].id)
 
     async def test_post_inverted_window_rejected_and_persists_nothing(

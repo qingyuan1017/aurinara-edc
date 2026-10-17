@@ -35,7 +35,13 @@ class StudyVersionCreate(BaseCreateSchema):
 class StudyAmendmentCreate(BaseCreateSchema):
     """Request body for creating an amendment from a published version."""
 
-    reason: str = Field(..., min_length=1, max_length=10_000)
+    reason: str = Field(..., min_length=1, max_length=4_000)
+
+
+class StudyVersionAbandon(BaseCreateSchema):
+    """Request body for abandoning an editable draft without deleting it."""
+
+    reason: str = Field(..., min_length=1, max_length=4_000)
 
 
 class StudyVersionResponse(BaseSchema):
@@ -44,11 +50,16 @@ class StudyVersionResponse(BaseSchema):
     id: UUID
     study_id: UUID
     version_number: str
+    odm_study_oid: str | None = None
+    odm_metadata_version_oid: str | None = None
     status: str
     amendment_reason: str | None = None
     amended_from_version_id: UUID | None = None
     published_at: UtcDatetime | None = None
     published_by: UUID | None = None
+    abandoned_at: UtcDatetime | None = None
+    abandoned_by: UUID | None = None
+    abandonment_reason: str | None = None
     created_at: UtcDatetime
 
 
@@ -63,6 +74,8 @@ class DesignValidationCounts(BaseSchema):
     codelists: int = 0
     codelist_items: int = 0
     edit_checks: int = 0
+    derivations: int = 0
+    measurement_units: int = 0
     subject_phases: int = 0
 
 
@@ -90,6 +103,7 @@ __all__ = [
     "DesignValidationIssue",
     "DesignValidationResponse",
     "StudyAmendmentCreate",
+    "StudyVersionAbandon",
     "StudyVersionCreate",
     "StudyVersionResponse",
 ]

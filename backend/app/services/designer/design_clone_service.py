@@ -15,9 +15,14 @@ from app.models.designer.arm_definition import ArmDefinition
 from app.models.designer.codelist import Codelist, CodelistItem
 from app.models.designer.coding_setting import CodingSetting
 from app.models.designer.crf_access_definition import CrfAccessDefinition
+from app.models.designer.custom_function import (
+    CustomFunctionDefinition,
+    CustomFunctionVersion,
+)
 from app.models.designer.edit_check import EditCheck
 from app.models.designer.form_dependency import FormDefinitionDependency
 from app.models.designer.form_metadata import FieldDefinition, FormDefinition, FormSection
+from app.models.designer.odm_metadata import DerivationDefinition, MeasurementUnitDefinition
 from app.models.designer.raw_data_variable_setting import RawDataVariableSetting
 from app.models.designer.schedule_of_assessment import ScheduleOfAssessment
 from app.models.designer.subject_phase_definition import (
@@ -267,21 +272,21 @@ class DesignCloneService:
         arms = list(
             (
                 await session.execute(
-                    select(ArmDefinition)
-                    .where(
+                    select(ArmDefinition).where(
                         ArmDefinition.study_version_id == source_version_id,
                         ArmDefinition.deleted_at.is_(None),
                     )
-                    .options(selectinload(ArmDefinition.visits))
                 )
             )
             .scalars()
             .all()
         )
+        arm_map: dict[UUID, ArmDefinition] = {}
         for source in arms:
             clone = _copy_row(source, study_version_id=target_version_id)
-            clone.visits = [visit_map.get(visit.id, visit) for visit in source.visits]
             session.add(clone)
+            arm_map[source.id] = clone
+        await session.flush()
         counts["arms"] = len(arms)
 
         schedules = list(
@@ -300,7 +305,15 @@ class DesignCloneService:
         )
         schedule_entry_count = 0
         for source in schedules:
-            clone = _copy_row(source, design_version_id=target_version_id)
+            clone = _copy_row(
+                source,
+                design_version_id=target_version_id,
+                arm_definition_id=(
+                    arm_map[source.arm_definition_id].id
+                    if source.arm_definition_id in arm_map
+                    else None
+                ),
+            )
             session.add(clone)
             await session.flush()
             for entry in source.entries:
@@ -337,6 +350,61 @@ class DesignCloneService:
                 )
             )
         counts["edit_checks"] = len(edit_checks)
+
+        custom_functions = await self._version_rows(
+            session,
+            CustomFunctionDefinition,
+            CustomFunctionDefinition.study_version_id,
+            source_version_id,
+        )
+        custom_function_map: dict[UUID, CustomFunctionDefinition] = {}
+        for source in custom_functions:
+            clone = _copy_row(source, study_version_id=target_version_id)
+            session.add(clone)
+            custom_function_map[source.id] = clone
+        await session.flush()
+        counts["custom_functions"] = len(custom_function_map)
+
+        custom_function_versions = await self._rows_for_ids(
+            session,
+            CustomFunctionVersion,
+            CustomFunctionVersion.definition_id,
+            set(custom_function_map),
+        )
+        for source in custom_function_versions:
+            session.add(
+                _copy_row(
+                    source,
+                    definition_id=custom_function_map[source.definition_id].id,
+                )
+            )
+        counts["custom_function_versions"] = len(custom_function_versions)
+
+        measurement_units = await self._version_rows(
+            session,
+            MeasurementUnitDefinition,
+            MeasurementUnitDefinition.study_version_id,
+            source_version_id,
+        )
+        for source in measurement_units:
+            session.add(_copy_row(source, study_version_id=target_version_id))
+        counts["measurement_units"] = len(measurement_units)
+
+        derivations = await self._version_rows(
+            session,
+            DerivationDefinition,
+            DerivationDefinition.study_version_id,
+            source_version_id,
+        )
+        for source in derivations:
+            session.add(
+                _copy_row(
+                    source,
+                    study_version_id=target_version_id,
+                    target_field_definition_id=field_map[source.target_field_definition_id].id,
+                )
+            )
+        counts["derivations"] = len(derivations)
 
         access_rows = await self._version_rows(
             session,

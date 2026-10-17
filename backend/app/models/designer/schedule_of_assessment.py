@@ -7,11 +7,11 @@ Design_Consumption_Contract. These are **new** designer tables (not a
 reassignment of an existing EDC table), each bound to exactly one
 ``Design_Version`` through ``design_version_id``.
 
-The SoA is modelled as a parent ``ScheduleOfAssessment`` (one per
-``Design_Version``) holding an ordered collection of ``ScheduleOfAssessmentEntry``
-rows. Each entry maps a form (``form_definitions``) **or** a named procedure to a
-single ``visit_definitions`` row (a plain visit or a cycle — a cycle is now a
-visit of ``visit_type == 'cycle'``):
+The SoA is modelled as a parent ``ScheduleOfAssessment`` scoped either to the
+common/pre-arm schedule or to one treatment arm, holding an ordered collection
+of ``ScheduleOfAssessmentEntry`` rows. Each entry maps a form
+(``form_definitions``) **or** a named procedure to a single
+``visit_definitions`` row:
 
   - ``form_definition_id`` XOR ``procedure_name`` identifies *what* is collected.
   - ``visit_definition_id`` identifies *when*.
@@ -43,17 +43,19 @@ from sqlalchemy import (
     Integer,
     String,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
 if TYPE_CHECKING:  # avoid runtime import cycles; resolved via the shared registry
+    from app.models.designer.arm_definition import ArmDefinition
     from app.models.designer.study_version import StudyVersion
 
 
 class ScheduleOfAssessment(Base):
-    """The schedule-of-assessment matrix for one ``Design_Version`` (R4.1).
+    """One scoped schedule-of-assessment matrix in a ``Design_Version`` (R4.1).
 
     One SoA binds to exactly one ``Design_Version`` via ``design_version_id`` and
     owns an ordered collection of :class:`ScheduleOfAssessmentEntry` mappings.
@@ -71,6 +73,14 @@ class ScheduleOfAssessment(Base):
         nullable=False,
     )
 
+    # Optional treatment-arm scope. NULL identifies the common/pre-arm SoA;
+    # an arm id identifies that arm's complete treatment schedule.
+    arm_definition_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("arm_definitions.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
     # Timestamps (timezone-aware)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
@@ -84,6 +94,7 @@ class ScheduleOfAssessment(Base):
 
     # Relationships (resolved by string against the shared ORM registry)
     design_version: Mapped[StudyVersion] = relationship("StudyVersion", lazy="selectin")
+    arm_definition: Mapped[ArmDefinition | None] = relationship("ArmDefinition", lazy="selectin")
     entries: Mapped[list[ScheduleOfAssessmentEntry]] = relationship(
         "ScheduleOfAssessmentEntry",
         back_populates="schedule_of_assessment",
@@ -97,10 +108,33 @@ class ScheduleOfAssessment(Base):
             "ix_schedule_of_assessment_design_version_id",
             "design_version_id",
         ),
+        Index(
+            "ix_schedule_of_assessment_arm_definition_id",
+            "arm_definition_id",
+        ),
+        Index(
+            "uq_schedule_of_assessment_common_live",
+            "design_version_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL AND arm_definition_id IS NULL"),
+            sqlite_where=text("deleted_at IS NULL AND arm_definition_id IS NULL"),
+        ),
+        Index(
+            "uq_schedule_of_assessment_arm_live",
+            "design_version_id",
+            "arm_definition_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL AND arm_definition_id IS NOT NULL"),
+            sqlite_where=text("deleted_at IS NULL AND arm_definition_id IS NOT NULL"),
+        ),
     )
 
     def __repr__(self) -> str:
-        return f"<ScheduleOfAssessment(id={self.id}, design_version_id={self.design_version_id})>"
+        return (
+            f"<ScheduleOfAssessment(id={self.id}, "
+            f"design_version_id={self.design_version_id}, "
+            f"arm_definition_id={self.arm_definition_id})>"
+        )
 
 
 class ScheduleOfAssessmentEntry(Base):

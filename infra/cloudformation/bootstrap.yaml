@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Aurinara EDC consumer delivery role, templates, and immutable image repository.
+
+Parameters:
+  GitHubOwner: {Type: String}
+  GitHubRepository: {Type: String}
+  DeploymentBranch: {Type: String, Default: main}
+  GitHubOidcProviderArn: {Type: String}
+
+Resources:
+  CloudFormationExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: aurinara-edc-cloudformation-execution
+      AssumeRolePolicyDocument: {Version: '2012-10-17', Statement: [{Effect: Allow, Principal: {Service: cloudformation.amazonaws.com}, Action: 'sts:AssumeRole'}]}
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AdministratorAccess]
+  DeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: aurinara-edc-github-deployment
+      MaxSessionDuration: 7200
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Federated: !Ref GitHubOidcProviderArn}
+            Action: 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:repository: !Sub '${GitHubOwner}/${GitHubRepository}'
+                token.actions.githubusercontent.com:ref: !Sub 'refs/heads/${DeploymentBranch}'
+              StringLike:
+                token.actions.githubusercontent.com:sub: [!Sub 'repo:${GitHubOwner}/${GitHubRepository}:environment:staging', !Sub 'repo:${GitHubOwner}/${GitHubRepository}:environment:production']
+      Policies:
+        - PolicyName: delivery
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - {Effect: Allow, Action: ['cloudformation:CreateChangeSet', 'cloudformation:CreateStack', 'cloudformation:DeleteChangeSet', 'cloudformation:Describe*', 'cloudformation:Detect*', 'cloudformation:ExecuteChangeSet', 'cloudformation:GetTemplateSummary', 'cloudformation:List*', 'cloudformation:UpdateStack', 'cloudformation:ValidateTemplate', 'cloudformation:UpdateTerminationProtection'], Resource: '*'}
+              - {Effect: Allow, Action: 'iam:PassRole', Resource: !GetAtt CloudFormationExecutionRole.Arn}
+              - {Effect: Allow, Action: ['ecr:BatchCheckLayerAvailability', 'ecr:CompleteLayerUpload', 'ecr:GetAuthorizationToken', 'ecr:GetDownloadUrlForLayer', 'ecr:InitiateLayerUpload', 'ecr:PutImage', 'ecr:UploadLayerPart', 'ecr:BatchGetImage', 'ecr:DescribeImages'], Resource: '*'}
+              - {Effect: Allow, Action: [s3:GetObject, s3:PutObject, s3:ListBucket, s3:GetBucketLocation], Resource: [!GetAtt TemplateBucket.Arn, !Sub '${TemplateBucket.Arn}/*', !Sub 'arn:${AWS::Partition}:s3:::aurinara-edc-*', !Sub 'arn:${AWS::Partition}:s3:::aurinara-edc-*/*']}
+              - {Effect: Allow, Action: [ecs:DescribeServices, ecs:DescribeTaskDefinition, ecs:DescribeTasks, ecs:ListTasks, ecs:RunTask], Resource: '*'}
+              - {Effect: Allow, Action: 'iam:PassRole', Resource: '*', Condition: {StringEquals: {'iam:PassedToService': ecs-tasks.amazonaws.com}}}
+              - {Effect: Allow, Action: [cloudfront:CreateInvalidation, rds:CreateDBSnapshot, rds:DescribeDBSnapshots], Resource: '*'}
+  TemplateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption: {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]}
+      PublicAccessBlockConfiguration: {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
+      VersioningConfiguration: {Status: Enabled}
+  ApplicationRepository:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RepositoryName: aurinara-edc/application
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration: {ScanOnPush: true}
+      EncryptionConfiguration: {EncryptionType: AES256}
+      LifecyclePolicy: {LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Retain 50 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":50},"action":{"type":"expire"}}]}'}
+
+Outputs:
+  DeploymentRoleArn: {Value: !GetAtt DeploymentRole.Arn}
+  CloudFormationExecutionRoleArn: {Value: !GetAtt CloudFormationExecutionRole.Arn}
+  TemplateBucketName: {Value: !Ref TemplateBucket}
+  ApplicationRepositoryUri: {Value: !GetAtt ApplicationRepository.RepositoryUri}

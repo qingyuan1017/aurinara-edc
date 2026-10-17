@@ -29,6 +29,9 @@ export interface StudyVersion {
   amended_from_version_id?: string | null
   published_at?: string | null
   published_by?: string | null
+  abandoned_at?: string | null
+  abandoned_by?: string | null
+  abandonment_reason?: string | null
   created_at: string
 }
 
@@ -58,6 +61,8 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
   const canPublish = usePermission(PERMISSIONS.DESIGNER_VERSION_PUBLISH, studyId)
   const [showAmendmentForm, setShowAmendmentForm] = useState(false)
   const [reason, setReason] = useState('')
+  const [abandoningVersion, setAbandoningVersion] = useState<StudyVersion | null>(null)
+  const [abandonmentReason, setAbandonmentReason] = useState('')
   const [validationError, setValidationError] = useState('')
   const [message, setMessage] = useState('')
 
@@ -111,6 +116,19 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
     onError: (error: unknown) => {
       setValidationError(getApiErrorMessage(error, 'Could not create the amendment.'))
       setMessage('')
+    },
+  })
+
+  const abandonDraft = useMutation({
+    mutationFn: async ({ versionId, reason: abandonment }: { versionId: string; reason: string }) => (
+      await api.post<StudyVersion>(`/designer/versions/${versionId}/abandon`, { reason: abandonment })
+    ).data,
+    onSuccess: async (version) => {
+      await queryClient.invalidateQueries({ queryKey: ['study-versions', studyId] })
+      setAbandoningVersion(null)
+      setAbandonmentReason('')
+      setValidationError('')
+      setMessage(`Draft version ${version.version_number} abandoned.`)
     },
   })
 
@@ -175,18 +193,19 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
           >
             <Table>
               <caption className="sr-only">Study version history</caption>
-              <TableHeader><TableRow>{['Version', 'Status', 'Amendment reason', 'Based on', 'Created', 'Published', 'Actions'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
+              <TableHeader><TableRow>{['Version', 'Status', 'Lifecycle reason', 'Based on', 'Created', 'Published', 'Actions'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader>
               <TableBody>{versions.map((version) => {
                 const source = version.amended_from_version_id ? versionsById.get(version.amended_from_version_id) : undefined
                 return <TableRow key={version.id}>
                   <TableCell className="whitespace-nowrap font-medium">v{version.version_number}</TableCell>
                   <TableCell><StatusBadge status={version.status} label="Version status" /></TableCell>
-                  <TableCell className="max-w-xs">{version.amendment_reason || 'Initial study version'}</TableCell>
+                  <TableCell className="max-w-xs">{version.abandonment_reason || version.amendment_reason || 'Initial study version'}</TableCell>
                   <TableCell>{source ? `v${source.version_number}` : version.amended_from_version_id ? 'Previous published version' : '—'}</TableCell>
                   <TableCell className="whitespace-nowrap">{formatDate(version.created_at)}</TableCell>
                   <TableCell className="whitespace-nowrap">{formatDate(version.published_at)}</TableCell>
-                  <TableCell>{canPublish && version.status === 'draft' ? (
+                  <TableCell><div className="flex flex-wrap gap-2">{canPublish && version.status === 'draft' ? (
                     <PublishDesignDialog
+                      studyId={studyId}
                       versionId={version.id}
                       versionNumber={version.version_number}
                       onPublished={() => {
@@ -196,11 +215,11 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
                         setValidationError('')
                       }}
                     />
-                  ) : version.status === 'published' && canRead ? (
+                  ) : null}{canConfigure && version.status === 'draft' ? <Button type="button" variant="outline" size="sm" onClick={() => { setAbandoningVersion(version); setAbandonmentReason(''); abandonDraft.reset(); setMessage('') }}>Abandon draft</Button> : null}{version.status === 'published' && canRead ? (
                     <Button asChild type="button" variant="outline" size="sm">
                       <Link to="/studies/$studyId/designer/forms" params={{ studyId }} search={{ design_version_id: version.id }}>View in Designer</Link>
                     </Button>
-                  ) : version.status === 'published' ? <span className="text-sm text-muted-foreground">Read-only</span> : null}</TableCell>
+                  ) : version.status === 'published' ? <span className="text-sm text-muted-foreground">Read-only</span> : version.status === 'abandoned' ? <span className="text-sm text-muted-foreground">Retained history</span> : null}</div></TableCell>
                 </TableRow>
               })}</TableBody>
             </Table>
@@ -215,8 +234,22 @@ export function StudyVersioningPage({ studyId }: { studyId: string }) {
             <DialogDescription>A complete editable copy will be created from {latestPublished ? `published version ${latestPublished.version_number}` : 'the latest published version'}. Prior versions are retained.</DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); setValidationError(''); amendment.mutate() }}>
-            <div className="space-y-2"><Label htmlFor="amendment-reason">Amendment reason</Label><Textarea id="amendment-reason" required minLength={1} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Describe the protocol or study configuration change." /></div>
+            <div className="space-y-2"><Label htmlFor="amendment-reason">Amendment reason</Label><Textarea id="amendment-reason" required minLength={1} maxLength={4000} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Describe the protocol or study configuration change." /></div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setShowAmendmentForm(false)}>Cancel</Button><Button type="submit" pending={amendment.isPending} loadingText="Creating…">Create draft amendment</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(abandoningVersion)} onOpenChange={(open) => { if (!open) { setAbandoningVersion(null); setAbandonmentReason(''); abandonDraft.reset() } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Abandon draft version</DialogTitle>
+            <DialogDescription>Version {abandoningVersion?.version_number} will become read-only and remain in the version history. This does not delete its definitions.</DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (abandoningVersion && abandonmentReason.trim()) abandonDraft.mutate({ versionId: abandoningVersion.id, reason: abandonmentReason.trim() }) }}>
+            <div className="space-y-2"><Label htmlFor="abandonment-reason">Abandonment reason</Label><Textarea id="abandonment-reason" required minLength={1} maxLength={4000} value={abandonmentReason} onChange={(event) => setAbandonmentReason(event.target.value)} placeholder="Explain why this draft will not be continued." /></div>
+            {abandonDraft.error ? <Alert variant="destructive"><AlertDescription>{getApiErrorMessage(abandonDraft.error, 'Could not abandon the draft version.')}</AlertDescription></Alert> : null}
+            <DialogFooter><Button type="button" variant="outline" onClick={() => setAbandoningVersion(null)}>Cancel</Button><Button type="submit" variant="destructive" pending={abandonDraft.isPending} loadingText="Abandoning…" disabled={!abandonmentReason.trim()}>Abandon draft</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

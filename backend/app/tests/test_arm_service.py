@@ -13,8 +13,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.database import Base
-from app.core.exceptions import ConflictError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.designer.arm_definition import ArmDefinition
+from app.models.designer.schedule_of_assessment import ScheduleOfAssessment
 from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
 from app.services.designer.arm_service import ArmService
 
@@ -142,3 +143,43 @@ class TestCreateArmDefinition:
             )
         ).scalar_one()
         assert count == 1
+
+
+class TestDeleteArmDefinition:
+    """ArmService.delete_arm_definition()."""
+
+    async def test_soft_deletes_arm_and_only_its_scoped_schedule(self, service, db_session):
+        version = await _make_draft_version(db_session)
+        arm = await service.create_arm_definition(
+            db_session,
+            design_version_id=version.id,
+            name="Treatment Arm A",
+            display_order=1,
+        )
+        common_schedule = ScheduleOfAssessment(
+            design_version_id=version.id,
+            arm_definition_id=None,
+        )
+        arm_schedule = ScheduleOfAssessment(
+            design_version_id=version.id,
+            arm_definition_id=arm.id,
+        )
+        db_session.add_all([common_schedule, arm_schedule])
+        await db_session.flush()
+
+        await service.delete_arm_definition(db_session, arm.id, actor_id=uuid4())
+
+        assert arm.deleted_at is not None
+        assert arm_schedule.deleted_at is not None
+        assert common_schedule.deleted_at is None
+        assert await service.list_arm_definitions(db_session, version.id) == []
+        with pytest.raises(NotFoundError):
+            await service.get_arm_definition(db_session, arm.id)
+
+        replacement = await service.create_arm_definition(
+            db_session,
+            design_version_id=version.id,
+            name="Treatment Arm A",
+            display_order=1,
+        )
+        assert replacement.id != arm.id

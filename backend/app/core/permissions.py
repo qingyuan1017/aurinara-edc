@@ -50,6 +50,9 @@ PERMISSION_CODES: set[str] = {
     "designer.field.configure",
     "designer.editcheck.configure",
     "designer.editcheck.test",
+    "designer.custom_function.author",
+    "designer.custom_function.approve",
+    "designer.custom_function.execute",
     "designer.codelist.read",
     "designer.codelist.configure",
     "designer.subject_phase.read",
@@ -63,12 +66,18 @@ PERMISSION_CODES: set[str] = {
     "designer.crf_access.configure",
     "designer.raw_data_variable.configure",
     "designer.coding_setting.configure",
+    "designer.sdr.configure",
+    "designer.odm.import",
+    "designer.odm.export",
     # Site management
     "site.manage",
     "site.read",
     # Subject management
     "subject.create",
+    "subject.delete",
     "subject.read",
+    "subject.restore",
+    "subject.transfer",
     "subject.update",
     # Form management
     "form.configure",
@@ -87,6 +96,15 @@ PERMISSION_CODES: set[str] = {
     "sdv.manage",
     "review.manage",
     "lock.manage",
+    "listing.read",
+    "review.read",
+    "sdv.read",
+    "sdr.read",
+    "sdr.manage",
+    "lock.read",
+    "lock.request",
+    "lock.approve",
+    "lock.execute",
     # Signature
     "signature.sign",
     # Audit and export
@@ -101,6 +119,9 @@ PERMISSION_CODES: set[str] = {
     "ctms.enrollment_management",
     "ctms.conflict_management",
     "ctms.coordination_replay",
+    "ctms.template_rule_management",
+    "ctms.capa_management",
+    "ctms.capacity_override",
     # PV/Safety access (shared authorization namespace; no EDC/CTMS authority)
     # Requirements 1.x, 2.x, 18.4. Phase 1 seeds (safety_case.enter/read/
     # lifecycle, safety_assessment.record, safety_audit.read) are also written
@@ -130,6 +151,9 @@ CTMS_PERMISSION_CODES: frozenset[str] = frozenset(
         "ctms.enrollment_management",
         "ctms.conflict_management",
         "ctms.coordination_replay",
+        "ctms.template_rule_management",
+        "ctms.capa_management",
+        "ctms.capacity_override",
     }
 )
 
@@ -181,6 +205,9 @@ DESIGNER_PERMISSION_CODES: frozenset[str] = frozenset(
         "designer.field.configure",
         "designer.editcheck.configure",
         "designer.editcheck.test",
+        "designer.custom_function.author",
+        "designer.custom_function.approve",
+        "designer.custom_function.execute",
         "designer.codelist.read",
         "designer.codelist.configure",
         "designer.subject_phase.read",
@@ -194,6 +221,9 @@ DESIGNER_PERMISSION_CODES: frozenset[str] = frozenset(
         "designer.crf_access.configure",
         "designer.raw_data_variable.configure",
         "designer.coding_setting.configure",
+        "designer.sdr.configure",
+        "designer.odm.import",
+        "designer.odm.export",
     }
 )
 
@@ -205,7 +235,10 @@ OPERATIONAL_PERMISSION_CODES: frozenset[str] = frozenset(
     {
         "study.read",
         "subject.create",
+        "subject.delete",
         "subject.read",
+        "subject.restore",
+        "subject.transfer",
         "subject.update",
         "form.read",
         "form.enter",
@@ -218,6 +251,15 @@ OPERATIONAL_PERMISSION_CODES: frozenset[str] = frozenset(
         "sdv.manage",
         "review.manage",
         "lock.manage",
+        "listing.read",
+        "review.read",
+        "sdv.read",
+        "sdr.read",
+        "sdr.manage",
+        "lock.read",
+        "lock.request",
+        "lock.approve",
+        "lock.execute",
         "signature.sign",
         "data.export",
         "file.upload",
@@ -288,6 +330,10 @@ ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
     "Data Manager": {
         "scope": "study",
         "permissions": [
+            "subject.read",
+            "subject.delete",
+            "subject.restore",
+            "subject.transfer",
             "query.create",
             "query.close",
             "query.reopen",
@@ -297,6 +343,14 @@ ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
             "data.export",
             "audit.read",
             "review.manage",
+            "listing.read",
+            "review.read",
+            "sdv.read",
+            "sdr.read",
+            "lock.read",
+            "lock.request",
+            "lock.approve",
+            "lock.execute",
         ],
     },
     "CRA": {
@@ -305,6 +359,11 @@ ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
             "subject.read",
             "form.read",
             "sdv.manage",
+            "sdv.read",
+            "sdr.read",
+            "sdr.manage",
+            "listing.read",
+            "lock.read",
             "query.create",
             "query.close",
             "audit.read",
@@ -327,6 +386,7 @@ ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
             "subject.create",
             "subject.read",
             "subject.update",
+            "form.read",
             "form.enter",
             "form.submit",
             "query.respond",
@@ -338,6 +398,9 @@ ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
         "permissions": [
             "form.read",
             "review.manage",
+            "review.read",
+            "listing.read",
+            "lock.read",
             "query.create",
             "audit.read",
         ],
@@ -368,6 +431,7 @@ ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
             "ctms.operational_site_management",
             "ctms.monitoring_activity_management",
             "ctms.enrollment_management",
+            "ctms.capa_management",
         ],
     },
     "CTMS_Viewer": {
@@ -462,18 +526,7 @@ async def seed_roles_and_permissions(session: AsyncSession) -> None:
     """
     from app.models.shared.identity import Permission, Role, RolePermission
 
-    # --- Seed permissions ---
-    existing_perms_result = await session.execute(select(Permission.code))
-    existing_codes: set[str] = set(existing_perms_result.scalars().all())
-
-    new_permissions: list[Permission] = []
-    for code in sorted(PERMISSION_CODES):
-        if code not in existing_codes:
-            new_permissions.append(Permission(code=code))
-
-    if new_permissions:
-        session.add_all(new_permissions)
-        await session.flush()
+    await seed_permission_catalog(session)
 
     # Build code -> Permission lookup (includes both pre-existing and newly added)
     all_perms_result = await session.execute(select(Permission))
@@ -514,3 +567,67 @@ async def seed_roles_and_permissions(session: AsyncSession) -> None:
                 session.add(RolePermission(role_id=role.id, permission_id=perm.id))
 
         await session.flush()
+
+
+def permission_catalog() -> list[dict[str, object]]:
+    """Return product-owned capabilities for registration in Platform.
+
+    Platform owns role composition. EDC continues to own the stable permission
+    vocabulary and the scope/module metadata needed to constrain role editing.
+    """
+
+    system_only = {
+        "user.list",
+        "user.create",
+        "user.update",
+        "user.deactivate",
+        "user.assign",
+        "role.list",
+        "role.create",
+        "role.update",
+        "study.create",
+    }
+    catalog: list[dict[str, object]] = []
+    for code in sorted(PERMISSION_CODES):
+        module = permission_module(code)
+        if module is None:
+            if code.startswith("ctms."):
+                module = "ctms"
+            elif code.startswith("safety_"):
+                module = "pv"
+            else:
+                module = "shared"
+        if code in system_only:
+            scopes = ["system"]
+        elif module == "designer":
+            scopes = ["system", "study"]
+        else:
+            scopes = ["system", "study", "site"]
+        catalog.append(
+            {
+                "code": code,
+                "description": code.replace("_", " ").replace(".", " · "),
+                "module": module,
+                "allowed_scope_levels": scopes,
+            }
+        )
+    return catalog
+
+
+async def seed_permission_catalog(session: AsyncSession) -> None:
+    """Idempotently register local permission records without defining roles."""
+
+    from app.models.shared.identity import Permission
+
+    existing = {
+        permission.code: permission
+        for permission in (await session.execute(select(Permission))).scalars().all()
+    }
+    for definition in permission_catalog():
+        code = str(definition["code"])
+        permission = existing.get(code)
+        if permission is None:
+            session.add(Permission(code=code, description=str(definition["description"])))
+        elif not permission.description:
+            permission.description = str(definition["description"])
+    await session.flush()

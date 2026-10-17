@@ -4,7 +4,7 @@
 
 This plan converts the current design into incremental coding and testing tasks, preserving the completed EDC clinical delivery phases while adding the revised unified-platform boundary work from Requirement 32. Phase 1 ships the auditable EDC MVP (auth, authorization, canonical clinical Study/Site/Subject setup, eCRF metadata + data capture, immutable audit, manual queries, CSV export) with authorization scope, audit immutability, and clinical ownership independently verified. Phase 2 adds the EDC edit-check engine, repeating records, SDV, review, freeze/lock, Clinical_Attachments, and clinical notifications. Phase 3 adds EDC electronic signatures, published-version amendments, advanced clinical exports, and the optional AI assistant. A cross-cutting boundary phase adds EDC-side canonical identity guards, ownership enforcement, minimized read-only CTMS projections, explicit coordination validation, shared module-owner discrimination, request/correlation propagation, boundary tests, and EDC resilience when CTMS is disabled or unavailable.
 
-Implementation follows the design's layering throughout: thin routes → services (transaction boundary) → repositories; the EDC Audit_Service writes an append-only, module-owned Audit_Event in the **same transaction** as every EDC clinical/config mutation; the Permission_Service enforces route- and object-level access on every protected endpoint; canonical identity and authoritative-module guards reject cross-module writes; deletions are soft only; edit checks are safe declarative DSL (no arbitrary code); all DB timestamps are UTC; the API is versioned under `/api/v1` with generated OpenAPI. Shared audit, notification, file, and export primitives carry explicit module-owner discriminators, while EDC consumes only approved minimized read-only CTMS projections and never owns CTMS operational records.
+Implementation follows the design's layering throughout: thin routes → services (transaction boundary) → repositories; the EDC Audit_Service writes an append-only, module-owned Audit_Event in the **same transaction** as every EDC clinical/config mutation; the Permission_Service enforces route- and object-level access on every protected endpoint; canonical identity and authoritative-module guards reject cross-module writes; deletions are soft only; edit checks use the safe declarative DSL by default, while optional custom Python runs only through the separately deployed governed sandbox; all DB timestamps are UTC; the API is versioned under `/api/v1` with generated OpenAPI. Shared audit, notification, file, and export primitives carry explicit module-owner discriminators, while EDC consumes only approved minimized read-only CTMS projections and never owns CTMS operational records.
 
 Property-based tests (Hypothesis) cover all 44 correctness properties, each as an optional (`*`) sub-task tagged `# Feature: clinical-edc-system, Property {n}: ...` and run at 100+ iterations, placed next to the feature it protects. Optional (`*`) sub-tasks are not required for a working build and may be skipped for a faster MVP. The new boundary properties 38–44 use deterministic EDC/CTMS fakes and repository-level isolation tests; EDC tasks implement only shared primitives, EDC-side guards/consumers, and rejection/resilience behavior, while CTMS operational ownership remains in the separate CTMS task plan.
 
@@ -146,10 +146,10 @@ Property-based tests (Hypothesis) cover all 44 correctness properties, each as a
     - Define `subjects` (subject_number unique within study, bound study_version_id); add filter indexes (study, site, status)
     - _Requirements: 7.1, 7.2, 22.5, 22.6_
   - [x] 9.2 Implement Subject_Service
-    - `create_subject` (bind published version, generate id by configured rule), `transition_status` (subject state machine, audit), `get_casebook`, soft-delete; write Audit_Events
+    - `create_subject` (require an active site, bind published version, generate id by configured rule), enrollment-readiness evaluation, `transition_status` (subject state machine, audit), `get_casebook`, soft-delete; write Audit_Events
     - _Requirements: 7.1, 7.2, 7.3, 7.5, 7.6, 22.2_
   - [x] 9.3 Implement subjects routes
-    - `GET/POST /studies/{id}/subjects`, `GET/PATCH /subjects/{id}`, `POST /subjects/{id}/screen-fail|randomize|terminate`, `GET /subjects/{id}/casebook`
+    - `GET/POST /studies/{id}/subjects`, `GET /studies/{id}/subjects/enrollment-readiness`, `GET/PATCH /subjects/{id}`, `POST /subjects/{id}/screen-fail|randomize|terminate`, `GET /subjects/{id}/casebook`; disable the frontend enrollment action and link to versioning while prerequisites are unresolved
     - _Requirements: 7.1, 7.3, 7.5, 21.1_
   - [x] 9.4 Write property test for scoped uniqueness
     - **Property 7: Scoped uniqueness is enforced**
@@ -165,7 +165,7 @@ Property-based tests (Hypothesis) cover all 44 correctness properties, each as a
     - `define_visit` (draft-only via guard_mutable), `record_visit_date` (compute before/in/after window status), `create_unscheduled`, `mark_missed`; write Audit_Events
     - _Requirements: 8.1, 8.3, 8.4, 8.5_
   - [x] 10.3 Wire Visit_Instance initialization into subject creation
-    - `initialize_instances(subject)` creates Visit_Instances from the bound version's definitions
+    - `initialize_instances(subject, definition_ids, skip_existing)` creates initial phase visits, treats arm phases as assignment-only, and idempotently activates each later phase's intersection with the selected arm SoA while retaining whole-version initialization for phase-less legacy designs
     - _Requirements: 7.4, 8.2_
   - [x] 10.4 Implement visits routes
     - `GET /subjects/{id}/visits`, `POST /subjects/{id}/visits/unscheduled`, `GET/PATCH /visits/{id}`, `POST /visits/{id}/mark-missed`
@@ -324,6 +324,10 @@ Property-based tests (Hypothesis) cover all 44 correctness properties, each as a
   - [x] 19.7 Write property test for test-without-persist
     - **Property 24: Edit-check test does not persist clinical data**
     - **Validates: Requirements 12.4**
+  - [x] 19.8 Add the governed custom Python extension boundary
+    - Store immutable source versions and SHA-256 provenance; require distinct author/approve/execute permissions and maker-checker approval; support activate, retire, and emergency disable lifecycle
+    - Delegate execution only to an explicitly configured isolated runtime with no local fallback, bounded resources, size-checked responses, allowlisted commands, and payload-free audit metadata
+    - _Requirements: 12.8, 12.9, 12.10, 12.11_
   - [x] 19.8 Write property test for system-query generation
     - **Property 25: Query-severity checks generate a linked system query**
     - **Validates: Requirements 12.5**
@@ -412,11 +416,11 @@ Property-based tests (Hypothesis) cover all 44 correctness properties, each as a
     - **Property 36: Workflow events create notifications for the right recipients**
     - **Validates: Requirements 28.1, 28.2, 28.3**
 
-- [x] 26. Full Dashboard and data-cleaning frontend
-  - [x] 26.1 Build Phase 2 frontend views
+- [ ] 26. Full Dashboard and data-cleaning frontend (partially implemented; advanced dashboard families remain deferred)
+  - [ ] 26.1 Build Phase 2 frontend views (core worklists delivered; remaining report families unavailable)
     - Edit-check builder, query inbox/detail, SDV worklist, clinical review worklist, freeze/lock controls (disabled inputs when frozen/locked), file upload, notifications UI, and full data-cleaning dashboards
     - _Requirements: 24.1, 24.4, 20.1, 20.2, 20.3_
-  - [x] 26.2 Write frontend tests for Phase 2 workflows
+  - [ ] 26.2 Write frontend tests for Phase 2 workflows (existing coverage does not yet cover all independent status dimensions)
     - Query thread, frozen/locked disabling, SDV/review actions
     - _Requirements: 24.1, 24.4_
 
@@ -544,6 +548,36 @@ These tasks extend the completed EDC phases with the current unified-platform bo
 
 - [ ] 34. Boundary completion checkpoint
   - Ensure all boundary implementation and regression tests pass, verify no EDC task claims CTMS operational ownership, and ask the user if questions arise.
+
+### Core EDC Gap-Closure Delivery (Requirement 33)
+
+- [x] 35.1 Add the authorization and clinical-state foundation
+  - Add object-derived Study/Site guards, site-intersected collections, revision counters, `data_entry_status`, revision-bound review/SDV state, canonical `FormOperationalStatus`, compatibility backfill, and new permission grants.
+  - _Requirements: 33.1, 33.2, 33.3_
+
+- [x] 35.2 Complete server-side data-entry behavior
+  - Propagate revisions through field and repeating-record mutations, enforce reason-for-change and ancestor controls, invalidate signatures and quality decisions, evaluate calculated/conditional fields, and run published edit checks with system-query deduplication.
+  - _Requirements: 33.2, 33.3, 33.4, 33.5_
+
+- [x] 35.3 Deliver aggregate subjects, casebooks, form worklists, and sequential data-entry navigation
+  - Return subject operational summaries and casebook status matrices; expose the paginated form worklist and server-authorized Site → Subject → Visit → Form frontend flow.
+  - _Requirements: 33.1, 33.3, 33.6_
+
+- [x] 35.4 Deliver review, SDV, and SDR worklists and operations
+  - Replace client fan-out with the shared quality worklist; add draft-only SDR configuration, published-design materialization, immutable selections, revision-bound decisions, and frontend SDV/SDR navigation.
+  - _Requirements: 33.3, 33.6, 33.7_
+
+- [x] 35.5 Deliver contextual queries, listings, and expanded export operations
+  - Validate query targets and lifecycle scope, add contextual/aging filters and paginated audit history, add metadata listing catalog/rows, expose export filters/polling/history/retry, and retain medical coding as explicitly unavailable.
+  - _Requirements: 33.8, 33.9, 33.10, 33.14_
+
+- [x] 35.6 Deliver controlled freeze and database lock
+  - Add readiness snapshots, maker-checker request/approve/reject/cancel/execute lifecycle, execution-time readiness locking, stable readiness hashes, failure retention, hard-lock quality enforcement, and frontend history/action surfaces.
+  - _Requirements: 33.11, 33.12, 33.13_
+
+- [ ] 35.7 Complete gap-closure verification
+  - Add migration upgrade/backfill/downgrade tests, role/site/object authorization matrices, revision/staleness/deduplication properties, control-request concurrency tests, API filter/pagination tests, independent-status frontend tests, full Playwright flows, and bounded-query performance assertions.
+  - _Requirements: 33.1–33.14_
 
 ## Notes
 

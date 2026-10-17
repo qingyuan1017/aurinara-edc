@@ -32,6 +32,7 @@ from sqlalchemy.orm import selectinload
 from app.core.audit import audit_service
 from app.core.ctms import Module
 from app.core.exceptions import NotFoundError, ValidationError
+from app.core.odm_oid import new_odm_oid
 from app.models.designer.codelist import Codelist, CodelistItem
 from app.models.designer.form_metadata import (
     FieldDefinition,
@@ -92,6 +93,7 @@ class FormMetadataService:
             form_code=data.form_code,
             display_order=data.display_order,
             is_repeating=data.is_repeating,
+            requires_signature=data.requires_signature,
             form_type=str(data.form_type),
             access_type=str(data.access_type),
             domain=data.domain,
@@ -328,6 +330,7 @@ class FormMetadataService:
 
         section = FormSection(
             form_definition_id=form.id,
+            odm_oid=new_odm_oid("IG"),
             name=data.name,
             label=data.label or data.name,
             display_order=data.display_order,
@@ -335,6 +338,9 @@ class FormMetadataService:
             output_to_dataset=data.output_to_dataset,
             help_text=data.help_text,
             access_type=str(data.access_type),
+            is_repeating=data.is_repeating,
+            repeat_min=data.repeat_min,
+            repeat_max=data.repeat_max,
         )
         session.add(section)
         await session.flush()
@@ -467,6 +473,7 @@ class FormMetadataService:
             record_id=data.record_id,
             crf_id=data.crf_id,
             odm_id=data.odm_id,
+            odm_oid=data.odm_oid or new_odm_oid("ITEM"),
             control_type=str(data.control_type),
             data_type=data.data_type,
             is_required=data.is_required,
@@ -483,6 +490,14 @@ class FormMetadataService:
             is_read_only=data.is_read_only,
             is_calculated=data.is_calculated,
             calculation_expression=data.calculation_expression,
+            data_format=data.data_format,
+            allows_partial_date=data.allows_partial_date,
+            source_document=data.source_document,
+            query_future_date=data.query_future_date,
+            query_nonconformance=data.query_nonconformance,
+            breaks_signature=data.breaks_signature,
+            review_group=data.review_group,
+            dynamic_search_config=data.dynamic_search_config,
             display_order=data.display_order,
         )
         session.add(field)

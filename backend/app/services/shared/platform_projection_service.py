@@ -7,8 +7,16 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError
+from app.core.permissions import PERMISSION_CODES
 from app.models.edc.study import Study, StudyStatus
-from app.models.shared.identity import Role, User, UserRole, UserStatus
+from app.models.shared.identity import (
+    Permission,
+    Role,
+    RolePermission,
+    User,
+    UserRole,
+    UserStatus,
+)
 from app.models.shared.platform_projection import (
     PlatformMembershipProjection,
     PlatformProjectionEvent,
@@ -44,6 +52,8 @@ async def apply_platform_event(session: AsyncSession, event: PlatformEvent) -> b
         return False
     if event.type in {"platform.user.created.v1", "platform.user.updated.v1"}:
         return await _apply_user_event(session, event)
+    if event.type == "platform.role.changed.v1":
+        return await _apply_role_event(session, event)
     if event.type == "platform.membership.changed.v1":
         return await _apply_membership_event(session, event)
     if event.type == "platform.assignment.changed.v1":
@@ -88,6 +98,101 @@ async def apply_platform_event(session: AsyncSession, event: PlatformEvent) -> b
         study.platform_managed = True
         study.platform_revision = event.sequence
         study.platform_registry_status = str(event.data["status"])
+    session.add(
+        PlatformProjectionEvent(
+            id=event.id,
+            event_type=event.type,
+            aggregate_id=event.aggregate_id,
+            sequence=event.sequence,
+        )
+    )
+    await session.flush()
+    return True
+
+
+def _local_permission_code(code: str) -> str:
+    return code.removeprefix("edc.")
+
+
+async def _apply_role_event(session: AsyncSession, event: PlatformEvent) -> bool:
+    """Project Platform-owned role composition for local scoped filtering."""
+
+    if event.data.get("product") != "aurinara-edc":
+        return False
+    role_id = UUID(
+        str(event.data.get("source_role_id") or event.data.get("role_id") or event.aggregate_id)
+    )
+    name = str(event.data["name"])
+    local_codes = {
+        _local_permission_code(str(code)) for code in event.data.get("permission_codes", [])
+    }
+    unsupported = local_codes - PERMISSION_CODES
+    if unsupported:
+        raise ConflictError(
+            message="Platform role references an unregistered EDC permission",
+            details={
+                "reason": "PERMISSION_NOT_REGISTERED",
+                "permission_codes": sorted(unsupported),
+            },
+        )
+    role = await session.get(Role, role_id)
+    if (
+        role is not None
+        and role.platform_revision is not None
+        and event.sequence <= role.platform_revision
+    ):
+        session.add(
+            PlatformProjectionEvent(
+                id=event.id,
+                event_type=event.type,
+                aggregate_id=event.aggregate_id,
+                sequence=event.sequence,
+            )
+        )
+        await session.flush()
+        return True
+    collision = await session.scalar(select(Role).where(Role.name == name, Role.id != role_id))
+    if collision is not None:
+        raise ConflictError(
+            message="Platform role identity conflicts with an existing EDC role",
+            details={"reason": "ROLE_IDENTITY_CONFLICT"},
+        )
+    if role is None:
+        role = Role(
+            id=role_id,
+            name=name,
+            scope_level=str(event.data["scope_level"]),
+            description=(str(event.data["description"]) if event.data.get("description") else None),
+            is_system=False,
+            platform_managed=True,
+            platform_revision=event.sequence,
+            platform_status=str(event.data["status"]),
+        )
+        session.add(role)
+        await session.flush()
+    else:
+        role.name = name
+        role.scope_level = str(event.data["scope_level"])
+        role.description = str(event.data["description"]) if event.data.get("description") else None
+        role.platform_managed = True
+        role.platform_revision = event.sequence
+        role.platform_status = str(event.data["status"])
+
+    permissions_by_code: dict[str, Permission] = {}
+    if local_codes:
+        existing = await session.execute(select(Permission).where(Permission.code.in_(local_codes)))
+        permissions_by_code = {item.code: item for item in existing.scalars().all()}
+    for code in sorted(local_codes - permissions_by_code.keys()):
+        permission = Permission(code=code, description=code.replace("_", " ").replace(".", " · "))
+        session.add(permission)
+        permissions_by_code[code] = permission
+    await session.flush()
+    permission_ids = {item.id for item in permissions_by_code.values()}
+    await session.execute(delete(RolePermission).where(RolePermission.role_id == role.id))
+    session.add_all(
+        RolePermission(role_id=role.id, permission_id=permission_id)
+        for permission_id in permission_ids
+    )
     session.add(
         PlatformProjectionEvent(
             id=event.id,

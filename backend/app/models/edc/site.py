@@ -58,9 +58,7 @@ class Site(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Site details
-    principal_investigator: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
+    principal_investigator: Mapped[str | None] = mapped_column(String(255), nullable=True)
     country: Mapped[str | None] = mapped_column(String(100), nullable=True)
     region: Mapped[str | None] = mapped_column(String(100), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -74,9 +72,7 @@ class Site(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Soft-delete (Requirement 22.5)
     deleted_at: Mapped[datetime | None] = mapped_column(
@@ -139,9 +135,7 @@ class StudySiteUser(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "study_id", "site_id", "user_id", name="uq_study_site_user"
-        ),
+        UniqueConstraint("study_id", "site_id", "user_id", name="uq_study_site_user"),
         Index("ix_study_site_users_study_site_user", "study_id", "site_id", "user_id"),
         Index("ix_study_site_users_user_id", "user_id"),
     )

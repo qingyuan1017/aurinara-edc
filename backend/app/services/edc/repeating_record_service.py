@@ -28,6 +28,9 @@ from app.core.audit import audit_service
 from app.core.exceptions import BusinessRuleError, ConflictError, ValidationError
 from app.models.edc.form_data import FormInstance
 from app.models.edc.form_record import FormRecord
+from app.services.edc.lock_service import lock_service
+from app.services.edc.revision_service import clinical_revision_service
+from app.services.edc.signature_service import signature_service
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,8 @@ class RepeatingRecordService:
         form_instance: FormInstance,
         values: Mapping[str, Any] | UUID | None = None,
         actor_id: UUID | None = None,
+        *,
+        reason: str | None = None,
     ) -> FormRecord:
         """Create a row with the next sequence number for a form instance.
 
@@ -56,12 +61,11 @@ class RepeatingRecordService:
             actor_id = values
             values = None
 
+        await self._guard_mutation(session, form_instance, reason)
         # Serialize additions for this form instance.  PostgreSQL's row lock
         # prevents two transactions from observing the same current maximum.
         await session.execute(
-            select(FormInstance.id)
-            .where(FormInstance.id == form_instance.id)
-            .with_for_update()
+            select(FormInstance.id).where(FormInstance.id == form_instance.id).with_for_update()
         )
         max_result = await session.execute(
             select(func.max(FormRecord.sequence_number)).where(
@@ -79,7 +83,11 @@ class RepeatingRecordService:
             design_version_id=form_instance.design_version_id,
         )
         session.add(record)
+        clinical_revision_service.bump_form(form_instance)
         await session.flush()
+        await signature_service.invalidate_if_changed(
+            session, form_instance, actor_id=actor_id, reason=reason
+        )
 
         study_id, site_id, subject_id = self._scope(form_instance)
         await audit_service.record(
@@ -109,6 +117,8 @@ class RepeatingRecordService:
         record: FormRecord,
         values: Mapping[str, Any],
         actor_id: UUID | None = None,
+        *,
+        reason: str | None = None,
     ) -> FormRecord:
         """Replace a row's values and record the old and new payloads.
 
@@ -117,13 +127,22 @@ class RepeatingRecordService:
         """
         self._require_values(values)
         self._guard_not_deleted(record)
+        form_instance = record.form_instance
+        await self._guard_mutation(
+            session, form_instance, reason, form_instance_id=record.form_instance_id
+        )
 
         old_values = record.data_jsonb
         record.data_jsonb = dict(values)
         record.updated_at = datetime.now(UTC)
+        if form_instance is not None:
+            clinical_revision_service.bump_form(form_instance)
         await session.flush()
+        if form_instance is not None:
+            await signature_service.invalidate_if_changed(
+                session, form_instance, actor_id=actor_id, reason=reason
+            )
 
-        form_instance = getattr(record, "form_instance", None)
         study_id, site_id, subject_id = self._scope(form_instance)
         await audit_service.record(
             session,
@@ -134,6 +153,7 @@ class RepeatingRecordService:
             site_id=site_id,
             subject_id=subject_id,
             actor_id=actor_id,
+            reason=reason,
             old_value=str(old_values) if old_values is not None else None,
             new_value=str(record.data_jsonb),
         )
@@ -165,14 +185,23 @@ class RepeatingRecordService:
                 details={"record_id": str(record.id)},
             )
 
+        form_instance = record.form_instance
+        await self._guard_mutation(
+            session, form_instance, reason, form_instance_id=record.form_instance_id
+        )
         deleted_at = datetime.now(UTC)
         record.deleted_at = deleted_at
         record.deleted_by = actor_id
         record.deletion_reason = reason
         record.updated_at = deleted_at
+        if form_instance is not None:
+            clinical_revision_service.bump_form(form_instance)
         await session.flush()
+        if form_instance is not None:
+            await signature_service.invalidate_if_changed(
+                session, form_instance, actor_id=actor_id, reason=reason
+            )
 
-        form_instance = getattr(record, "form_instance", None)
         study_id, site_id, subject_id = self._scope(form_instance)
         await audit_service.record(
             session,
@@ -185,8 +214,7 @@ class RepeatingRecordService:
             actor_id=actor_id,
             reason=reason,
             old_value=(
-                f"deleted_at=None, deleted_by=None, deletion_reason=None, "
-                f"data={record.data_jsonb}"
+                f"deleted_at=None, deleted_by=None, deletion_reason=None, data={record.data_jsonb}"
             ),
             new_value=(
                 f"deleted_at={record.deleted_at.isoformat()}, "
@@ -209,6 +237,8 @@ class RepeatingRecordService:
         session: AsyncSession,
         record: FormRecord,
         actor_id: UUID | None = None,
+        *,
+        reason: str | None = None,
     ) -> FormRecord:
         """Restore a soft-deleted row and clear all deletion metadata."""
         if record.deleted_at is None:
@@ -217,6 +247,10 @@ class RepeatingRecordService:
                 details={"record_id": str(record.id)},
             )
 
+        form_instance = record.form_instance
+        await self._guard_mutation(
+            session, form_instance, reason, form_instance_id=record.form_instance_id
+        )
         old_deleted_at = record.deleted_at
         old_deleted_by = record.deleted_by
         old_reason = record.deletion_reason
@@ -224,9 +258,14 @@ class RepeatingRecordService:
         record.deleted_by = None
         record.deletion_reason = None
         record.updated_at = datetime.now(UTC)
+        if form_instance is not None:
+            clinical_revision_service.bump_form(form_instance)
         await session.flush()
+        if form_instance is not None:
+            await signature_service.invalidate_if_changed(
+                session, form_instance, actor_id=actor_id, reason=reason
+            )
 
-        form_instance = getattr(record, "form_instance", None)
         study_id, site_id, subject_id = self._scope(form_instance)
         await audit_service.record(
             session,
@@ -237,6 +276,7 @@ class RepeatingRecordService:
             site_id=site_id,
             subject_id=subject_id,
             actor_id=actor_id,
+            reason=reason,
             old_value=(
                 f"deleted_at={old_deleted_at.isoformat()}, "
                 f"deleted_by={old_deleted_by}, deletion_reason={old_reason}"
@@ -268,6 +308,37 @@ class RepeatingRecordService:
             raise BusinessRuleError(
                 message="Cannot edit a deleted form record; restore it first",
                 details={"record_id": str(record.id)},
+            )
+
+    @staticmethod
+    async def _guard_mutation(
+        session: AsyncSession,
+        form_instance: FormInstance | None,
+        reason: str | None,
+        *,
+        form_instance_id: UUID | None = None,
+    ) -> None:
+        if form_instance is not None:
+            blocked = await lock_service.is_modification_blocked(session, form_instance)
+            resolved_id = form_instance.id
+        else:
+            resolved_id = form_instance_id
+            blocked = await lock_service.is_modification_blocked(
+                session, object_type="form", object_id=resolved_id
+            )
+        if blocked:
+            raise BusinessRuleError(
+                message="Cannot modify repeating data under a frozen or locked scope",
+                details={"form_instance_id": str(resolved_id)},
+            )
+        if (
+            form_instance is not None
+            and form_instance.data_entry_status == "Submitted"
+            and not (reason or "").strip()
+        ):
+            raise ValidationError(
+                message="Reason_For_Change is required for post-submission edits",
+                details={"form_instance_id": str(form_instance.id)},
             )
 
     @staticmethod

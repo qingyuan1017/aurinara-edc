@@ -30,7 +30,7 @@ The system is intended for regulated clinical environments and is delivered in p
 - **Form_Metadata_Service**: The EDC-owned service that manages eCRF form definitions, sections, fields, and code lists within a Study_Version.
 - **Data_Capture_Service**: The EDC-owned service that loads, saves, submits, and edits clinical field values for Form_Instances.
 - **Repeating_Record_Service**: The EDC-owned service that adds, edits, soft-deletes, and restores rows for clinical repeating forms.
-- **Edit_Check_Engine**: The EDC-owned backend component that evaluates declarative JSON edit-check rules without executing user-provided code.
+- **Edit_Check_Engine**: The EDC-owned backend component that evaluates declarative JSON edit-check rules in-process without executing user-provided code. An optional governed custom-function extension executes only approved immutable Python versions in a separately deployed sandbox.
 - **Query_Service**: The EDC-owned service that manages manual and system-generated Query lifecycle and threaded message history. CTMS may reference approved Query identifiers and summaries for operational follow-up but does not own Query state or unrestricted messages.
 - **SDV_Service**: The EDC-owned service that records and clears source data verification status at field, form, visit, and subject level.
 - **Review_Service**: The EDC-owned service that records and clears clinical review status on Form_Instances.
@@ -187,12 +187,13 @@ A CTMS_Operational_Projection is an explicit, minimized, authorized, read-only v
 1. WHEN an authorized User creates a clinical Subject under a valid Study and Site with one selected published Study_Version, THE Subject_Service SHALL persist one Clinical_Subject_Registry record bound to that Study, Site, and Study_Version.
 2. THE Subject_Service SHALL generate the clinical subject identifier using the configured rule of the bound Study and SHALL reject any identifier that is not unique within that Study.
 3. THE Subject_Service SHALL permit only configured transitions among Screening, Screen Failed, Enrolled, Randomized, On Treatment, Completed, Early Terminated, Lost to Follow-up, and Withdrawn; IF a requested transition is not configured, THEN THE Subject_Service SHALL reject it without changing the Subject.
-4. WHEN a clinical Subject is created, THE Subject_Service SHALL initialize every Visit_Instance and Form_Instance defined by the bound Study_Version, and IF initialization cannot complete, THEN THE Subject_Service SHALL retain neither the new Subject nor a partial casebook.
-5. WHEN an authorized User requests a subject casebook, THE EDC_System SHALL return the clinical Subject visit and form structure with EDC clinical status.
+4. WHEN a clinical Subject is created under a phase-configured Study_Version, THE Subject_Service SHALL initialize the Visit_Instances and Form_Instances assigned to its initial registered phase; WHEN the bound Study_Version has no phase configuration, it SHALL retain the legacy behavior of initializing every defined instance; and IF initialization cannot complete, THEN THE Subject_Service SHALL retain neither the new Subject nor a partial casebook.
+5. WHEN an authorized User requests a subject casebook, THE EDC_System SHALL return the cumulative clinical visit and form structure activated by the Subject's actual phase path with EDC clinical status.
 6. WHEN an EDC clinical subject status changes, THE Audit_Service SHALL record an EDC clinical Audit_Event capturing the change.
 7. THE EDC_System SHALL keep EDC clinical subject status separate from CTMS operational subject status, even when both use the same status labels.
 8. THE EDC_System SHALL consume CTMS operational enrollment status or milestones only through an approved, minimized, read-only CTMS_Operational_Projection or an explicitly configured coordinated transition.
 9. THE Subject_Service SHALL reject a command that attempts to create a duplicate clinical subject from a CTMS operational milestone or replace the EDC clinical subject identifier with an operational display identifier.
+10. BEFORE subject enrollment, THE EDC_System SHALL report whether a published Study_Version and at least one authorized active Site exist, SHALL disable enrollment while either prerequisite is missing, and SHALL provide an authorized navigation path to resolve the missing design configuration.
 
 ### Requirement 8: Protocol Visit Schedule
 
@@ -201,7 +202,7 @@ A CTMS_Operational_Projection is an explicit, minimized, authorized, read-only v
 #### Acceptance Criteria
 
 1. WHEN an authorized User defines a protocol visit within a draft Study_Version, THE Protocol_Visit_Service SHALL persist a unique visit definition with a name, visit number, visit type, integer target day, integer lower and upper window bounds in days where the lower bound is no greater than the upper bound, display order, and required flag.
-2. WHEN a clinical Subject is created, THE Protocol_Visit_Service SHALL create EDC Visit_Instances from the protocol visit definitions of the bound Study_Version.
+2. WHEN a clinical Subject is created or enters another configured visit-bearing phase, THE Protocol_Visit_Service SHALL idempotently create EDC Visit_Instances activated by that phase; entering an arm phase SHALL only select the SoA scope and create no Visit_Instance, while each subsequent phase SHALL activate only its visit definitions that also occur in the selected arm Schedule_Of_Assessment; designs without phase configuration SHALL retain whole-version initialization.
 3. WHEN a protocol visit date is recorded, THE Protocol_Visit_Service SHALL calculate the EDC visit window status from the difference in calendar days between the visit date and the Subject's protocol reference date, using the configured bounds, as Early, In Window, or Late.
 4. WHERE an unscheduled protocol visit is permitted by the bound Study_Version, THE Protocol_Visit_Service SHALL allow an authorized User to create an unscheduled EDC Visit_Instance that is not assigned a scheduled visit number.
 5. WHEN an authorized User marks a protocol visit as missed, THE Protocol_Visit_Service SHALL set the EDC Visit_Instance status to missed.
@@ -258,7 +259,11 @@ A CTMS_Operational_Projection is an explicit, minimized, authorized, read-only v
 4. WHEN an authorized User tests an edit check against sample data, THE Edit_Check_Engine SHALL return the rule outcome, severity, and affected clinical object without persisting the sample data, rule, or Query.
 5. WHEN a query-severity edit check condition is met for an affected clinical object, THE Edit_Check_Engine SHALL request Query_Service to create one system Query linked to that object and SHALL not create a second identical open system Query for the same rule and object.
 6. THE Edit_Check_Engine SHALL bind each edit check to exactly one Study_Version and SHALL evaluate that check only against clinical data governed by that Study_Version.
-7. THE Edit_Check_Engine SHALL evaluate rules without executing user-provided code.
+7. THE Edit_Check_Engine SHALL evaluate declarative rules without executing user-provided code in the API or worker process.
+8. WHEN custom Python is enabled, THE Platform SHALL require separate author, approve, and execute permissions; SHALL require an approver different from the author and submitter; and SHALL execute only an active immutable version.
+9. THE Platform SHALL send custom Python only to an explicitly configured isolated runtime with network disabled and bounded time, memory, input, and output; if the runtime is disabled, unavailable, or returns an invalid response, execution SHALL fail closed without local fallback.
+10. THE Platform SHALL retain source hashes and execution input/output hashes, status, actor, study scope, timing, and sanitized error codes in the audit trail without logging source, inputs, outputs, credentials, or clinical payloads.
+11. A custom function SHALL have no direct database authority. It MAY return only typed results and allowlisted commands that the Platform validates before any separately authorized clinical mutation.
 
 ### Requirement 13: Query Management
 
@@ -346,6 +351,7 @@ A CTMS_Operational_Projection is an explicit, minimized, authorized, read-only v
 5. THE Export_Service SHALL accept and produce exactly the EDC clinical formats CSV, Excel, JSON, SAS XPT, and ODM XML, and SHALL reject any other requested format without creating a Completed job.
 6. THE EDC_System SHALL not generate or own CTMS operational export content. CTMS operational exports SHALL use the shared Export_Service job infrastructure while remaining CTMS-owned and separately authorized.
 7. THE Export_Service SHALL keep EDC clinical export content and filters separate from CTMS operational export content, and WHERE an explicitly approved minimized projection is included, THE Export_Service SHALL label it as projected content and exclude unapproved fields.
+8. THE Export_Service SHALL populate clinical dataset rows only from Form_Instances whose canonical data-entry status is Submitted; Not Started and In Progress forms SHALL contribute no rows, while downstream review, freeze, lock, and signature state SHALL NOT exclude a form whose data-entry status remains Submitted.
 
 ### Requirement 20: Clinical Dashboards and Reports
 
@@ -577,3 +583,24 @@ For every valid EDC clinical API request and response model supported by Pydanti
 - Requirement 32 defines canonical identity, ownership, projection, coordination, and CTMS non-modification boundaries.
 - Clinical Correctness Properties 1–8 provide the verification mapping for EDC identity, lifecycle, casebook, data integrity, auditability, authorization, content separation, and serialization.
 - The CTMS requirements document remains authoritative for CTMS operational study/site/enrollment/monitoring/work-management behavior, operational dashboards/reports/exports/attachments, coordination recovery, and operational qualification. This document remains authoritative for EDC clinical behavior identified in the ownership rules and glossary.
+
+### Requirement 33: Core EDC Operational Gap Closure
+
+**User Story:** As a clinical data manager, I want each operational state and control to be independently authoritative, so that data entry, quality review, and database lock decisions remain traceable after data changes.
+
+#### Acceptance Criteria
+
+1. WHEN an EDC object is read or mutated by identifier, THE API_Layer SHALL derive its canonical Study and Site from the persisted object and SHALL enforce the required permission against that derived scope without returning clinical metadata on denial.
+2. THE EDC_System SHALL maintain monotonic `data_revision` values for Subject, Visit_Instance, Form_Instance, and Field_Value, and SHALL increment the affected object and ancestors atomically for each actual captured-data or repeating-record change.
+3. THE EDC_System SHALL represent data entry, clinical review, SDV, SDR, freeze, lock, signature, and active-query count as independent dimensions in `FormOperationalStatus`; a later data revision SHALL make revision-bound review, SDV, SDR, and signature decisions Stale without deleting their history.
+4. WHEN conditional rules hide a field, THE Data_Capture_Service SHALL retain its prior value for traceability, SHALL mark it inactive in operational output, and SHALL exclude it from required-field validation and clinical export output.
+5. WHEN data is saved or submitted, THE Data_Capture_Service SHALL run applicable published-design edit checks; error results SHALL block submission, query-severity results SHALL create at most one active system Query for the same finding, and cleared conditions SHALL resolve validation results without silently closing user-visible Queries.
+6. THE EDC_System SHALL expose paginated, scope-filtered subject summaries, casebook matrices, form worklists, and review/SDV/SDR quality worklists without client-side per-subject fan-out.
+7. THE Designer_Module SHALL own versioned SDR selection settings; THE EDC_Module SHALL materialize immutable published-version selections and SHALL record revision-bound operational SDR decisions.
+8. THE EDC_System SHALL expose metadata-driven listings from published form definitions, enforce Study/Site/design/field access server-side, accept only allowlisted filters and sort keys, and include an authorized source-eCRF link in every row.
+9. THE Query_Service SHALL validate the target's canonical Study/Site/Subject, expose contextual labels, assignment and aging, preserve immutable paginated history, and treat Open, Answered, and Reopened as active.
+10. THE Export_Service SHALL expose its complete allowlisted filter contract, dataset selection, job polling, authorized history/download, and retry by creating a new job only from a failed job's immutable inputs.
+11. THE EDC_System SHALL manage freeze, unfreeze, lock, and unlock through a `ClinicalControlRequest` lifecycle of Pending Approval → Approved → Executed, with Rejected, Cancelled, and Failed terminal states and at most one non-terminal request for an action and scope.
+12. THE Clinical_Control_Service SHALL enforce requester/approver separation, recalculate readiness under a database lock immediately before execution, and SHALL refuse a Study freeze or lock while required forms, queries, validation findings, review, SDV, SDR, or signatures are incomplete or stale.
+13. A freeze SHALL block captured-data and attachment mutation while allowing query resolution and quality review; a hard lock SHALL block all clinical-state mutation except the controlled unlock workflow.
+14. THE EDC capability manifest SHALL explicitly report medical coding as unavailable until a licensed terminology provider and coding domain are configured, and unavailable report families SHALL not return misleading empty completed reports.

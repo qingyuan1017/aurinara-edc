@@ -237,6 +237,7 @@ class VisitDefinitionService:
             window_after=data.window_after,
             display_order=data.display_order,
             is_required=data.is_required,
+            addable=data.addable,
             repeat_min=data.repeat_min,
             repeat_max=data.repeat_max,
             cycle_length=data.cycle_length,
@@ -329,6 +330,14 @@ class VisitDefinitionService:
         study_version_service.guard_mutable(version)
         changes = data.model_dump(exclude_unset=True)
         member_ids = changes.pop("member_visit_ids", None)
+        if changes.get("addable") and definition.definition_kind not in {
+            VisitDefinitionKind.visit,
+            VisitDefinitionKind.cycle_visit,
+        }:
+            raise ValidationError(
+                "Only a visit can be addable",
+                details={"field": "addable"},
+            )
         for enum_field in ("visit_type", "category", "subtype"):
             if changes.get(enum_field) is not None:
                 changes[enum_field] = str(changes[enum_field])

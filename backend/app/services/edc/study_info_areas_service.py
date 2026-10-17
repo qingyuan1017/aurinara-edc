@@ -142,10 +142,7 @@ class StudyInfoAreasService:
             study_id=study.id,
             design_version_id=design.design_version_id if design else None,
             available=True,
-            items=[
-                SubAreaItem(key=key, label=label, detail={})
-                for key, label in sections
-            ],
+            items=[SubAreaItem(key=key, label=label, detail={}) for key, label in sections],
         )
 
     async def alerts(self, session: AsyncSession, study_id: UUID) -> SubAreaSurface:
@@ -160,17 +157,11 @@ class StudyInfoAreasService:
         """Return the Lab surface for a study (R8.9)."""
         return await self._surface(session, study_id, _LAB_SECTIONS)
 
-    async def external_data_source(
-        self, session: AsyncSession, study_id: UUID
-    ) -> SubAreaSurface:
+    async def external_data_source(self, session: AsyncSession, study_id: UUID) -> SubAreaSurface:
         """Return the External Data Source surface for a study (R8.10)."""
-        return await self._surface(
-            session, study_id, _EXTERNAL_DATA_SOURCE_SECTIONS
-        )
+        return await self._surface(session, study_id, _EXTERNAL_DATA_SOURCE_SECTIONS)
 
-    async def adjudication(
-        self, session: AsyncSession, study_id: UUID
-    ) -> SubAreaSurface:
+    async def adjudication(self, session: AsyncSession, study_id: UUID) -> SubAreaSurface:
         """Return the Adjudication surface for a study (R8.11, where enabled)."""
         return await self._surface(session, study_id, _ADJUDICATION_SECTIONS)
 
@@ -178,9 +169,7 @@ class StudyInfoAreasService:
         """Return the SAEs surface for a study (R8.12)."""
         return await self._surface(session, study_id, _SAE_SECTIONS)
 
-    async def integrations(
-        self, session: AsyncSession, study_id: UUID
-    ) -> SubAreaSurface:
+    async def integrations(self, session: AsyncSession, study_id: UUID) -> SubAreaSurface:
         """Return the integration group surface for a study (R8.13).
 
         Covers Conversion, Data Validation, System Integration, eDiary, eCOA,

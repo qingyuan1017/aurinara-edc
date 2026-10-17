@@ -23,6 +23,19 @@ class PlatformObjectRegistration:
     reference_id: UUID
 
 
+@dataclass(frozen=True, slots=True)
+class PlatformRepositoryVersion:
+    id: UUID
+    study_id: UUID
+    object_id: UUID
+    filename: str
+    media_type: str
+    sha256: str
+    size: int
+    classification: str
+    source_status: str
+
+
 class PlatformObjectClient:
     """Authorize downloads without revealing storage keys or credentials."""
 
@@ -49,6 +62,7 @@ class PlatformObjectClient:
             response = await self._client.post(
                 f"{self._base_url}/v1/objects/{object_id}/download",
                 headers={"Authorization": f"Bearer {self._authorization.service_token()}"},
+                json={"authorization_action": "edc.file.upload"},
             )
             response.raise_for_status()
             url = str(response.json()["url"])
@@ -71,6 +85,7 @@ class PlatformObjectClient:
         classification: str,
         external_reference: str,
         retention_until: datetime | None = None,
+        repository: dict[str, object] | None = None,
     ) -> PlatformObjectRegistration:
         """Upload verified bytes and register the EDC-owned reference."""
 
@@ -81,6 +96,7 @@ class PlatformObjectClient:
         command = {
             "study_id": str(study_id),
             "owner_product": "aurinara-edc",
+            "authorization_action": "edc.file.upload",
             "classification": classification,
             "media_type": media_type,
             "expected_sha256": digest,
@@ -121,7 +137,10 @@ class PlatformObjectClient:
                 headers=headers,
                 json={
                     "product": "aurinara-edc",
+                    "authorization_action": "edc.file.upload",
                     "external_reference": external_reference,
+                    "idempotency_key": external_reference,
+                    **({"repository": repository} if repository is not None else {}),
                 },
             )
             referenced.raise_for_status()
@@ -132,6 +151,64 @@ class PlatformObjectClient:
         except ServiceUnavailableError:
             raise
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as error:
+            raise ServiceUnavailableError(
+                "Platform object gateway is temporarily unavailable"
+            ) from error
+
+    async def resolve_repository_version(
+        self, version_id: UUID, user_access_token: str
+    ) -> PlatformRepositoryVersion:
+        """Resolve Repository metadata with the signed-in user's token."""
+
+        if not self._base_url:
+            raise ServiceUnavailableError("Platform object gateway is not configured")
+        try:
+            response = await self._client.get(
+                f"{self._base_url}/v1/repository/versions/{version_id}",
+                headers={"Authorization": f"Bearer {user_access_token}"},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return PlatformRepositoryVersion(
+                id=UUID(payload["id"]),
+                study_id=UUID(payload["study_id"]),
+                object_id=UUID(payload["object_id"]),
+                filename=str(payload["filename"]),
+                media_type=str(payload["media_type"]),
+                sha256=str(payload["sha256"]),
+                size=int(payload["size_bytes"]),
+                classification=str(payload["classification"]),
+                source_status=str(payload["source_status"]),
+            )
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
+            raise ServiceUnavailableError(
+                "Platform object gateway is temporarily unavailable"
+            ) from error
+
+    async def bind_repository_object(
+        self, *, object_id: UUID, external_reference: str
+    ) -> PlatformObjectRegistration:
+        """Create the EDC reference for an explicitly selected Repository version."""
+
+        if not self._base_url:
+            raise ServiceUnavailableError("Platform object gateway is not configured")
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/v1/objects/{object_id}/references",
+                headers={"Authorization": f"Bearer {self._authorization.service_token()}"},
+                json={
+                    "product": "aurinara-edc",
+                    "authorization_action": "edc.file.upload",
+                    "external_reference": external_reference,
+                    "idempotency_key": external_reference,
+                },
+            )
+            response.raise_for_status()
+            return PlatformObjectRegistration(
+                object_id=object_id,
+                reference_id=UUID(response.json()["id"]),
+            )
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
             raise ServiceUnavailableError(
                 "Platform object gateway is temporarily unavailable"
             ) from error

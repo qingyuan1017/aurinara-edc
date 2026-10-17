@@ -280,7 +280,6 @@ export interface CTMSManagedEntity {
   entity_type: CTMSManagedEntityType
   code: string
   name: string
-  canonical_site_id?: string | null
   attributes: Record<string, unknown>
   active: boolean
   created_at: string
@@ -303,6 +302,8 @@ export interface CTMSStudyEntityAssignment {
   id: string
   study_id: string
   entity_id: string
+  site_id?: string | null
+  site_number?: string | null
   entity: CTMSManagedEntity
   attributes: Record<string, unknown>
   created_at: string
@@ -1593,8 +1594,10 @@ export const ctmsApi = {
   createStudyProfile: (studyId: string, payload: CTMSOperationalStudyPayload) => post<CTMSOperationalStudy>(`/ctms/studies/${studyId}/operational-profile`, payload),
   updateStudyProfile: (id: string, payload: CTMSOperationalStudyUpdate) => patch<CTMSOperationalStudy>(`/ctms/operational-studies/${id}`, payload),
   entities: (studyId?: string, context?: CTMSQueryContext) => list<CTMSManagedEntity>(studyId ? `/ctms/studies/${studyId}/available-entities` : '/ctms/entities', context),
-  createStudySite: (studyId: string, payload: CTMSManagedSitePayload) => post<CTMSManagedEntity>(`/ctms/studies/${studyId}/sites`, payload),
-  createEntity: (payload: { entity_type: CTMSManagedEntityType; code: string; name: string; canonical_site_id?: string; attributes?: Record<string, unknown> }) => post<CTMSManagedEntity>('/ctms/entities', payload),
+  availableEntities: (studyId: string, entityType?: CTMSManagedEntityType, context?: CTMSQueryContext) => list<CTMSManagedEntity>(`/ctms/studies/${studyId}/available-entities${entityType ? `?entity_type=${entityType}` : ''}`, context),
+  createSite: (payload: CTMSManagedSitePayload) => post<CTMSManagedEntity>('/ctms/sites', payload),
+  createStudySite: (studyId: string, payload: { entity_id: string; site_number: string }) => post<CTMSStudyEntityAssignment>(`/ctms/studies/${studyId}/sites`, payload),
+  createEntity: (payload: { entity_type: CTMSManagedEntityType; code: string; name: string; attributes?: Record<string, unknown> }) => post<CTMSManagedEntity>('/ctms/entities', payload),
   updateEntity: (id: string, payload: Partial<Pick<CTMSManagedEntity, 'code' | 'name' | 'attributes' | 'active'>>) => patch<CTMSManagedEntity>(`/ctms/entities/${id}`, payload),
   referenceValues: (category?: CTMSReferenceCategory, active: boolean | null = true) => {
     const params = new URLSearchParams({ page_size: '100' })

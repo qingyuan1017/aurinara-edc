@@ -23,6 +23,7 @@ from app.services.edc.form_instance_service import FormInstanceService, form_ins
 def design_service():
     service = MagicMock()
     service.get_schedule_of_assessment = AsyncMock(return_value=SimpleNamespace(entries=()))
+    service.list_subject_phase_definitions = AsyncMock(return_value=[])
     return service
 
 
@@ -144,7 +145,7 @@ class TestInitializeInstances:
         }
         assert pairs == expected_pairs
         design_service.get_schedule_of_assessment.assert_awaited_once_with(
-            mock_session, study_version_id
+            mock_session, study_version_id, None
         )
 
     async def test_no_scheduled_forms_returns_empty_list(
@@ -269,6 +270,35 @@ class TestInitializeInstances:
 
         assert len(instances) == 1
         mock_session.add.assert_called_once()
+
+    async def test_phase_activation_creates_forms_only_for_selected_visits(
+        self, service, design_service, mock_session, actor_id, study_version_id
+    ):
+        subject = _make_subject(study_version_id)
+        prior_visit = _make_visit_instance(subject.id, "Prior")
+        activated_visit = _make_visit_instance(subject.id, "Activated")
+        prior_form = _make_form_definition(study_version_id, "PRIOR", 0)
+        activated_form = _make_form_definition(study_version_id, "ACTIVE", 1)
+        design_service.get_schedule_of_assessment.return_value = _schedule(
+            (prior_visit.visit_definition_id, prior_form.id),
+            (activated_visit.visit_definition_id, activated_form.id),
+        )
+        visit_result = MagicMock()
+        visit_result.scalars.return_value.all.return_value = [prior_visit, activated_visit]
+        mock_session.execute.return_value = visit_result
+
+        with patch("app.services.edc.form_instance_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            instances = await service.initialize_instances(
+                mock_session,
+                subject,
+                actor_id,
+                definition_ids={activated_visit.visit_definition_id},
+            )
+
+        assert [(item.visit_instance_id, item.form_definition_id) for item in instances] == [
+            (activated_visit.id, activated_form.id)
+        ]
 
 
 class TestFormInstanceServiceSingleton:

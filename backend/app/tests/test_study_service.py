@@ -22,7 +22,9 @@ from app.services.edc.study_service import StudyService, study_service
 @pytest.fixture
 def service():
     """Fresh StudyService instance for each test."""
-    return StudyService()
+    phase_service = MagicMock()
+    phase_service.seed_default_phase_flow = AsyncMock()
+    return StudyService(phase_service=phase_service)
 
 
 @pytest.fixture
@@ -70,7 +72,9 @@ def _make_study(status: StudyStatus = StudyStatus.draft) -> Study:
 class TestCreateStudy:
     """Tests for StudyService.create_study()."""
 
-    async def test_create_study_checks_uniqueness(self, service, mock_session, study_create_data, actor_id):
+    async def test_create_study_checks_uniqueness(
+        self, service, mock_session, study_create_data, actor_id
+    ):
         """create_study raises ConflictError when study_code already exists (Req 4.2)."""
         # Mock: existing study found
         mock_result = MagicMock()
@@ -119,7 +123,9 @@ class TestCreateStudy:
         mock_session.add.assert_not_called()
         mock_session.flush.assert_not_awaited()
 
-    async def test_create_study_persists_metadata(self, service, mock_session, study_create_data, actor_id):
+    async def test_create_study_persists_metadata(
+        self, service, mock_session, study_create_data, actor_id
+    ):
         """create_study creates a Study with correct metadata and Draft status (Req 4.1)."""
         # Mock: no existing study
         mock_result = MagicMock()
@@ -140,7 +146,9 @@ class TestCreateStudy:
         assert study.status == StudyStatus.draft
         assert study.created_by == actor_id
 
-    async def test_create_study_creates_initial_version(self, service, mock_session, study_create_data, actor_id):
+    async def test_create_study_creates_initial_version(
+        self, service, mock_session, study_create_data, actor_id
+    ):
         """create_study also creates an initial StudyVersion 1.0 in draft status."""
         # Mock: no existing study
         mock_result = MagicMock()
@@ -159,8 +167,16 @@ class TestCreateStudy:
         assert isinstance(version, StudyVersion)
         assert version.version_number == "1.0"
         assert version.status == StudyVersionStatus.draft
+        service._phase_service.seed_default_phase_flow.assert_awaited_once_with(
+            mock_session,
+            design_version_id=version.id,
+            study_id=version.study_id,
+            actor_id=actor_id,
+        )
 
-    async def test_create_study_writes_audit_event(self, service, mock_session, study_create_data, actor_id):
+    async def test_create_study_writes_audit_event(
+        self, service, mock_session, study_create_data, actor_id
+    ):
         """create_study writes an Audit_Event (Req 4.5)."""
         # Mock: no existing study
         mock_result = MagicMock()
@@ -191,7 +207,9 @@ class TestTransitionStatus:
             (StudyStatus.locked, StudyStatus.archived),
         ],
     )
-    async def test_legal_transitions_succeed(self, service, mock_session, actor_id, current, target):
+    async def test_legal_transitions_succeed(
+        self, service, mock_session, actor_id, current, target
+    ):
         """All legal transitions in the state machine succeed (Req 4.3)."""
         study = _make_study(status=current)
 

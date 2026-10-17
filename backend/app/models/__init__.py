@@ -128,7 +128,15 @@ from app.models.ctms import (
 from app.models.designer.arm_definition import ArmDefinition, arm_definition_visits
 from app.models.designer.coding_setting import CodingSetting
 from app.models.designer.crf_access_definition import CrfAccessDefinition
+from app.models.designer.custom_function import (
+    CustomFunctionDefinition,
+    CustomFunctionExecution,
+    CustomFunctionExecutionStatus,
+    CustomFunctionVersion,
+    CustomFunctionVersionStatus,
+)
 from app.models.designer.form_dependency import FormDefinitionDependency
+from app.models.designer.odm_metadata import DerivationDefinition, MeasurementUnitDefinition
 from app.models.designer.raw_data_variable_setting import RawDataVariableSetting
 from app.models.designer.schedule_of_assessment import (
     ScheduleOfAssessment,
@@ -154,6 +162,16 @@ from app.models.edc.lock import (
     FreezeLock,
     FreezeLockObjectType,
     FreezeLockType,
+)
+from app.models.edc.operations import (
+    ClinicalControlAction,
+    ClinicalControlRequest,
+    ClinicalControlRequestStatus,
+    SDRResult,
+    SDRSelection,
+    SDRSelectionStrategy,
+    SDRSetting,
+    SDRStatus,
 )
 from app.models.edc.query import (
     Query,
@@ -276,6 +294,9 @@ __all__ = [
     "CaseVersionKind",
     "CaseVersionStatus",
     "CausalityAssessment",
+    "ClinicalControlAction",
+    "ClinicalControlRequest",
+    "ClinicalControlRequestStatus",
     "Codelist",
     "CodelistItem",
     "CodingDictionaryVersion",
@@ -293,7 +314,13 @@ __all__ = [
     "CoordinationRef",
     "CorrelationMixin",
     "CrfAccessDefinition",
+    "CustomFunctionDefinition",
+    "CustomFunctionExecution",
+    "CustomFunctionExecutionStatus",
+    "CustomFunctionVersion",
+    "CustomFunctionVersionStatus",
     "DashboardQuery",
+    "DerivationDefinition",
     "EdcAeProjection",
     "EditCheck",
     "EnrollmentPlan",
@@ -336,6 +363,7 @@ __all__ = [
     "InvitationStatus",
     "ManagedEntity",
     "ManagedEntityType",
+    "MeasurementUnitDefinition",
     "MedDraCoding",
     "MonitoringActionItem",
     "MonitoringActivity",
@@ -409,6 +437,11 @@ __all__ = [
     "RevokedToken",
     "Role",
     "RolePermission",
+    "SDRResult",
+    "SDRSelection",
+    "SDRSelectionStrategy",
+    "SDRSetting",
+    "SDRStatus",
     "SDVScopeType",
     "SDVStatus",
     "SafetyCase",

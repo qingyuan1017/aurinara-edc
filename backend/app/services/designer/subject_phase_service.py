@@ -43,11 +43,103 @@ _VISIT_PHASE_TYPES = {
     SubjectPhaseType.registered,
     SubjectPhaseType.screen_failure,
     SubjectPhaseType.common,
+    SubjectPhaseType.complete,
 }
+
+# New draft designs start with the platform's established clinical subject
+# lifecycle. Designers can rename, remove, or extend these rows while the
+# version remains a draft, then associate protocol visits with the applicable
+# phases before publication.
+DEFAULT_SUBJECT_PHASES: tuple[tuple[str, SubjectPhaseType], ...] = (
+    ("Screening", SubjectPhaseType.registered),
+    ("Screen Failed", SubjectPhaseType.screen_failure),
+    ("Enrolled", SubjectPhaseType.common),
+    ("Randomized", SubjectPhaseType.common),
+    ("On Treatment", SubjectPhaseType.common),
+    ("Completed", SubjectPhaseType.complete),
+    ("Early Terminated", SubjectPhaseType.complete),
+    ("Lost to Follow-up", SubjectPhaseType.complete),
+    ("Withdrawn", SubjectPhaseType.complete),
+)
+
+DEFAULT_SUBJECT_PHASE_TRANSITIONS: tuple[tuple[str, str], ...] = (
+    ("Screening", "Screen Failed"),
+    ("Screening", "Enrolled"),
+    ("Enrolled", "Randomized"),
+    ("Enrolled", "Early Terminated"),
+    ("Enrolled", "Withdrawn"),
+    ("Randomized", "On Treatment"),
+    ("On Treatment", "Completed"),
+    ("On Treatment", "Early Terminated"),
+    ("On Treatment", "Lost to Follow-up"),
+    ("On Treatment", "Withdrawn"),
+)
 
 
 class SubjectPhaseService:
     """Creates and validates Subject_Phase_Definitions for a Draft_Design."""
+
+    async def seed_default_phase_flow(
+        self,
+        session: AsyncSession,
+        *,
+        design_version_id: UUID,
+        study_id: UUID | None = None,
+        actor_id: UUID | None = None,
+    ) -> list[SubjectPhaseDefinition]:
+        """Create the standard subject lifecycle for an otherwise empty draft.
+
+        The operation is idempotent at the design-version boundary: if any live
+        phase already exists, no defaults are added. This keeps imports and
+        retries from mixing a designer-authored flow with the default flow.
+        """
+
+        existing_phase_id = await session.scalar(
+            select(SubjectPhaseDefinition.id)
+            .where(SubjectPhaseDefinition.design_version_id == design_version_id)
+            .limit(1)
+        )
+        if existing_phase_id is not None:
+            return []
+
+        phases = [
+            SubjectPhaseDefinition(
+                design_version_id=design_version_id,
+                name=name,
+                phase_type=phase_type,
+                display_order=display_order,
+            )
+            for display_order, (name, phase_type) in enumerate(DEFAULT_SUBJECT_PHASES, start=1)
+        ]
+        session.add_all(phases)
+        await session.flush()
+
+        phase_by_name = {phase.name: phase for phase in phases}
+        transitions = [
+            SubjectPhaseTransition(
+                design_version_id=design_version_id,
+                from_phase_id=phase_by_name[from_name].id,
+                to_phase_id=phase_by_name[to_name].id,
+            )
+            for from_name, to_name in DEFAULT_SUBJECT_PHASE_TRANSITIONS
+        ]
+        session.add_all(transitions)
+        await session.flush()
+
+        await audit_service.record(
+            session,
+            entity_type="study_version",
+            entity_id=design_version_id,
+            action="seed_default_subject_phases",
+            module=Module.DESIGNER,
+            study_id=study_id,
+            actor_id=actor_id,
+            new_value=(
+                f"phases={len(phases)}; transitions={len(transitions)}; "
+                f"phase_names={[phase.name for phase in phases]}"
+            ),
+        )
+        return phases
 
     async def create_phase_definition(
         self,
@@ -302,7 +394,7 @@ class SubjectPhaseService:
     ) -> None:
         if phase_type not in _VISIT_PHASE_TYPES and visit_definition_ids:
             raise ValidationError(
-                "Arm and complete subject phases cannot have associated visits",
+                "Arm subject phases cannot have associated visits",
                 details={
                     "field": "visit_definition_ids",
                     "phase_type": phase_type.value,

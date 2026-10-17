@@ -49,10 +49,33 @@ const phaseTypeOptions = [
   { value: SubjectPhaseType.complete, label: 'Complete' },
   { value: SubjectPhaseType.arm, label: 'Arm selection' },
 ]
+const phaseTypeStyles: Record<SubjectPhaseType, { node: string; swatch: string }> = {
+  [SubjectPhaseType.registered]: {
+    node: '!border-blue-500 !bg-blue-50 !text-blue-950 dark:!bg-blue-950 dark:!text-blue-50',
+    swatch: 'bg-blue-500',
+  },
+  [SubjectPhaseType.screen_failure]: {
+    node: '!border-rose-500 !bg-rose-50 !text-rose-950 dark:!bg-rose-950 dark:!text-rose-50',
+    swatch: 'bg-rose-500',
+  },
+  [SubjectPhaseType.common]: {
+    node: '!border-slate-500 !bg-slate-50 !text-slate-950 dark:!bg-slate-900 dark:!text-slate-50',
+    swatch: 'bg-slate-500',
+  },
+  [SubjectPhaseType.complete]: {
+    node: '!border-emerald-500 !bg-emerald-50 !text-emerald-950 dark:!bg-emerald-950 dark:!text-emerald-50',
+    swatch: 'bg-emerald-500',
+  },
+  [SubjectPhaseType.arm]: {
+    node: '!border-violet-500 !bg-violet-50 !text-violet-950 dark:!bg-violet-950 dark:!text-violet-50',
+    swatch: 'bg-violet-500',
+  },
+}
 const supportsVisits = (phaseType: string) =>
   phaseType === SubjectPhaseType.registered
   || phaseType === SubjectPhaseType.screen_failure
   || phaseType === SubjectPhaseType.common
+  || phaseType === SubjectPhaseType.complete
 
 function readPositions(versionId: string): PositionMap {
   try {
@@ -94,8 +117,7 @@ function SubjectPhasesFlow({ versionId, studyId, readOnly }: { versionId: string
   const [phaseNameDraft, setPhaseNameDraft] = useState('')
   const [phaseTypeDraft, setPhaseTypeDraft] = useState<SubjectPhaseType>(SubjectPhaseType.common)
   const [phaseVisitIdsDraft, setPhaseVisitIdsDraft] = useState<string[]>([])
-  const [edgeFrom, setEdgeFrom] = useState('')
-  const [edgeTo, setEdgeTo] = useState('')
+  const [selectedTransitionId, setSelectedTransitionId] = useState('')
   // Positions seed the layout and are updated on drag-stop. Initialized lazily
   // from localStorage; the backend has no position column.
   const [positions, setPositions] = useState<PositionMap>(() => readPositions(versionId))
@@ -133,12 +155,16 @@ function SubjectPhasesFlow({ versionId, studyId, readOnly }: { versionId: string
   const phasesData = phasesQuery.data
   if (phasesData !== undefined && phasesData !== syncedPhases) {
     setSyncedPhases(phasesData ?? null)
-    setNodes(phases.map((phase, index) => ({
-      id: phase.id,
-      position: positions[phase.id] ?? gridPosition(index),
-      data: { label: `${phase.name} (${(phase.phase_type ?? SubjectPhaseType.common).replace('_', ' ')})` },
-      type: 'default',
-    })))
+    setNodes(phases.map((phase, index) => {
+      const phaseType = phase.phase_type ?? SubjectPhaseType.common
+      return {
+        id: phase.id,
+        position: positions[phase.id] ?? gridPosition(index),
+        data: { label: `${phase.name} (${phaseType.replace('_', ' ')})` },
+        type: 'default',
+        className: phaseTypeStyles[phaseType].node,
+      }
+    }))
   }
 
   // Sync edges from the transitions query. edge.id IS the server transition id.
@@ -179,7 +205,12 @@ function SubjectPhasesFlow({ versionId, studyId, readOnly }: { versionId: string
     mutationFn: async (transitionId: string) => {
       await api.delete(`/designer/versions/${versionId}/subject-phase-transitions/${transitionId}`)
     },
-    onSuccess: () => { setError(''); invalidate() },
+    onSuccess: () => {
+      setSelectedTransitionId('')
+      setError('')
+      setMessage('Link deleted.')
+      invalidate()
+    },
     onError: (err) => { setError(getApiErrorMessage(err, 'Could not delete the transition.')); invalidate() },
   })
 
@@ -249,47 +280,43 @@ function SubjectPhasesFlow({ versionId, studyId, readOnly }: { versionId: string
     })
   }, [versionId])
 
+  const selectPhase = useCallback((id: string) => {
+    setSelectedPhaseId(id)
+    const phase = phases.find((item) => item.id === id)
+    setPhaseNameDraft(phase?.name ?? '')
+    setPhaseTypeDraft(phase?.phase_type ?? SubjectPhaseType.common)
+    setPhaseVisitIdsDraft(phase?.visit_definition_ids ?? [])
+  }, [phases])
+
   // React Flow has NO default self-connection block (NIT-1): keep the explicit guard.
   const isValidConnection = useCallback<IsValidConnection>((conn) => {
     const c = conn as Connection
-    return !!c.source && !!c.target && c.source !== c.target
-  }, [])
+    return !!c.source
+      && !!c.target
+      && c.source !== c.target
+      && !edges.some((edge) => edge.source === c.source && edge.target === c.target)
+  }, [edges])
 
   const onConnect = useCallback((connection: Connection) => {
     if (!canConfigure) return
     const { source, target } = connection
     if (!source || !target || source === target) return // self-guard
+    if (edges.some((edge) => edge.source === source && edge.target === target)) return
     const tmpId = makeTmpId()
     setEdges((eds) => addEdge({ ...connection, id: tmpId }, eds))
     createTransition.mutate({ from_phase_id: source, to_phase_id: target })
-  }, [canConfigure, createTransition])
+  }, [canConfigure, createTransition, edges])
 
   const onEdgesDelete = useCallback((deleted: Edge[]) => {
     if (!canConfigure) return
+    if (deleted.some((edge) => edge.id === selectedTransitionId)) setSelectedTransitionId('')
     for (const edge of deleted) {
       if (isTmpId(edge.id)) continue // optimistic edge: no server id yet
       deleteTransition.mutate(edge.id)
     }
-  }, [canConfigure, deleteTransition])
+  }, [canConfigure, deleteTransition, selectedTransitionId])
 
-  const addTransitionFromForm = () => {
-    if (!edgeFrom || !edgeTo || edgeFrom === edgeTo) {
-      setError('Pick two different phases to connect.')
-      return
-    }
-    const tmpId = makeTmpId()
-    setEdges((eds) => addEdge({ id: tmpId, source: edgeFrom, target: edgeTo }, eds))
-    createTransition.mutate({ from_phase_id: edgeFrom, to_phase_id: edgeTo })
-    setEdgeFrom(''); setEdgeTo('')
-  }
-
-  const selectPhase = (id: string) => {
-    setSelectedPhaseId(id)
-    const phase = phases.find((p) => p.id === id)
-    setPhaseNameDraft(phase?.name ?? '')
-    setPhaseTypeDraft(phase?.phase_type ?? SubjectPhaseType.common)
-    setPhaseVisitIdsDraft(phase?.visit_definition_ids ?? [])
-  }
+  const selectedTransition = edges.find((edge) => edge.id === selectedTransitionId)
 
   if (phasesQuery.isLoading || transitionsQuery.isLoading || visitsQuery.isLoading) {
     return <PageContainer wide><LoadingState label="subject phases" /></PageContainer>
@@ -325,25 +352,6 @@ function SubjectPhasesFlow({ versionId, studyId, readOnly }: { versionId: string
             </Card>
           ) : null}
 
-          {canConfigure ? (
-            <Card>
-              <CardHeader><CardTitle className="text-base">Add transition</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <label className="block text-xs text-muted-foreground" htmlFor="transition-from">From phase</label>
-                <select id="transition-from" aria-label="Transition from phase" value={edgeFrom} onChange={(event) => setEdgeFrom(event.target.value)} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
-                  <option value="">— select —</option>
-                  {phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.name}</option>)}
-                </select>
-                <label className="block text-xs text-muted-foreground" htmlFor="transition-to">To phase</label>
-                <select id="transition-to" aria-label="Transition to phase" value={edgeTo} onChange={(event) => setEdgeTo(event.target.value)} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
-                  <option value="">— select —</option>
-                  {phases.filter((phase) => phase.id !== edgeFrom).map((phase) => <option key={phase.id} value={phase.id}>{phase.name}</option>)}
-                </select>
-                <Button type="button" className="w-full" variant="outline" onClick={addTransitionFromForm}>Add transition</Button>
-              </CardContent>
-            </Card>
-          ) : null}
-
           {readOnly ? (
             <Card>
               <CardHeader><CardTitle className="text-base">Phase visit membership</CardTitle></CardHeader>
@@ -367,7 +375,7 @@ function SubjectPhasesFlow({ versionId, studyId, readOnly }: { versionId: string
                           </ol>
                         ) : <p className="text-xs text-muted-foreground">No visits associated with this phase.</p>
                       ) : (
-                        <p className="text-xs text-muted-foreground">{phaseType === SubjectPhaseType.arm ? 'Visits are determined by the subject’s selected arm.' : 'This phase completes the study and has no associated visits.'}</p>
+                        <p className="text-xs text-muted-foreground">Visits are determined by the subject’s selected arm.</p>
                       )}
                     </section>
                   )
@@ -377,10 +385,11 @@ function SubjectPhasesFlow({ versionId, studyId, readOnly }: { versionId: string
           ) : null}
 
           {!readOnly ? <Card>
-            <CardHeader><CardTitle className="text-base">Phase details</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Edit phase</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <select aria-label="Select phase" value={selectedPhaseId} onChange={(event) => selectPhase(event.target.value)} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
-                <option value="">— select a phase —</option>
+              <p className="text-xs text-muted-foreground">Select a phase on the canvas or choose one here.</p>
+              <select aria-label="Select phase to edit" value={selectedPhaseId} onChange={(event) => selectPhase(event.target.value)} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
+                <option value="">— choose a phase —</option>
                 {phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.name}</option>)}
               </select>
               {selectedPhaseId && canConfigure ? (
@@ -404,31 +413,68 @@ function SubjectPhasesFlow({ versionId, studyId, readOnly }: { versionId: string
         </div>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">Flow</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Flow</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {canConfigure
+                ? 'Drag from a phase connection handle to another phase to link them. Select a phase to edit it, or select a link to remove it.'
+                : 'Review the configured subject phase flow for this version.'}
+            </p>
+          </CardHeader>
           <CardContent>
             {phases.length === 0 ? (
               <Alert><AlertDescription>No phases yet. Add a phase to start building the flow.</AlertDescription></Alert>
             ) : (
-              <div className="h-[70vh] w-full rounded-lg border">
-                <ReactFlow
-                  nodes={nodes}
-                  edges={edges}
-                  onNodesChange={onNodesChange}
-                  onEdgesChange={onEdgesChange}
-                  onNodeDragStop={onNodeDragStop}
-                  onConnect={onConnect}
-                  onEdgesDelete={onEdgesDelete}
-                  isValidConnection={isValidConnection}
-                  nodesConnectable={canConfigure}
-                  elementsSelectable={canConfigure}
-                  nodesFocusable
-                  edgesFocusable
-                  aria-label="Subject phase flow graph"
-                  fitView
-                >
-                  <Background />
-                  <Controls />
-                </ReactFlow>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-x-4 gap-y-2" aria-label="Phase type color legend">
+                  {phaseTypeOptions.map((option) => (
+                    <span key={option.value} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className={`size-2.5 rounded-full ${phaseTypeStyles[option.value].swatch}`} aria-hidden="true" />
+                      {option.label}
+                    </span>
+                  ))}
+                </div>
+                {canConfigure ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 px-3 py-2">
+                    <p className="text-sm text-muted-foreground">
+                      {selectedTransition ? 'Link selected. Delete it or press Delete/Backspace.' : 'Select a link to enable deletion.'}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={!selectedTransition || isTmpId(selectedTransition.id)}
+                      pending={deleteTransition.isPending}
+                      loadingText="Deleting…"
+                      onClick={() => selectedTransition && deleteTransition.mutate(selectedTransition.id)}
+                    >
+                      Delete selected link
+                    </Button>
+                  </div>
+                ) : null}
+                <div className="h-[70vh] w-full rounded-lg border">
+                  <ReactFlow
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onNodeDragStop={onNodeDragStop}
+                    onNodeClick={(_event, node) => selectPhase(node.id)}
+                    onEdgeClick={(_event, edge) => setSelectedTransitionId(edge.id)}
+                    onPaneClick={() => setSelectedTransitionId('')}
+                    onConnect={onConnect}
+                    onEdgesDelete={onEdgesDelete}
+                    isValidConnection={isValidConnection}
+                    nodesConnectable={canConfigure}
+                    elementsSelectable={canConfigure}
+                    nodesFocusable
+                    edgesFocusable
+                    aria-label="Subject phase flow graph"
+                    fitView
+                  >
+                    <Background />
+                    <Controls />
+                  </ReactFlow>
+                </div>
               </div>
             )}
           </CardContent>

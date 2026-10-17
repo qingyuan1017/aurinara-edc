@@ -139,6 +139,18 @@ class Settings(BaseSettings):
     platform_event_region: str = "us-east-1"
     platform_event_endpoint_url: str | None = None
 
+    # --- Isolated custom-function runtime ---
+    # The API never evaluates function source locally. Execution is fail-closed
+    # unless a separately secured runtime is explicitly configured.
+    custom_function_runtime_enabled: bool = False
+    custom_function_runtime_url: str | None = None
+    custom_function_runtime_token: SecretStr | None = None
+    custom_function_runtime_timeout_seconds: float = 3.0
+    custom_function_execution_timeout_ms: int = 1000
+    custom_function_memory_limit_mb: int = 64
+    custom_function_max_input_bytes: int = 65_536
+    custom_function_max_output_bytes: int = 65_536
+
     # --- Object storage (local by default; S3-compatible when configured) ---
     object_storage_backend: str = "local"
     object_storage_local_dir: str = "attachments"
@@ -185,6 +197,19 @@ class Settings(BaseSettings):
     def validate_platform_authorization_cache(cls, value: int) -> int:
         if not 0 <= value <= 60:
             raise ValueError("platform authorization cache must be between 0 and 60 seconds")
+        return value
+
+    @field_validator(
+        "custom_function_runtime_timeout_seconds",
+        "custom_function_execution_timeout_ms",
+        "custom_function_memory_limit_mb",
+        "custom_function_max_input_bytes",
+        "custom_function_max_output_bytes",
+    )
+    @classmethod
+    def validate_custom_function_limits(cls, value: float | int) -> float | int:
+        if value <= 0:
+            raise ValueError("custom function runtime limits must be positive")
         return value
 
     # --- PV/Safety phased capability rollout ---

@@ -111,10 +111,13 @@ server-side default-deny authorization via the shared `permission_service`.
   - [x] 5.1 Reassign edit-check model/repository/service/examples to designer
     - Move `edit_check` model, `edit_check_repository`, `edit_check_service`,
       `edit_check_examples` into `app/{models,repositories,services}/designer/`;
-      store rules declaratively (no user-code execution); FK to `study_versions`
+      store rules declaratively (no in-process user-code execution); FK to `study_versions`
     - Validate rules against the declarative schema before persistence; reject
       schema violations without persisting
     - _Requirements: 5.1, 5.2, 5.4, 5.5, 11.1_
+  - [x] 5.4 Add governed custom Python function versions
+    - Separate author/approve/execute permissions, maker-checker lifecycle, immutable source hashes, remote sandbox-only execution, validated command output, and payload-free audit metadata
+    - _Requirements: 5.7_
   - [x] 5.2 Implement design-time rule testing with no operational side effects
     - In the designer edit-check service, evaluate a provided test case returning
       pass/fail without creating any Operational_Record
@@ -145,6 +148,15 @@ server-side default-deny authorization via the shared `permission_service`.
       and `app/services/designer/subject_phase_service.py` with uniqueness
       rejection returning the duplicate name
     - _Requirements: 3.1, 3.2, 3.3_
+  - [x] 7.1.1 Seed and require the standard subject phase flow
+    - Seed new draft designs with the standard subject lifecycle phases and transitions.
+    - Block publication when no active subject phase or no registered starting phase is configured.
+    - _Requirements: 3.14, 3.15_
+  - [x] 7.1.2 Author transitions and edit phases directly from the flow canvas
+    - Create transitions by dragging between phase handles; remove the separate add-transition form.
+    - Select a phase node to edit its name, type, and applicable visit membership.
+    - Color-code phase nodes by type with a visible legend and expose a reliable selected-link delete action.
+    - _Requirements: 3.16, 3.17_
   - [x] 7.2 Add cycle and arm definition models and services
     - Create `cycle_definitions` (FK `study_versions`, membership to
       `visit_definitions`) and `arm_definitions` (FK `study_versions`) models and
@@ -395,10 +407,19 @@ server-side default-deny authorization via the shared `permission_service`.
   - [x] 27.1 Add registered, screen-failure, common, complete, and arm phase types
   - [x] 27.2 Enforce phase-specific visit membership rules in Designer
   - [x] 27.3 Persist and audit each subject's current phase and selected arm
-  - [x] 27.4 Filter Study Data visits by the current phase or selected arm
+  - [x] 27.4 Show cumulative visits from the audited phase path; make arm phases assignment-only and activate the phase/arm-SoA visit intersection on subsequent phases
   - [x] 27.5 Prompt for a configured arm when entering an arm phase and complete the subject when entering a complete phase
   - [x] 27.6 Restrict Study Data phase actions and API mutations to outgoing published phase-flow transitions
   - [x] 27.7 Show Site names and phase-consistent subject status in the Subjects list
+
+- [x] 32. Move treatment scheduling from arms into the Schedule of Assessment
+  - [x] 32.1 Keep arm authoring limited to name, order, and description
+  - [x] 32.1.1 Add audited draft-only arm removal with arm-scoped SoA cleanup
+  - [x] 32.2 Add common and per-arm SoA scopes with scoped replacement semantics
+  - [x] 32.2.1 Copy the saved common SoA into an unsaved editable arm schedule
+  - [x] 32.3 Require one saved SoA for every configured arm before publication
+  - [x] 32.4 Derive arm-phase visit/form visibility from the selected arm's SoA
+  - _Requirements: 3.7, 4.1, 4.5, 4.23–4.25_
   - _Requirements: 3.4–3.11_
 
 - [x] 28. Preserve visit hierarchy in schedules and arm selection
@@ -425,6 +446,11 @@ server-side default-deny authorization via the shared `permission_service`.
   - [x] 31.2 Persist the selected study and site across internal navigation and reloads, while clearing them on sign-out
   - [x] 31.3 Replace clinical study, subject, and form document-reload links with router navigation
   - _Requirements: 3.12–3.13_
+
+- [x] 32. Add versioned SDR selection configuration
+  - Add draft-only Designer SDR settings for all, deterministic percentage, and targeted-field strategies; validate targeted fields against the owning design and expose read/upsert contracts under the Designer API.
+  - Materialize selections only from published designs in the EDC operational boundary and preserve selection identity across later reads.
+  - _Requirements: 8.8, 10.1–10.6_
 
 ## Notes
 

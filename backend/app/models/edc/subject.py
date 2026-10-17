@@ -15,6 +15,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -39,6 +40,8 @@ class SubjectStatus(enum.StrEnum):
     early_terminated = "Early Terminated"
     lost_to_follow_up = "Lost to Follow-up"
     withdrawn = "Withdrawn"
+    inactive = "Inactive"
+    discontinued = "Discontinued"
 
 
 # --- Models ---
@@ -93,6 +96,11 @@ class Subject(Base):
         String(30), nullable=False, default=SubjectStatus.screening
     )
 
+    # Monotonic revision of clinical data owned by this subject. Child visit,
+    # form, field, and repeating-record mutations increment this value so
+    # quality decisions can be identified as stale without destroying history.
+    data_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
     # Ownership / audit
     created_by: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
@@ -100,9 +108,7 @@ class Subject(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Soft-delete (Requirement 22.5)
     deleted_at: Mapped[datetime | None] = mapped_column(

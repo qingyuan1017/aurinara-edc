@@ -19,6 +19,19 @@ from app.services.edc.repeating_record_service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def isolate_clinical_controls():
+    """Keep row lifecycle unit tests independent from lock/signature services."""
+    with patch(
+        "app.services.edc.repeating_record_service.lock_service.is_modification_blocked",
+        AsyncMock(return_value=False),
+    ), patch(
+        "app.services.edc.repeating_record_service.signature_service.invalidate_if_changed",
+        AsyncMock(),
+    ):
+        yield
+
+
 @pytest.fixture
 def service():
     return RepeatingRecordService()

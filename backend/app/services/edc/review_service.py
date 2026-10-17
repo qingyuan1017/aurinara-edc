@@ -18,13 +18,15 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit_service
+from app.core.exceptions import BusinessRuleError
 from app.models.edc.form_data import FormInstance
 from app.models.edc.review import ReviewStatus
 from app.models.edc.subject import Subject
+from app.services.edc.lock_service import lock_service
 
 logger = logging.getLogger(__name__)
 
@@ -48,12 +50,18 @@ class ReviewService:
         Returns:
             The persisted ``ReviewStatus`` row.
         """
+        if await lock_service.is_hard_locked(session, form_instance):
+            raise BusinessRuleError(
+                message="Clinical review cannot be changed while the form is locked",
+                details={"form_instance_id": str(form_instance.id)},
+            )
         actor_uuid, actor_email = self._normalize_actor(actor_id)
         review_status = await self._get_or_create_status(session, form_instance)
         old_reviewed = review_status.is_reviewed
         reviewed_at = datetime.now(UTC)
 
         review_status.is_reviewed = True
+        review_status.reviewed_revision = int(form_instance.data_revision or 0)
         review_status.reviewed_by = actor_uuid
         review_status.reviewed_at = reviewed_at
         review_status.updated_at = reviewed_at
@@ -99,12 +107,18 @@ class ReviewService:
         Returns:
             The persisted ``ReviewStatus`` row.
         """
+        if await lock_service.is_hard_locked(session, form_instance):
+            raise BusinessRuleError(
+                message="Clinical review cannot be changed while the form is locked",
+                details={"form_instance_id": str(form_instance.id)},
+            )
         actor_uuid, actor_email = self._normalize_actor(actor_id)
         review_status = await self._get_or_create_status(session, form_instance)
         old_reviewed = review_status.is_reviewed
         cleared_at = datetime.now(UTC)
 
         review_status.is_reviewed = False
+        review_status.reviewed_revision = None
         review_status.reviewed_by = None
         review_status.reviewed_at = None
         review_status.updated_at = cleared_at
@@ -136,6 +150,7 @@ class ReviewService:
         study_id: UUID | None = None,
         site_id: UUID | None = None,
         subject_id: UUID | None = None,
+        authorized_site_ids: set[UUID] | None = None,
     ) -> dict[str, int]:
         """Return reviewed/not-reviewed form counts for a clinical scope.
 
@@ -148,9 +163,7 @@ class ReviewService:
         Returns:
             A dictionary with ``reviewed`` and ``not_reviewed`` integer counts.
         """
-        if scope is not None and all(
-            value is None for value in (study_id, site_id, subject_id)
-        ):
+        if scope is not None and all(value is None for value in (study_id, site_id, subject_id)):
             if isinstance(scope, UUID):
                 study_id = scope
             elif isinstance(scope, str):
@@ -169,7 +182,14 @@ class ReviewService:
             func.count(FormInstance.id).label("total"),
             func.count(
                 case(
-                    (ReviewStatus.is_reviewed.is_(True), FormInstance.id),
+                    (
+                        and_(
+                            ReviewStatus.is_reviewed.is_(True),
+                            ReviewStatus.reviewed_revision
+                            == FormInstance.data_revision,
+                        ),
+                        FormInstance.id,
+                    ),
                     else_=None,
                 )
             ).label("reviewed"),
@@ -186,6 +206,8 @@ class ReviewService:
             stmt = stmt.where(Subject.site_id == site_id)
         if subject_id is not None:
             stmt = stmt.where(Subject.id == subject_id)
+        if authorized_site_ids is not None:
+            stmt = stmt.where(Subject.site_id.in_(authorized_site_ids))
 
         result = await session.execute(stmt)
         row = result.one()
@@ -212,9 +234,7 @@ class ReviewService:
     ) -> ReviewStatus:
         """Fetch the unique status row or create its not-reviewed baseline."""
         result = await session.execute(
-            select(ReviewStatus).where(
-                ReviewStatus.form_instance_id == form_instance.id
-            )
+            select(ReviewStatus).where(ReviewStatus.form_instance_id == form_instance.id)
         )
         review_status = result.scalars().first()
         if review_status is None:

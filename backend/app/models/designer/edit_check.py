@@ -32,6 +32,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     Uuid,
@@ -39,6 +40,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.odm_oid import new_odm_oid
 
 
 class EditCheck(Base):
@@ -59,6 +61,12 @@ class EditCheck(Base):
         ForeignKey("study_versions.id", ondelete="CASCADE"),
         nullable=False,
     )
+    odm_oid: Mapped[str] = mapped_column(
+        String(255), nullable=False, default=lambda: new_odm_oid("COND")
+    )
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    needs_retesting: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    retesting_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Descriptive metadata
     name: Mapped[str] = mapped_column(String(255), nullable=False)

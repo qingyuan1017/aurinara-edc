@@ -23,10 +23,13 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import PaginationParams, get_db, require_permission
+from app.api.deps import PaginationParams, get_current_user, get_db, get_permission_service
 from app.core.audit import audit_service
+from app.core.edit_check_dsl import evaluate_rule
+from app.models.edc.form_data import FieldValue
 from app.models.shared.identity import User
 from app.schemas.edc.form_data import (
     ChangeValueRequest,
@@ -36,6 +39,9 @@ from app.schemas.edc.form_data import (
 from app.schemas.shared.audit import AuditEventResponse, AuditSearchFilters
 from app.schemas.shared.base import PaginatedResponse
 from app.services.edc.data_capture_service import data_capture_service
+from app.services.edc.operational_service import edc_operational_service
+from app.services.edc.scope_service import edc_scope_service
+from app.services.shared.permission_service import PermissionService
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +51,38 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 router = APIRouter(prefix="/form-instances", tags=["form-data"])
 
 
-def _instance_payload(form_instance: Any) -> dict[str, Any]:
+async def _authorized_form(
+    session: AsyncSession,
+    form_instance_id: UUID,
+    current_user: User,
+    permission_service: PermissionService,
+    permission: str,
+) -> Any:
+    form_instance = await data_capture_service.load(session, form_instance_id)
+    edc_scope_service.require_form(current_user, permission_service, permission, form_instance)
+    return form_instance
+
+
+async def _instance_payload(session: AsyncSession, form_instance: Any) -> dict[str, Any]:
     """Return the persisted instance plus the metadata needed by the UI."""
     definition = form_instance.form_definition
+    field_values = list(
+        (
+            await session.execute(
+                select(FieldValue).where(FieldValue.form_instance_id == form_instance.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    values = form_instance.data_jsonb or {
+        str(value.field_definition_id): value.value for value in field_values
+    }
+    variable_context = {
+        field.variable_name: values.get(str(field.id))
+        for section in definition.sections
+        for field in section.fields
+    }
     sections = [
         {
             "id": section.id,
@@ -72,6 +107,13 @@ def _instance_payload(form_instance: Any) -> dict[str, Any]:
                     "decimal_precision": field.decimal_precision,
                     "is_read_only": field.is_read_only,
                     "is_calculated": field.is_calculated,
+                    "calculation_expression": field.calculation_expression,
+                    "visibility_rule": field.visibility_rule,
+                    "is_visible": (
+                        bool(evaluate_rule(field.visibility_rule, variable_context))
+                        if field.visibility_rule
+                        else True
+                    ),
                     # Choice controls (dropdown/radio/checkbox/...) render their
                     # options from the linked codelist's items. Project them as
                     # {value: code, label} ordered by display order so the
@@ -91,28 +133,33 @@ def _instance_payload(form_instance: Any) -> dict[str, Any]:
         }
         for section in definition.sections
     ]
-    values = form_instance.data_jsonb or {
-        str(value.field_definition_id): value.value for value in form_instance.field_values
-    }
+    operational_status = (await edc_operational_service.form_statuses(session, [form_instance]))[
+        form_instance.id
+    ]
     return {
         "id": form_instance.id,
+        "study_id": form_instance.subject.study_id,
         "subject_id": form_instance.subject_id,
         "visit_instance_id": form_instance.visit_instance_id,
         "form_definition_id": form_instance.form_definition_id,
         "status": form_instance.status,
+        "data_entry_status": form_instance.data_entry_status,
+        "data_revision": form_instance.data_revision,
+        "operational_status": operational_status,
         "data_jsonb": form_instance.data_jsonb,
         "created_at": form_instance.created_at,
         "updated_at": form_instance.updated_at,
         "submitted_at": form_instance.submitted_at,
         "submitted_by": form_instance.submitted_by,
-        "field_values": form_instance.field_values,
+        "field_values": field_values,
         "form_name": definition.name,
+        "is_repeating": definition.is_repeating,
         "subject_number": form_instance.subject.subject_number,
         "visit_name": form_instance.visit_instance.name if form_instance.visit_instance else None,
         "sections": sections,
         "data": values,
-        "is_frozen": str(form_instance.status).lower() == "frozen",
-        "is_locked": str(form_instance.status).lower() == "locked",
+        "is_frozen": operational_status.freeze == "Active",
+        "is_locked": operational_status.lock == "Active",
     }
 
 
@@ -120,15 +167,18 @@ def _instance_payload(form_instance: Any) -> dict[str, Any]:
 async def get_form_instance(
     form_instance_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.read"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> FormInstanceResponse:
     """Load a form instance with its field values.
 
     Permission: form.read
     Requirement 10.1: Returns the form instance with current data.
     """
-    form_instance = await data_capture_service.load(session, form_instance_id)
-    return FormInstanceResponse.model_validate(_instance_payload(form_instance))
+    form_instance = await _authorized_form(
+        session, form_instance_id, current_user, permission_service, "form.read"
+    )
+    return FormInstanceResponse.model_validate(await _instance_payload(session, form_instance))
 
 
 @router.patch("/{form_instance_id}/data", response_model=FormInstanceResponse)
@@ -136,7 +186,8 @@ async def patch_form_data(
     form_instance_id: UUID,
     body: FormDataPatch,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.enter"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> FormInstanceResponse:
     """Save draft field data for a form instance.
 
@@ -144,14 +195,16 @@ async def patch_form_data(
     Requirement 10.1: Persists Field_Values and sets status to In Progress.
     Body is a dict mapping field_definition_id to value.
     """
-    form_instance = await data_capture_service.load(session, form_instance_id)
+    form_instance = await _authorized_form(
+        session, form_instance_id, current_user, permission_service, "form.enter"
+    )
     updated = await data_capture_service.save_draft(
         session=session,
         form_instance=form_instance,
         values=body.values,
         actor_id=current_user.id,
     )
-    return FormInstanceResponse.model_validate(_instance_payload(updated))
+    return FormInstanceResponse.model_validate(await _instance_payload(session, updated))
 
 
 @router.post("/{form_instance_id}/save", response_model=FormInstanceResponse)
@@ -159,7 +212,8 @@ async def save_form_draft(
     form_instance_id: UUID,
     body: FormDataPatch,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.enter"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> FormInstanceResponse:
     """Explicit save of draft field data for a form instance.
 
@@ -167,21 +221,24 @@ async def save_form_draft(
     Requirement 10.1: Persists Field_Values and sets status to In Progress.
     Semantically identical to PATCH /data but uses POST for explicit save intent.
     """
-    form_instance = await data_capture_service.load(session, form_instance_id)
+    form_instance = await _authorized_form(
+        session, form_instance_id, current_user, permission_service, "form.enter"
+    )
     updated = await data_capture_service.save_draft(
         session=session,
         form_instance=form_instance,
         values=body.values,
         actor_id=current_user.id,
     )
-    return FormInstanceResponse.model_validate(_instance_payload(updated))
+    return FormInstanceResponse.model_validate(await _instance_payload(session, updated))
 
 
 @router.post("/{form_instance_id}/submit", response_model=FormInstanceResponse)
 async def submit_form(
     form_instance_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.submit"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> FormInstanceResponse:
     """Submit a form instance after validation.
 
@@ -190,13 +247,15 @@ async def submit_form(
     membership, and conditional rules. On success sets status Submitted.
     On failure returns field-level errors preserving previously entered values.
     """
-    form_instance = await data_capture_service.load(session, form_instance_id)
+    form_instance = await _authorized_form(
+        session, form_instance_id, current_user, permission_service, "form.submit"
+    )
     updated = await data_capture_service.submit(
         session=session,
         form_instance=form_instance,
         actor_id=current_user.id,
     )
-    return FormInstanceResponse.model_validate(_instance_payload(updated))
+    return FormInstanceResponse.model_validate(await _instance_payload(session, updated))
 
 
 @router.post("/{form_instance_id}/change-value", response_model=FormInstanceResponse)
@@ -204,7 +263,8 @@ async def change_field_value(
     form_instance_id: UUID,
     body: ChangeValueRequest,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("form.enter"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> FormInstanceResponse:
     """Change a single field value, with optional reason for post-submission edits.
 
@@ -212,7 +272,9 @@ async def change_field_value(
     Requirement 10.5: If the form instance was already submitted, requires a
     Reason_For_Change before persisting the change.
     """
-    form_instance = await data_capture_service.load(session, form_instance_id)
+    form_instance = await _authorized_form(
+        session, form_instance_id, current_user, permission_service, "form.enter"
+    )
     updated = await data_capture_service.change_value(
         session=session,
         form_instance=form_instance,
@@ -221,7 +283,7 @@ async def change_field_value(
         reason=body.reason,
         actor_id=current_user.id,
     )
-    return FormInstanceResponse.model_validate(_instance_payload(updated))
+    return FormInstanceResponse.model_validate(await _instance_payload(session, updated))
 
 
 @router.get(
@@ -231,8 +293,9 @@ async def change_field_value(
 async def get_form_instance_audit(
     form_instance_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("audit.read"))],
+    current_user: Annotated[User, Depends(get_current_user)],
     pagination: Annotated[PaginationParams, Depends()],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> Any:
     """Get the audit trail for a form instance.
 
@@ -241,7 +304,9 @@ async def get_form_instance_audit(
     most recent first.
     """
     # Validate the form instance exists
-    await data_capture_service.load(session, form_instance_id)
+    await _authorized_form(
+        session, form_instance_id, current_user, permission_service, "audit.read"
+    )
 
     # Search audit events scoped to this form instance
     filters = AuditSearchFilters(

@@ -109,13 +109,12 @@ class Query(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Query origin
-    query_type: Mapped[str] = mapped_column(
-        String(10), nullable=False, default=QueryType.manual
-    )
+    query_type: Mapped[str] = mapped_column(String(10), nullable=False, default=QueryType.manual)
 
     # Optional notification assignment target (Requirement 28.1)
     assigned_role: Mapped[str | None] = mapped_column(
-        String(100), nullable=True,
+        String(100),
+        nullable=True,
         comment="Role whose in-scope active users receive assignment notifications",
     )
 
@@ -131,14 +130,10 @@ class Query(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Closure tracking
-    closed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -209,7 +204,4 @@ class QueryMessage(Base):
     __table_args__ = (Index("ix_query_messages_query_id", "query_id"),)
 
     def __repr__(self) -> str:
-        return (
-            f"<QueryMessage(id={self.id}, query_id={self.query_id}, "
-            f"author_id={self.author_id})>"
-        )
+        return f"<QueryMessage(id={self.id}, query_id={self.query_id}, author_id={self.author_id})>"

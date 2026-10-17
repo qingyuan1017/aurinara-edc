@@ -96,6 +96,7 @@ class FormDefinitionCreate(BaseCreateSchema):
     form_code: str = Field(..., min_length=1, max_length=50, description='e.g. "AE", "CM", "DM"')
     display_order: int = Field(..., description="Sort order within the version")
     is_repeating: bool = Field(False, description="Whether the form is repeating")
+    requires_signature: bool = Field(False, description="Require a valid signature for lock readiness")
     form_type: FormType = FormType.simple
     access_type: AccessType = AccessType.open_access
     domain: str | None = Field(None, max_length=50)
@@ -117,6 +118,7 @@ class FormDefinitionUpdate(BaseUpdateSchema):
     form_code: str | None = Field(None, min_length=1, max_length=50)
     display_order: int | None = None
     is_repeating: bool | None = None
+    requires_signature: bool | None = None
     form_type: FormType | None = None
     access_type: AccessType | None = None
     domain: str | None = Field(None, max_length=50)
@@ -135,11 +137,13 @@ class FormDefinitionResponse(BaseSchema):
     """Response schema for a form definition (Requirement 4.1)."""
 
     id: UUID
+    odm_oid: str | None = None
     study_version_id: UUID
     name: str
     form_code: str
     display_order: int
     is_repeating: bool
+    requires_signature: bool = False
     form_type: str
     access_type: str
     domain: str | None = None
@@ -171,6 +175,9 @@ class FormSectionCreate(BaseCreateSchema):
     output_to_dataset: bool = True
     help_text: str | None = None
     access_type: AccessType = AccessType.open_access
+    is_repeating: bool = False
+    repeat_min: int | None = Field(None, ge=0)
+    repeat_max: int | None = Field(None, ge=0)
 
 
 class FormSectionUpdate(BaseUpdateSchema):
@@ -183,12 +190,19 @@ class FormSectionUpdate(BaseUpdateSchema):
     output_to_dataset: bool | None = None
     help_text: str | None = None
     access_type: AccessType | None = None
+    is_repeating: bool | None = None
+    repeat_min: int | None = Field(None, ge=0)
+    repeat_max: int | None = Field(None, ge=0)
 
 
 class FormSectionResponse(BaseSchema):
     """Response schema for a form section (Requirement 4.2)."""
 
     id: UUID
+    odm_oid: str | None = None
+    is_repeating: bool = False
+    repeat_min: int | None = None
+    repeat_max: int | None = None
     form_definition_id: UUID
     name: str
     label: str
@@ -219,6 +233,7 @@ class FieldDefinitionCreate(BaseCreateSchema):
     record_id: str | None = Field(None, max_length=255)
     crf_id: str | None = Field(None, max_length=255)
     odm_id: str | None = Field(None, max_length=255)
+    odm_oid: str | None = Field(None, max_length=255)
     control_type: ControlType
     data_type: str = Field(..., min_length=1, max_length=50)
     display_order: int = Field(..., description="Sort order within the section")
@@ -238,6 +253,14 @@ class FieldDefinitionCreate(BaseCreateSchema):
     is_read_only: bool = False
     is_calculated: bool = False
     calculation_expression: str | None = None
+    data_format: str | None = Field(None, max_length=100)
+    allows_partial_date: bool = False
+    source_document: bool = True
+    query_future_date: bool = False
+    query_nonconformance: bool = False
+    breaks_signature: bool = True
+    review_group: str | None = Field(None, max_length=255)
+    dynamic_search_config: dict | None = None
 
 
 class FieldDefinitionUpdate(BaseUpdateSchema):
@@ -254,6 +277,7 @@ class FieldDefinitionUpdate(BaseUpdateSchema):
     record_id: str | None = Field(None, max_length=255)
     crf_id: str | None = Field(None, max_length=255)
     odm_id: str | None = Field(None, max_length=255)
+    odm_oid: str | None = Field(None, max_length=255)
     control_type: ControlType | None = None
     data_type: str | None = Field(None, min_length=1, max_length=50)
     display_order: int | None = None
@@ -274,12 +298,21 @@ class FieldDefinitionUpdate(BaseUpdateSchema):
     is_read_only: bool | None = None
     is_calculated: bool | None = None
     calculation_expression: str | None = None
+    data_format: str | None = Field(None, max_length=100)
+    allows_partial_date: bool | None = None
+    source_document: bool | None = None
+    query_future_date: bool | None = None
+    query_nonconformance: bool | None = None
+    breaks_signature: bool | None = None
+    review_group: str | None = Field(None, max_length=255)
+    dynamic_search_config: dict | None = None
 
 
 class FieldDefinitionResponse(BaseSchema):
     """Response schema for a field definition (Requirement 4.2)."""
 
     id: UUID
+    odm_oid: str | None = None
     form_section_id: UUID
     label: str
     question: str | None = None

@@ -1,0 +1,142 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Aurinara EDC consumer stack for the Aurinara Platform foundation.
+
+Parameters:
+  Environment: {Type: String, AllowedValues: [staging, production]}
+  VpcCidr: {Type: String, Default: 10.30.0.0/16}
+  BaseDomain: {Type: String}
+  DnsProvider: {Type: String, AllowedValues: [cloudflare, route53], Default: cloudflare}
+  HostedZoneId: {Type: String, Default: ''}
+  CertificateArn: {Type: String}
+  ApplicationImage: {Type: String, AllowedPattern: '^.+@sha256:[0-9a-f]{64}$'}
+  MigrationApplicationImage: {Type: String, AllowedPattern: '^.+@sha256:[0-9a-f]{64}$'}
+  DatabaseInstanceClass: {Type: String, Default: db.m7g.large}
+  AlarmEmail: {Type: String}
+  ServicesEnabled: {Type: String, AllowedValues: ['true', 'false'], Default: 'false'}
+  PlatformPrivateLinkServiceName: {Type: String}
+  PlatformPrivateUrl: {Type: String}
+  PlatformPublicUrl: {Type: String}
+  PlatformEventBusName: {Type: String}
+  SharedIdentityKeyArn: {Type: String}
+  UserPoolId: {Type: String}
+  SpaClientId: {Type: String}
+  JwtIssuer: {Type: String}
+  JwtJwksUrl: {Type: String}
+  CognitoDomain: {Type: String}
+  ServiceTokenUrl: {Type: String}
+  ServiceClientId: {Type: String}
+  ServiceClientSecretArn: {Type: String}
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, production]
+
+Rules:
+  Route53HostedZoneRequired:
+    RuleCondition: !Equals [!Ref DnsProvider, route53]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref HostedZoneId, '']]
+        AssertDescription: HostedZoneId is required when DnsProvider is route53.
+
+Resources:
+  Network:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: network.yaml
+      Parameters:
+        Environment: !Ref Environment
+        VpcCidr: !Ref VpcCidr
+        PlatformPrivateLinkServiceName: !Ref PlatformPrivateLinkServiceName
+  Data:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: data.yaml
+      Parameters:
+        Environment: !Ref Environment
+        DataSubnetIds: !GetAtt Network.Outputs.DataSubnetIds
+        DatabaseSecurityGroupId: !GetAtt Network.Outputs.DatabaseSecurityGroupId
+        DatabaseInstanceClass: !Ref DatabaseInstanceClass
+        PlatformEventBusName: !Ref PlatformEventBusName
+  Compute:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: compute.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ServicesEnabled: !Ref ServicesEnabled
+        ApplicationImage: !Ref ApplicationImage
+        MigrationApplicationImage: !Ref MigrationApplicationImage
+        VpcId: !GetAtt Network.Outputs.VpcId
+        AppSubnetIds: !GetAtt Network.Outputs.AppSubnetIds
+        AlbSecurityGroupId: !GetAtt Network.Outputs.AlbSecurityGroupId
+        ApiSecurityGroupId: !GetAtt Network.Outputs.ApiSecurityGroupId
+        WorkerSecurityGroupId: !GetAtt Network.Outputs.WorkerSecurityGroupId
+        DatabaseEndpoint: !GetAtt Data.Outputs.DatabaseEndpoint
+        DatabaseSecretArn: !GetAtt Data.Outputs.DatabaseSecretArn
+        ApplicationSecretArn: !GetAtt Data.Outputs.ApplicationSecretArn
+        DataKeyArn: !GetAtt Data.Outputs.DataKeyArn
+        SharedIdentityKeyArn: !Ref SharedIdentityKeyArn
+        AttachmentBucketName: !GetAtt Data.Outputs.AttachmentBucketName
+        ProjectionQueueUrl: !GetAtt Data.Outputs.ProjectionQueueUrl
+        UserPoolId: !Ref UserPoolId
+        SpaClientId: !Ref SpaClientId
+        JwtIssuer: !Ref JwtIssuer
+        JwtJwksUrl: !Ref JwtJwksUrl
+        CognitoDomain: !Ref CognitoDomain
+        ApplicationUrl: !Sub
+          - 'https://${Host}.${BaseDomain}'
+          - Host: !If [IsProduction, edc, edc-staging]
+        PlatformPrivateUrl: !Ref PlatformPrivateUrl
+        ServiceTokenUrl: !Ref ServiceTokenUrl
+        ServiceClientId: !Ref ServiceClientId
+        ServiceClientSecretArn: !Ref ServiceClientSecretArn
+  Edge:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: edge.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ApplicationDomain: !Sub
+          - '${Host}.${BaseDomain}'
+          - Host: !If [IsProduction, edc, edc-staging]
+        DnsProvider: !Ref DnsProvider
+        HostedZoneId: !Ref HostedZoneId
+        CertificateArn: !Ref CertificateArn
+        FrontendBucketName: !GetAtt Data.Outputs.FrontendBucketName
+        FrontendBucketRegionalDomainName: !GetAtt Data.Outputs.FrontendBucketRegionalDomainName
+        AccessLogBucketDomainName: !GetAtt Data.Outputs.AccessLogBucketDomainName
+        AlbArn: !GetAtt Compute.Outputs.AlbArn
+        AlbDnsName: !GetAtt Compute.Outputs.AlbDnsName
+  Operations:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: operations.yaml
+      Parameters:
+        Environment: !Ref Environment
+        AlarmEmail: !Ref AlarmEmail
+        ClusterName: !GetAtt Compute.Outputs.ClusterName
+        ApiServiceName: !GetAtt Compute.Outputs.ApiServiceName
+        AlbFullName: !GetAtt Compute.Outputs.AlbFullName
+        ApiTargetGroupFullName: !GetAtt Compute.Outputs.ApiTargetGroupFullName
+        DatabaseIdentifier: !GetAtt Data.Outputs.DatabaseIdentifier
+        ProjectionQueueName: !GetAtt Data.Outputs.ProjectionQueueName
+        ProjectionDlqName: !GetAtt Data.Outputs.ProjectionDlqName
+        BackupVaultName: !GetAtt Data.Outputs.BackupVaultName
+        DistributionId: !GetAtt Edge.Outputs.DistributionId
+        ArtifactBucketName: !GetAtt Data.Outputs.AttachmentBucketName
+        AccessLogBucketName: !GetAtt Data.Outputs.AccessLogBucketName
+        DataKeyArn: !GetAtt Data.Outputs.DataKeyArn
+
+Outputs:
+  ApplicationUrl:
+    Value: !Sub
+      - 'https://${Host}.${BaseDomain}'
+      - Host: !If [IsProduction, edc, edc-staging]
+  FrontendBucketName: {Value: !GetAtt Data.Outputs.FrontendBucketName}
+  CloudFrontDistributionId: {Value: !GetAtt Edge.Outputs.DistributionId}
+  CloudFrontDistributionDomainName: {Value: !GetAtt Edge.Outputs.DistributionDomainName}
+  ClusterName: {Value: !GetAtt Compute.Outputs.ClusterName}
+  MigrationTaskDefinitionArn: {Value: !GetAtt Compute.Outputs.MigrationTaskDefinitionArn}
+  AppSubnetIds: {Value: !GetAtt Network.Outputs.AppSubnetIds}
+  WorkerSecurityGroupId: {Value: !GetAtt Network.Outputs.WorkerSecurityGroupId}
+  DatabaseIdentifier: {Value: !GetAtt Data.Outputs.DatabaseIdentifier}
+  PlatformPublicUrl: {Value: !Ref PlatformPublicUrl}

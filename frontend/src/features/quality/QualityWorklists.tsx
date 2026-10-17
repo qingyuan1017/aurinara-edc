@@ -1,47 +1,90 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type PaginatedResponse } from '@/lib/api'
 import { PermissionGuard } from '@/components/guards/PermissionGuard'
 import { PERMISSIONS } from '@/lib/permissions'
-import { DataTableShell, MetricCard, OwnershipBadge, PageContainer, PageHeader, PageToolbar, StatusBadge } from '@/components/patterns'
+import { DataTableShell, OwnershipBadge, PageContainer, PageHeader, PageToolbar, StatusBadge } from '@/components/patterns'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-interface Subject { id: string; subject_number: string; site_id: string; status: string }
-interface CasebookForm { form_instance_id: string | null; name: string | null; status: string }
-interface CasebookVisit { name: string | null; forms: CasebookForm[] }
-interface Casebook { visits: CasebookVisit[] }
-interface WorkItem extends CasebookForm { subject_id: string; subject_number: string; visit_name: string; is_verified?: boolean; is_reviewed?: boolean }
-
-async function loadWorkItems(studyId: string): Promise<WorkItem[]> {
-  const subjects = (await api.get<PaginatedResponse<Subject>>(`/studies/${studyId}/subjects`, { params: { page: 1, page_size: 100 } })).data.items
-  const casebooks = await Promise.all(subjects.map(async (subject) => ({ subject, casebook: (await api.get<Casebook>(`/subjects/${subject.id}/casebook`)).data })))
-  return casebooks.flatMap(({ subject, casebook }) => casebook.visits.flatMap((visit) => visit.forms.filter((form) => form.form_instance_id).map((form) => ({ ...form, subject_id: subject.id, subject_number: subject.subject_number, visit_name: visit.name ?? 'Visit' }))))
+interface OperationalStatus {
+  data_entry: string
+  review: string
+  sdv: string
+  sdr: string
+  active_query_count: number
 }
 
-function ProgressBar({ done, total }: { done: number; total: number }) {
-  const percentage = total ? Math.round((done / total) * 100) : 0
-  return <div aria-label={`${done} of ${total} complete`} role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}><div className="flex justify-between text-xs text-muted-foreground"><span>{done} of {total} complete</span><span>{percentage}%</span></div><div className="mt-2 h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-primary" style={{ width: `${percentage}%` }} /></div></div>
+interface WorkItem {
+  form_instance_id: string
+  subject_id: string
+  subject_number: string
+  site_name?: string
+  visit_name?: string
+  form_name: string
+  status: OperationalStatus
+  workflow: 'review' | 'sdv' | 'sdr'
+  workflow_status: string
+  sdr_selection_id?: string
+}
+
+function useWorklist(studyId: string, workflow: WorkItem['workflow'], status: string) {
+  return useQuery({
+    queryKey: ['quality-worklist', studyId, workflow, status],
+    queryFn: async () => (await api.get<PaginatedResponse<WorkItem>>(`/studies/${studyId}/quality-worklist`, {
+      params: { workflow, page: 1, page_size: 100, ...(status !== 'all' ? { status } : {}) },
+    })).data,
+  })
 }
 
 export function SDVWorklistPage({ studyId }: { studyId: string }) {
-  const client = useQueryClient(); const [filter, setFilter] = useState('all'); const [overrides, setOverrides] = useState<Record<string, boolean>>({})
-  const progress = useQuery({ queryKey: ['sdv-progress', studyId], queryFn: async () => (await api.get<{ verified: number; not_verified: number }>(`/studies/${studyId}/sdv-progress`)).data })
-  const items = useQuery({ queryKey: ['sdv-worklist', studyId], queryFn: () => loadWorkItems(studyId) })
-  const action = useMutation({ mutationFn: ({ id, verified }: { id: string; verified: boolean }) => api.post(`/form-instances/${id}/${verified ? 'unsdv' : 'sdv'}`), onSuccess: (_data, variables) => { setOverrides((current) => ({ ...current, [variables.id]: !variables.verified })); client.invalidateQueries({ queryKey: ['sdv-progress', studyId] }) } })
-  const rows = useMemo(() => (items.data ?? []).map((item) => ({ ...item, is_verified: overrides[item.form_instance_id ?? ''] ?? item.is_verified })).filter((item) => filter === 'all' || (filter === 'pending' ? !item.is_verified : item.is_verified)), [items.data, filter, overrides])
-  return <PermissionGuard permission={PERMISSIONS.SDV_MANAGE} studyId={studyId}><PageContainer><PageHeader title="SDV worklist" description="Track source-data verification across form instances." ownership={<OwnershipBadge owner="EDC" />} /><div className="grid gap-4 md:grid-cols-3"><MetricCard label="Verified" value={progress.data?.verified ?? 0} status={<StatusBadge status="verified" label="SDV status" />} /><MetricCard label="Not verified" value={progress.data?.not_verified ?? 0} status={<StatusBadge status="pending" label="SDV status" />} /><MetricCard label="Worklist" value={<ProgressBar done={items.data?.filter((item) => item.is_verified).length ?? 0} total={items.data?.length ?? 0} />} /></div><PageToolbar label="SDV filters"><label className="flex items-center gap-2 text-sm">Filter<select aria-label="SDV filter" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="all">All forms</option><option value="pending">Not verified</option><option value="verified">Verified</option></select></label></PageToolbar><WorklistTable items={rows} kind="sdv" onToggle={(item) => action.mutate({ id: item.form_instance_id!, verified: Boolean(item.is_verified) })} isPending={action.isPending} loading={items.isLoading} error={Boolean(items.error)} /></PageContainer></PermissionGuard>
+  const [workflow, setWorkflow] = useState<'sdv' | 'sdr'>('sdv')
+  return <QualityWorklist studyId={studyId} workflow={workflow} onWorkflowChange={setWorkflow} />
 }
 
 export function ReviewWorklistPage({ studyId }: { studyId: string }) {
-  const client = useQueryClient(); const [filter, setFilter] = useState('all'); const [overrides, setOverrides] = useState<Record<string, boolean>>({})
-  const progress = useQuery({ queryKey: ['review-progress', studyId], queryFn: async () => (await api.get<{ reviewed: number; not_reviewed: number }>(`/studies/${studyId}/review-progress`)).data })
-  const items = useQuery({ queryKey: ['review-worklist', studyId], queryFn: () => loadWorkItems(studyId) })
-  const action = useMutation({ mutationFn: ({ id, reviewed }: { id: string; reviewed: boolean }) => api.post(`/form-instances/${id}/${reviewed ? 'unreview' : 'review'}`), onSuccess: (_data, variables) => { setOverrides((current) => ({ ...current, [variables.id]: !variables.reviewed })); client.invalidateQueries({ queryKey: ['review-progress', studyId] }) } })
-  const rows = useMemo(() => (items.data ?? []).map((item) => ({ ...item, is_reviewed: overrides[item.form_instance_id ?? ''] ?? item.is_reviewed })).filter((item) => filter === 'all' || (filter === 'pending' ? !item.is_reviewed : item.is_reviewed)), [items.data, filter, overrides])
-  return <PermissionGuard permission={PERMISSIONS.REVIEW_MANAGE} studyId={studyId}><PageContainer><PageHeader title="Clinical review worklist" description="Review submitted forms and track outstanding clinical review." ownership={<OwnershipBadge owner="EDC" />} /><div className="grid gap-4 md:grid-cols-3"><MetricCard label="Reviewed" value={progress.data?.reviewed ?? 0} status={<StatusBadge status="reviewed" label="Review status" />} /><MetricCard label="Not reviewed" value={progress.data?.not_reviewed ?? 0} status={<StatusBadge status="pending" label="Review status" />} /><MetricCard label="Worklist" value={<ProgressBar done={items.data?.filter((item) => item.is_reviewed).length ?? 0} total={items.data?.length ?? 0} />} /></div><PageToolbar label="Review filters"><label className="flex items-center gap-2 text-sm">Filter<select aria-label="Review filter" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="all">All forms</option><option value="pending">Not reviewed</option><option value="reviewed">Reviewed</option></select></label></PageToolbar><WorklistTable items={rows} kind="review" onToggle={(item) => action.mutate({ id: item.form_instance_id!, reviewed: Boolean(item.is_reviewed) })} isPending={action.isPending} loading={items.isLoading} error={Boolean(items.error)} /></PageContainer></PermissionGuard>
+  return <QualityWorklist studyId={studyId} workflow="review" />
 }
 
-function WorklistTable({ items, kind, onToggle, isPending, loading, error }: { items: WorkItem[]; kind: 'sdv' | 'review'; onToggle: (item: WorkItem) => void; isPending: boolean; loading: boolean; error: boolean }) {
-  return <DataTableShell label={`${kind} worklist`} loading={loading} error={error} errorMessage={`Unable to load the ${kind} worklist.`} empty={items.length === 0} emptyTitle={`No ${kind} forms`} emptyDescription="No forms match this worklist filter."><Table><TableHeader><TableRow>{['Subject', 'Visit', 'Form', 'Form status', 'Workflow', 'Action'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader><TableBody>{items.map((item) => { const done = kind === 'sdv' ? item.is_verified : item.is_reviewed; return <TableRow key={item.form_instance_id}><TableCell><a className="font-medium text-primary hover:underline" href={`/subjects/${item.subject_id}/casebook`}>{item.subject_number}</a></TableCell><TableCell>{item.visit_name}</TableCell><TableCell><a className="text-primary hover:underline" href={`/subjects/${item.subject_id}/forms/${item.form_instance_id}`}>{item.name ?? 'Form'}</a></TableCell><TableCell><StatusBadge status={item.status} label="form status" /></TableCell><TableCell><StatusBadge status={done ? (kind === 'sdv' ? 'verified' : 'reviewed') : 'pending'} label={`${kind} status`} /></TableCell><TableCell><Button size="sm" variant={done ? 'outline' : 'default'} onClick={() => onToggle(item)} disabled={isPending}>{done ? `Clear ${kind === 'sdv' ? 'SDV' : 'review'}` : `Mark ${kind === 'sdv' ? 'verified' : 'reviewed'}`}</Button></TableCell></TableRow> })}</TableBody></Table></DataTableShell>
+function QualityWorklist({ studyId, workflow, onWorkflowChange }: { studyId: string; workflow: WorkItem['workflow']; onWorkflowChange?: (workflow: 'sdv' | 'sdr') => void }) {
+  const client = useQueryClient()
+  const [status, setStatus] = useState('all')
+  const [overrides, setOverrides] = useState<Record<string, string>>({})
+  const query = useWorklist(studyId, workflow, status)
+  const action = useMutation({
+    mutationFn: async (item: WorkItem) => {
+      if (workflow === 'review') return api.post(`/form-instances/${item.form_instance_id}/${item.workflow_status === 'Reviewed' ? 'unreview' : 'review'}`)
+      if (workflow === 'sdv') return api.post(`/form-instances/${item.form_instance_id}/${item.workflow_status === 'Verified' ? 'unsdv' : 'sdv'}`)
+      if (!item.sdr_selection_id) throw new Error('SDR selection is unavailable')
+      return api.post(`/sdr-selections/${item.sdr_selection_id}/review`, { status: 'Complete', outcome: 'Reviewed' })
+    },
+    onSuccess: (_data, item) => {
+      const next = workflow === 'review'
+        ? (item.workflow_status === 'Reviewed' ? 'Not Reviewed' : 'Reviewed')
+        : workflow === 'sdv'
+          ? (item.workflow_status === 'Verified' ? 'Not Verified' : 'Verified')
+          : 'Complete'
+      setOverrides((current) => ({ ...current, [item.form_instance_id]: next }))
+      void client.invalidateQueries({ queryKey: ['quality-worklist', studyId] })
+    },
+  })
+  const title = workflow === 'review' ? 'Clinical review worklist' : workflow === 'sdv' ? 'SDV worklist' : 'SDR worklist'
+  const managePermission = workflow === 'review' ? PERMISSIONS.REVIEW_MANAGE : workflow === 'sdv' ? PERMISSIONS.SDV_MANAGE : PERMISSIONS.SDR_MANAGE
+  const items = (query.data?.items ?? []).map((item) => ({ ...item, workflow_status: overrides[item.form_instance_id] ?? item.workflow_status }))
+  const pendingStatus = workflow === 'review' ? 'Not Reviewed' : workflow === 'sdv' ? 'Not Verified' : 'Pending'
+  const completeStatus = workflow === 'review' ? 'Reviewed' : workflow === 'sdv' ? 'Verified' : 'Complete'
+  return (
+    <PermissionGuard permission={managePermission} studyId={studyId}>
+      <PageContainer wide>
+        <PageHeader title={title} description="Server-filtered quality work, including revision-aware stale decisions." ownership={<OwnershipBadge owner="EDC" />} />
+        <PageToolbar label="Quality worklist filters">
+          {onWorkflowChange ? <label className="flex items-center gap-2 text-sm">Workflow<select aria-label="Quality workflow" value={workflow} onChange={(event) => onWorkflowChange(event.target.value as 'sdv' | 'sdr')} className="h-10 rounded-md border border-input bg-background px-3"><option value="sdv">SDV</option><option value="sdr">SDR</option></select></label> : null}
+          <label className="flex items-center gap-2 text-sm">Status<select aria-label="Quality status" value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3"><option value="all">All</option><option value={pendingStatus}>Pending</option><option value={completeStatus}>Complete</option><option value="Stale">Stale</option></select></label>
+        </PageToolbar>
+        <DataTableShell label={title} loading={query.isLoading} error={Boolean(query.error)} errorMessage={`Unable to load ${title.toLowerCase()}.`} empty={!query.isLoading && items.length === 0} emptyTitle="No matching forms" emptyDescription="No authorized forms match the selected workflow status.">
+          <Table><TableHeader><TableRow>{['Site', 'Subject', 'Visit', 'Form', 'Entry', 'Workflow', 'Queries', 'Action'].map((heading) => <TableHead key={heading}>{heading}</TableHead>)}</TableRow></TableHeader><TableBody>{items.map((item) => <TableRow key={item.form_instance_id}><TableCell>{item.site_name ?? '—'}</TableCell><TableCell>{item.subject_number}</TableCell><TableCell>{item.visit_name ?? '—'}</TableCell><TableCell><a className="text-primary hover:underline" href={`/subjects/${item.subject_id}/forms/${item.form_instance_id}`}>{item.form_name}</a></TableCell><TableCell><StatusBadge status={item.status.data_entry} label="Entry status" /></TableCell><TableCell><StatusBadge status={item.workflow_status} label={`${workflow} status`} /></TableCell><TableCell>{item.status.active_query_count}</TableCell><TableCell><Button size="sm" variant={item.workflow_status === completeStatus ? 'outline' : 'default'} disabled={action.isPending || (workflow === 'sdr' && !item.sdr_selection_id)} onClick={() => action.mutate(item)}>{workflow === 'sdr' ? 'Complete SDR' : item.workflow_status === completeStatus ? `Clear ${workflow === 'sdv' ? 'SDV' : 'review'}` : `Mark ${workflow === 'sdv' ? 'verified' : 'reviewed'}`}</Button></TableCell></TableRow>)}</TableBody></Table>
+        </DataTableShell>
+      </PageContainer>
+    </PermissionGuard>
+  )
 }

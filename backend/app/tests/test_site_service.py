@@ -344,6 +344,27 @@ class TestListSites:
         assert result.total == 0
         assert result.items == []
 
+    async def test_list_sites_intersects_authorized_site_ids(self, service, study_id):
+        """Site-scoped callers cannot receive sites outside their assignments."""
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = 0
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        from app.api.deps import PaginationParams
+
+        allowed_site_id = uuid.uuid4()
+        await service.list_sites(
+            mock_session,
+            study_id,
+            PaginationParams(page=1, page_size=25),
+            authorized_site_ids={allowed_site_id},
+        )
+
+        executed_statements = [str(call.args[0]) for call in mock_session.execute.await_args_list]
+        assert any("sites.id IN" in statement for statement in executed_statements)
+
 
 class TestSiteServiceSingleton:
     """Tests for the module-level singleton."""

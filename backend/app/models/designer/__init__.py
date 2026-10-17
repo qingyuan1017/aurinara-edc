@@ -3,6 +3,13 @@
 from app.models.designer.arm_definition import ArmDefinition, arm_definition_visits
 from app.models.designer.coding_setting import CodingSetting
 from app.models.designer.crf_access_definition import CrfAccessDefinition
+from app.models.designer.custom_function import (
+    CustomFunctionDefinition,
+    CustomFunctionExecution,
+    CustomFunctionExecutionStatus,
+    CustomFunctionVersion,
+    CustomFunctionVersionStatus,
+)
 from app.models.designer.edit_check import EditCheck, ValidationResult
 from app.models.designer.form_dependency import FormDefinitionDependency
 from app.models.designer.form_metadata import (
@@ -10,6 +17,7 @@ from app.models.designer.form_metadata import (
     FormDefinition,
     FormSection,
 )
+from app.models.designer.odm_metadata import DerivationDefinition, MeasurementUnitDefinition
 from app.models.designer.raw_data_variable_setting import RawDataVariableSetting
 from app.models.designer.schedule_of_assessment import (
     ScheduleOfAssessment,
@@ -32,11 +40,18 @@ __all__ = [
     "ArmDefinition",
     "CodingSetting",
     "CrfAccessDefinition",
+    "CustomFunctionDefinition",
+    "CustomFunctionExecution",
+    "CustomFunctionExecutionStatus",
+    "CustomFunctionVersion",
+    "CustomFunctionVersionStatus",
+    "DerivationDefinition",
     "EditCheck",
     "FieldDefinition",
     "FormDefinition",
     "FormDefinitionDependency",
     "FormSection",
+    "MeasurementUnitDefinition",
     "RawDataVariableSetting",
     "ScheduleOfAssessment",
     "ScheduleOfAssessmentEntry",

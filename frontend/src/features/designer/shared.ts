@@ -17,6 +17,18 @@ export interface DesignVersionSelection {
   isReadOnly: boolean
 }
 
+const DESIGNER_VERSION_SELECTED_EVENT = 'designer-version-selected'
+
+export function setActiveDesignerVersion(studyId: string, versionId: string) {
+  try { localStorage.setItem(`designer:selected-version:${studyId}`, versionId) } catch { /* optional browser storage */ }
+  try {
+    const url = new URL(window.location.href)
+    url.searchParams.set('design_version_id', versionId)
+    window.history.replaceState(window.history.state, '', url)
+  } catch { /* optional browser history */ }
+  window.dispatchEvent(new CustomEvent(DESIGNER_VERSION_SELECTED_EVENT, { detail: { studyId, versionId } }))
+}
+
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message
   const response = (error as { response?: { data?: { detail?: string; error?: { message?: string } } } })?.response
@@ -29,7 +41,9 @@ export function useDraftVersion(studyId: string) {
     queryFn: async () => (await api.get<StudyVersionSummary[]>(`/studies/${studyId}/versions`)).data,
   })
   const versions = Array.isArray(query.data) ? query.data : []
-  const draft = versions.find((version) => version.status === 'draft')
+  const draft = [...versions]
+    .filter((version) => version.status === 'draft')
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
   return { query, versions, draftVersionId: draft?.id ?? null, draftVersionNumber: draft?.version_number ?? null }
 }
 
@@ -60,6 +74,15 @@ export function DraftGate({
     }
   }, [selectedVersion, storageKey])
 
+  useEffect(() => {
+    const activateImportedVersion = (event: Event) => {
+      const detail = (event as CustomEvent<{ studyId?: string; versionId?: string }>).detail
+      if (detail?.studyId === studyId && detail.versionId) setSelectedId(detail.versionId)
+    }
+    window.addEventListener(DESIGNER_VERSION_SELECTED_EVENT, activateImportedVersion)
+    return () => window.removeEventListener(DESIGNER_VERSION_SELECTED_EVENT, activateImportedVersion)
+  }, [studyId])
+
   if (query.isLoading) return createElement(PageContainer, null, createElement(LoadingState, { label: 'design version' }))
   if (query.isError) return createElement(PageContainer, null, createElement(ErrorState, { message: 'Unable to resolve the study design versions.', onRetry: () => void query.refetch() }))
   if (!selectedVersion) return createElement(PageContainer, null, createElement(Alert, null, createElement(AlertDescription, null, 'This study has no design versions. Create an initial draft on the Study versioning page.')))
@@ -67,12 +90,7 @@ export function DraftGate({
   const isReadOnly = selectedVersion.status !== 'draft'
   const changeVersion = (versionId: string) => {
     setSelectedId(versionId)
-    try { localStorage.setItem(storageKey, versionId) } catch { /* optional browser storage */ }
-    try {
-      const url = new URL(window.location.href)
-      url.searchParams.set('design_version_id', versionId)
-      window.history.replaceState(window.history.state, '', url)
-    } catch { /* optional browser history */ }
+    setActiveDesignerVersion(studyId, versionId)
   }
 
   return createElement(

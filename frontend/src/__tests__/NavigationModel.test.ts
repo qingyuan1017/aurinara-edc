@@ -26,12 +26,13 @@ const readyState = normalizeCTMSCapabilities({
 const disabledPVState = normalizePVCapabilities(PV_DISABLED_MANIFEST)
 
 describe('navigation model adapter', () => {
-  it('groups the eight study-scoped EDC workspaces and their submenus', () => {
+  it('groups the study-scoped EDC workspaces and their submenus', () => {
     const groupedItems = EDC_NAVIGATION_SECTIONS.flatMap((section) => section.items)
 
     expect(groupedItems).toHaveLength(EDC_NAV_ITEMS.length)
     expect(groupedItems.map((item) => item.to)).toEqual(EDC_NAV_ITEMS.map((item) => item.to))
     expect(new Set(EDC_NAVIGATION_SECTIONS.map((section) => section.id))).toEqual(new Set([
+      'repository',
       'overview',
       'subjects',
       'data-entry',

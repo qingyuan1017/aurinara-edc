@@ -12,6 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.edc.operations import FormOperationalStatus
 from app.schemas.shared.base import BaseSchema, UtcDatetime
 
 # ---------------------------------------------------------------------------
@@ -35,10 +36,14 @@ class FormInstanceResponse(BaseSchema):
     """Response schema for a form instance with its field values."""
 
     id: UUID
+    study_id: UUID
     subject_id: UUID
     visit_instance_id: UUID | None = None
     form_definition_id: UUID
     status: str
+    data_entry_status: str
+    data_revision: int = 0
+    operational_status: FormOperationalStatus | None = None
     data_jsonb: dict[str, Any] | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime | None = None
@@ -48,6 +53,7 @@ class FormInstanceResponse(BaseSchema):
     # Presentation fields for clients rendering a data-entry form. These are
     # assembled from the related form definition by the route layer.
     form_name: str | None = None
+    is_repeating: bool = False
     subject_number: str | None = None
     visit_name: str | None = None
     sections: list[dict[str, object]] = Field(default_factory=list)

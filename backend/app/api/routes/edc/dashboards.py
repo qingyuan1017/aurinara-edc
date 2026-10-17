@@ -22,10 +22,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, require_permission
+from app.api.deps import get_current_user, get_db, get_permission_service, require_permission
+from app.core.exceptions import AuthorizationError
 from app.models.shared.identity import User
 from app.schemas.edc.dashboard import QueryMetrics, SiteDashboard, StudyDashboard
 from app.services.edc.dashboard_service import dashboard_service
+from app.services.edc.scope_service import edc_scope_service
+from app.services.shared.permission_service import PermissionService
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +50,16 @@ study_dashboard_router = APIRouter(prefix="/studies", tags=["dashboards"])
 async def get_study_dashboard(
     study_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("study.read"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> StudyDashboard:
     """Get study-level dashboard metrics.
 
     Permission: study.read
     Requirement 20.1: Subject counts by status, form completion, open queries.
     """
-    return await dashboard_service.study_dashboard(session, study_id)
+    site_ids = _dashboard_sites(current_user, permission_service, study_id)
+    return await dashboard_service.study_dashboard(session, study_id, authorized_site_ids=site_ids)
 
 
 @study_dashboard_router.get(
@@ -64,14 +69,32 @@ async def get_study_dashboard(
 async def get_query_metrics(
     study_id: UUID,
     session: DbSession,
-    current_user: Annotated[User, Depends(require_permission("study.read"))],
+    current_user: Annotated[User, Depends(get_current_user)],
+    permission_service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> QueryMetrics:
     """Get query metrics for a study.
 
     Permission: study.read
     Requirement 20.3: Open/answered/overdue counts and aging.
     """
-    return await dashboard_service.query_metrics(session, study_id)
+    site_ids = _dashboard_sites(current_user, permission_service, study_id)
+    return await dashboard_service.query_metrics(session, study_id, authorized_site_ids=site_ids)
+
+
+def _dashboard_sites(
+    user: User,
+    permission_service: PermissionService,
+    study_id: UUID,
+) -> set[UUID] | None:
+    """Authorize legacy study reads or site-scoped EDC reads without disclosure."""
+    try:
+        return edc_scope_service.authorized_site_ids(
+            user, permission_service, "study.read", study_id
+        )
+    except AuthorizationError:
+        return edc_scope_service.authorized_site_ids(
+            user, permission_service, "form.read", study_id
+        )
 
 
 # ---------------------------------------------------------------------------

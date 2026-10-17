@@ -50,10 +50,11 @@ python -m scripts.seed_builtin_roles
 python -m scripts.seed_dev_user
 ```
 
-`seed_builtin_roles` is idempotent. When Platform service credentials are configured, it
-registers the complete EDC role catalog while preserving EDC role UUIDs, and synchronizes
-existing Sites for Platform-managed Studies. In enforced authorization mode, missing
-synchronization credentials fail startup setup instead of leaving Platform incomplete.
+`seed_builtin_roles` is idempotent. In standalone mode it seeds the local fallback roles.
+When Platform authorization is enabled, it registers only the EDC-owned permission
+catalog; role composition and assignment are configured in Platform. It also synchronizes
+existing Sites for Platform-managed Studies. In enforced mode, missing synchronization
+credentials fail startup setup instead of leaving Platform incomplete.
 
 Start FastAPI and leave this terminal running:
 
@@ -232,3 +233,22 @@ Cognito is disabled unless all required values are configured. The backend uses 
 Use a Cognito **public app client with no client secret** for the SPA. Register the exact callback URL (for local development, typically `http://localhost:5173/auth/callback`) in the user pool app client. The SPA stores only short-lived OAuth state/PKCE verifier material in session storage and sends the authorization code to the backend exchange endpoint; it never handles a client secret. Do not put tokens or secrets in URLs.
 
 Cognito authenticates the person. The API maps each verified identity by its immutable `(issuer, subject)` pair in `users.external_issuer` and `users.external_subject`; provider labels and email addresses are not identity keys. During local or shadow rollout, a legacy local user can be linked once from a verified Cognito ID token when the email is present and verified and no external mapping exists. In enforced platform mode, email linking and just-in-time local users are disabled because the control-plane projection is authoritative. Access tokens without a verified email cannot perform legacy linking, and Cognito groups and claims never grant application permissions. Set `LOCAL_AUTH_ENABLED=false` only after Cognito enrollment and rollback-window reconciliation are complete to disable the local password lifecycle endpoints.
+
+## Optional custom Python runtime
+
+Custom Python is disabled by default. The API never evaluates submitted source itself and has no local fallback. Configure these values only after deploying a separate sandbox runtime:
+
+```dotenv
+CUSTOM_FUNCTION_RUNTIME_ENABLED=true
+CUSTOM_FUNCTION_RUNTIME_URL=https://custom-function-runtime.internal
+CUSTOM_FUNCTION_RUNTIME_TOKEN=<runtime-service-token>
+CUSTOM_FUNCTION_RUNTIME_TIMEOUT_SECONDS=3
+CUSTOM_FUNCTION_EXECUTION_TIMEOUT_MS=1000
+CUSTOM_FUNCTION_MEMORY_LIMIT_MB=64
+CUSTOM_FUNCTION_MAX_INPUT_BYTES=65536
+CUSTOM_FUNCTION_MAX_OUTPUT_BYTES=65536
+```
+
+The runtime must expose `POST /v1/executions`, authenticate the API service, verify the supplied SHA-256 source hash, and run each request in a fresh rootless sandbox with network disabled, no host mounts, no database or platform credentials, a read-only base filesystem, a writable ephemeral working directory, and enforced CPU/time, memory, process, and output limits. Its response status must be `succeeded` or `failed`; commands are limited to `set_value`, `clear_value`, `open_query`, `show`, `hide`, and `require`. Returning a command does not grant mutation authority—the platform must validate and authorize it separately.
+
+Grant `designer.custom_function.author`, `designer.custom_function.approve`, and `designer.custom_function.execute` through the Platform role configuration. Approval is maker-checker: the approver cannot be the version's author or submitter. Do not place the runtime token in source control or frontend environment variables.

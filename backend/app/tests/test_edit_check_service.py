@@ -10,6 +10,12 @@ from app.models.edc.query import QueryTargetType, QueryType
 from app.services.edc.edit_check_service import EditCheckService
 
 
+def _empty_scalar_result() -> MagicMock:
+    result = MagicMock()
+    result.scalars.return_value.first.return_value = None
+    return result
+
+
 def _check(*, severity: str = "warning") -> EditCheck:
     return EditCheck(
         id=uuid4(),
@@ -54,6 +60,7 @@ async def test_runtime_persists_failed_result_with_severity():
     session = AsyncMock()
     session.add = MagicMock()
     session.flush = AsyncMock()
+    session.execute = AsyncMock(return_value=_empty_scalar_result())
     session.get = AsyncMock(
         return_value=SimpleNamespace(study_id=uuid4(), site_id=uuid4())
     )
@@ -79,6 +86,7 @@ async def test_query_severity_creates_system_query_linked_to_form():
     session = AsyncMock()
     session.add = MagicMock()
     session.flush = AsyncMock()
+    session.execute = AsyncMock(return_value=_empty_scalar_result())
     study_id, site_id = uuid4(), uuid4()
     session.get = AsyncMock(return_value=SimpleNamespace(study_id=study_id, site_id=site_id))
     query_service = MagicMock()

@@ -20,15 +20,16 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit_service
-from app.core.exceptions import ValidationError
+from app.core.exceptions import BusinessRuleError, ValidationError
 from app.models.edc.form_data import FieldValue, FormInstance
 from app.models.edc.sdv import SDVScopeType, SDVStatus
 from app.models.edc.subject import Subject
 from app.models.edc.visit import VisitInstance
+from app.services.edc.lock_service import lock_service
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +76,23 @@ class SDVService:
         UUID or the authenticated User object used by API dependencies.
         """
         target_ref = self._normalize_target(scope, target)
+        if await lock_service.is_hard_locked(
+            session,
+            target,
+            object_type=target_ref.scope_type.value,
+            object_id=target_ref.scope_id,
+        ):
+            raise BusinessRuleError(
+                message="SDV cannot be changed while the clinical target is locked",
+                details={"scope": target_ref.scope_type.value},
+            )
         actor_uuid, actor_email = self._normalize_actor(actor_id)
         status = await self._get_or_create_status(session, target_ref)
         old_verified = status.is_verified
         changed_at = datetime.now(UTC)
 
         status.is_verified = True
+        status.verified_revision = await self._target_revision(session, target_ref, target)
         status.verified_by = actor_uuid
         status.verified_at = changed_at
         status.updated_at = changed_at
@@ -120,12 +132,23 @@ class SDVService:
         omitted when the request context supplies the actor to AuditService.
         """
         target_ref = self._normalize_target(scope, target)
+        if await lock_service.is_hard_locked(
+            session,
+            target,
+            object_type=target_ref.scope_type.value,
+            object_id=target_ref.scope_id,
+        ):
+            raise BusinessRuleError(
+                message="SDV cannot be changed while the clinical target is locked",
+                details={"scope": target_ref.scope_type.value},
+            )
         actor_uuid, actor_email = self._normalize_actor(actor_id)
         status = await self._get_or_create_status(session, target_ref)
         old_verified = status.is_verified
         changed_at = datetime.now(UTC)
 
         status.is_verified = False
+        status.verified_revision = None
         status.verified_by = None
         status.verified_at = None
         status.updated_at = changed_at
@@ -150,6 +173,19 @@ class SDVService:
         )
         return status
 
+    async def _target_revision(
+        self,
+        session: AsyncSession,
+        target_ref: _SDVTarget,
+        target: Any,
+    ) -> int:
+        revision = getattr(target, "data_revision", None)
+        if revision is not None:
+            return int(revision)
+        model = self._model_for_scope(target_ref.scope_type)
+        loaded = await session.get(model, target_ref.scope_id)
+        return int(getattr(loaded, "data_revision", 0) or 0)
+
     async def progress(
         self,
         session: AsyncSession,
@@ -159,6 +195,7 @@ class SDVService:
         site_id: UUID | None = None,
         subject_id: UUID | None = None,
         scope_type: SDVScopeType | str | None = None,
+        authorized_site_ids: set[UUID] | None = None,
     ) -> dict[str, int]:
         """Return verified/not-verified counts for a requested clinical scope.
 
@@ -212,6 +249,7 @@ class SDVService:
                 study_id=study_id,
                 site_id=site_id,
                 subject_id=subject_id,
+                authorized_site_ids=authorized_site_ids,
             )
             total_terms.append(total.scalar_subquery())
             verified_terms.append(verified.scalar_subquery())
@@ -257,9 +295,7 @@ class SDVService:
         )
         status = result.scalars().first()
         if status is None:
-            design_version_id = await self._resolve_design_version_id(
-                session, target
-            )
+            design_version_id = await self._resolve_design_version_id(session, target)
             status = SDVStatus(
                 scope_type=target.scope_type.value,
                 scope_id=target.scope_id,
@@ -295,9 +331,7 @@ class SDVService:
         else:  # SDVScopeType.field
             column = FieldValue.design_version_id
             model = FieldValue
-        result = await session.execute(
-            select(column).where(model.id == target.scope_id)
-        )
+        result = await session.execute(select(column).where(model.id == target.scope_id))
         return result.scalar_one_or_none()
 
     def _count_query(
@@ -308,14 +342,24 @@ class SDVService:
         study_id: UUID | None,
         site_id: UUID | None,
         subject_id: UUID | None,
+        authorized_site_ids: set[UUID] | None,
     ) -> tuple[Any, Any]:
         """Build total and verified count queries for one target type."""
         status_join = (SDVStatus.scope_type == scope_type.value) & (SDVStatus.scope_id == model.id)
         base = select(
             func.count(model.id).label("total"),
-            func.count(case((SDVStatus.is_verified.is_(True), model.id), else_=None)).label(
-                "verified"
-            ),
+            func.count(
+                case(
+                    (
+                        and_(
+                            SDVStatus.is_verified.is_(True),
+                            SDVStatus.verified_revision == model.data_revision,
+                        ),
+                        model.id,
+                    ),
+                    else_=None,
+                )
+            ).label("verified"),
         ).select_from(model)
 
         if model is Subject:
@@ -325,30 +369,45 @@ class SDVService:
                 base = base.where(Subject.site_id == site_id)
             if subject_id is not None:
                 base = base.where(Subject.id == subject_id)
+            if authorized_site_ids is not None:
+                base = base.where(Subject.site_id.in_(authorized_site_ids))
         elif model is VisitInstance:
             base = base.join(Subject, VisitInstance.subject_id == Subject.id)
-            base = self._subject_filters(base, study_id, site_id, subject_id)
+            base = self._subject_filters(base, study_id, site_id, subject_id, authorized_site_ids)
         elif model is FormInstance:
             base = base.join(Subject, FormInstance.subject_id == Subject.id)
-            base = self._subject_filters(base, study_id, site_id, subject_id)
+            base = self._subject_filters(base, study_id, site_id, subject_id, authorized_site_ids)
         elif model is FieldValue:
             base = base.join(FormInstance, FieldValue.form_instance_id == FormInstance.id)
             base = base.join(Subject, FormInstance.subject_id == Subject.id)
-            base = self._subject_filters(base, study_id, site_id, subject_id)
+            base = self._subject_filters(base, study_id, site_id, subject_id, authorized_site_ids)
 
         total = base.outerjoin(SDVStatus, status_join).with_only_columns(
             func.count(model.id).label("total")
         )
         verified = base.outerjoin(SDVStatus, status_join).with_only_columns(
-            func.count(case((SDVStatus.is_verified.is_(True), model.id), else_=None)).label(
-                "verified"
-            )
+            func.count(
+                case(
+                    (
+                        and_(
+                            SDVStatus.is_verified.is_(True),
+                            SDVStatus.verified_revision == model.data_revision,
+                        ),
+                        model.id,
+                    ),
+                    else_=None,
+                )
+            ).label("verified")
         )
         return total, verified
 
     @staticmethod
     def _subject_filters(
-        stmt: Any, study_id: UUID | None, site_id: UUID | None, subject_id: UUID | None
+        stmt: Any,
+        study_id: UUID | None,
+        site_id: UUID | None,
+        subject_id: UUID | None,
+        authorized_site_ids: set[UUID] | None,
     ) -> Any:
         if study_id is not None:
             stmt = stmt.where(Subject.study_id == study_id)
@@ -356,6 +415,8 @@ class SDVService:
             stmt = stmt.where(Subject.site_id == site_id)
         if subject_id is not None:
             stmt = stmt.where(Subject.id == subject_id)
+        if authorized_site_ids is not None:
+            stmt = stmt.where(Subject.site_id.in_(authorized_site_ids))
         return stmt
 
     @staticmethod

@@ -36,6 +36,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.odm_oid import new_odm_oid
 
 if TYPE_CHECKING:  # avoid a runtime import cycle; the registry resolves by string
     from app.models.designer.study_version import StudyVersion
@@ -54,6 +55,9 @@ class SubjectPhaseTransition(Base):
         Uuid,
         ForeignKey("study_versions.id", ondelete="CASCADE"),
         nullable=False,
+    )
+    odm_oid: Mapped[str] = mapped_column(
+        String(255), nullable=False, default=lambda: new_odm_oid("PHT")
     )
 
     # The source and target phases of the transition.
@@ -99,6 +103,11 @@ class SubjectPhaseTransition(Base):
             "to_phase_id",
             name="uq_subject_phase_transition",
         ),
+        UniqueConstraint(
+            "design_version_id",
+            "odm_oid",
+            name="uq_subject_phase_transition_oid_per_version",
+        ),
         Index(
             "ix_subject_phase_transitions_design_version_id",
             "design_version_id",
@@ -111,6 +120,7 @@ class SubjectPhaseTransition(Base):
             "ix_subject_phase_transitions_to_phase_id",
             "to_phase_id",
         ),
+        Index("ix_subject_phase_transitions_odm_oid", "odm_oid"),
     )
 
     def __repr__(self) -> str:

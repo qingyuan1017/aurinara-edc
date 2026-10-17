@@ -17,29 +17,41 @@ Note: Visit_Instance initialization (Req 7.4 / 8.2) is wired into
 
 from __future__ import annotations
 
+import inspect
 import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import PaginationParams
 from app.api.pagination import paginate
 from app.core.audit import audit_service
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError, ValidationError
+from app.models.ctms.enrollment import OperationalMilestone
+from app.models.ctms.financial import FinancialEvent
+from app.models.ctms.projection import CTMSOperationalProjection
+from app.models.ctms.study_operation import StudyOperationRecord
 from app.models.designer.subject_phase_definition import SubjectPhaseType
-from app.models.edc.form_data import FormInstance
-from app.models.edc.site import Site
+from app.models.edc.form_data import FieldValue, FormInstance
+from app.models.edc.form_record import FormRecord
+from app.models.edc.query import Query, QueryStatus
+from app.models.edc.review import ReviewStatus
+from app.models.edc.site import Site, SiteStatus
 from app.models.edc.study import StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject, SubjectStatus
-from app.models.edc.visit import VisitInstance
+from app.models.edc.visit import VisitInstance, VisitInstanceStatus
+from app.models.pv.safety_case import SafetyCase
+from app.models.shared.audit import AuditEvent
+from app.models.shared.file_attachment import FileAttachment
 from app.schemas.edc.subject import SubjectCreate
 from app.schemas.shared.base import PaginatedResponse
 from app.services.designer.design_consumption_service import (
     DesignConsumptionService,
     design_consumption_service,
 )
+from app.services.edc.lock_service import lock_service
 
 logger = logging.getLogger(__name__)
 
@@ -49,20 +61,28 @@ _LEGAL_TRANSITIONS: dict[SubjectStatus, set[SubjectStatus]] = {
     SubjectStatus.screening: {
         SubjectStatus.screen_failed,
         SubjectStatus.enrolled,
+        SubjectStatus.inactive,
+        SubjectStatus.discontinued,
     },
     SubjectStatus.enrolled: {
         SubjectStatus.randomized,
         SubjectStatus.withdrawn,
         SubjectStatus.early_terminated,
+        SubjectStatus.inactive,
+        SubjectStatus.discontinued,
     },
     SubjectStatus.randomized: {
         SubjectStatus.on_treatment,
+        SubjectStatus.inactive,
+        SubjectStatus.discontinued,
     },
     SubjectStatus.on_treatment: {
         SubjectStatus.completed,
         SubjectStatus.early_terminated,
         SubjectStatus.lost_to_follow_up,
         SubjectStatus.withdrawn,
+        SubjectStatus.inactive,
+        SubjectStatus.discontinued,
     },
     # Terminal states
     SubjectStatus.screen_failed: set(),
@@ -70,6 +90,8 @@ _LEGAL_TRANSITIONS: dict[SubjectStatus, set[SubjectStatus]] = {
     SubjectStatus.early_terminated: set(),
     SubjectStatus.lost_to_follow_up: set(),
     SubjectStatus.withdrawn: set(),
+    SubjectStatus.inactive: {SubjectStatus.discontinued},
+    SubjectStatus.discontinued: set(),
 }
 
 
@@ -124,6 +146,11 @@ class SubjectService:
         if site is None:
             raise NotFoundError(
                 message="Site not found within this study",
+                details={"site_id": str(site_id), "study_id": str(study_id)},
+            )
+        if site.status != SiteStatus.active:
+            raise BusinessRuleError(
+                message="Subjects can only be enrolled at an active site",
                 details={"site_id": str(site_id), "study_id": str(study_id)},
             )
 
@@ -188,19 +215,34 @@ class SubjectService:
             new_value=f"subject_number={subject.subject_number}, status={subject.status}",
         )
 
-        # Initialize Visit_Instances from the bound Study_Version's visit
-        # definitions (Req 7.4, 8.2). Imported here to avoid a circular import
-        # at module load time.
+        # Activate only the initial phase's visits. Designs without phase
+        # configuration retain whole-version initialization for compatibility.
+        # Imported here to avoid a circular import at module load time.
         from app.services.edc.visit_service import visit_service
 
-        await visit_service.initialize_instances(session, subject, actor_id)
+        initial_visit_ids: set[UUID] | None = None
+        if phase_definitions:
+            initial_visit_ids = (
+                set(initial_phase.visit_definition_ids) if initial_phase is not None else set()
+            )
+        await visit_service.initialize_instances(
+            session,
+            subject,
+            actor_id,
+            definition_ids=initial_visit_ids,
+        )
 
         # Initialize Form_Instances from the bound Study_Version's form
         # definitions (Req 7.4). Must run after visit initialization so that
         # visit_instances exist to link against.
         from app.services.edc.form_instance_service import form_instance_service
 
-        await form_instance_service.initialize_instances(session, subject, actor_id)
+        await form_instance_service.initialize_instances(
+            session,
+            subject,
+            actor_id,
+            definition_ids=initial_visit_ids,
+        )
 
         logger.info(
             "Subject created: id=%s study_id=%s site_id=%s subject_number=%s actor=%s",
@@ -211,6 +253,49 @@ class SubjectService:
             actor_id,
         )
         return subject
+
+    async def enrollment_readiness(
+        self,
+        session: AsyncSession,
+        study_id: UUID,
+        *,
+        authorized_site_ids: set[UUID] | None = None,
+    ) -> dict:
+        """Return server-derived prerequisites for subject enrollment."""
+        version = await self._get_published_version(session, study_id)
+        site_query = select(func.count(Site.id)).where(
+            Site.study_id == study_id,
+            Site.status == SiteStatus.active,
+            Site.deleted_at.is_(None),
+        )
+        if authorized_site_ids is not None:
+            site_query = site_query.where(Site.id.in_(authorized_site_ids))
+        site_count = int((await session.execute(site_query)).scalar_one())
+
+        blockers: list[dict[str, str]] = []
+        if version is None:
+            blockers.append(
+                {
+                    "code": "NO_PUBLISHED_DESIGN",
+                    "message": "Publish a valid study design before enrolling subjects.",
+                }
+            )
+        if site_count == 0:
+            blockers.append(
+                {
+                    "code": "NO_AUTHORIZED_ACTIVE_SITE",
+                    "message": "Configure or assign at least one active site for this study.",
+                }
+            )
+
+        return {
+            "study_id": study_id,
+            "ready": not blockers,
+            "published_version_id": version.id if version else None,
+            "published_version_number": version.version_number if version else None,
+            "authorized_active_site_count": site_count,
+            "blockers": blockers,
+        }
 
     # ------------------------------------------------------------------
     # Study-data phase and arm state
@@ -247,6 +332,7 @@ class SubjectService:
             for phase in phases
         ]
         next_phase_ids = {phase.id for phase in next_phases}
+        previous_phase_id = await self._previous_phase_id(session, subject)
         return {
             "current_phase_definition_id": subject.current_phase_definition_id,
             "current_phase_name": current_phase.name if current_phase else None,
@@ -255,6 +341,10 @@ class SubjectService:
             "arm_name": current_arm.name if current_arm else None,
             "phases": phase_options,
             "next_phases": [option for option in phase_options if option["id"] in next_phase_ids],
+            "previous_phase": next(
+                (option for option in phase_options if option["id"] == previous_phase_id),
+                None,
+            ),
             "arms": [
                 {
                     "id": arm.id,
@@ -335,6 +425,50 @@ class SubjectService:
         subject.updated_at = datetime.now(UTC)
         await session.flush()
 
+        if phase.phase_type in {
+            SubjectPhaseType.registered.value,
+            SubjectPhaseType.screen_failure.value,
+            SubjectPhaseType.common.value,
+            SubjectPhaseType.complete.value,
+        }:
+            phase_visit_ids = set(phase.visit_definition_ids)
+            if subject.arm_definition_id is not None:
+                schedule = await self._design.get_schedule_of_assessment(
+                    session,
+                    subject.study_version_id,
+                    subject.arm_definition_id,
+                )
+                arm_visit_ids = {
+                    entry.visit_definition_id
+                    for entry in schedule.entries
+                    if entry.visit_definition_id is not None
+                }
+                phase_visit_ids.intersection_update(arm_visit_ids)
+        else:
+            phase_visit_ids = set()
+
+        # Arm phases assign the schedule only. A later visit-bearing phase
+        # activates the intersection of its visits and the selected arm SoA.
+        if phase_visit_ids:
+            from app.services.edc.form_instance_service import form_instance_service
+            from app.services.edc.visit_service import visit_service
+
+            await visit_service.initialize_instances(
+                session,
+                subject,
+                actor_id,
+                definition_ids=phase_visit_ids,
+                skip_existing=True,
+            )
+            await form_instance_service.initialize_instances(
+                session,
+                subject,
+                actor_id,
+                skip_existing=True,
+                arm_definition_id=subject.arm_definition_id,
+                definition_ids=phase_visit_ids,
+            )
+
         await audit_service.record(
             session,
             entity_type="subject",
@@ -354,36 +488,95 @@ class SubjectService:
         )
         return subject
 
+    async def reverse_phase(
+        self,
+        session: AsyncSession,
+        subject: Subject,
+        *,
+        reason: str,
+        actor_id: UUID,
+    ) -> Subject:
+        """Move to the immediately preceding audited phase without deleting data."""
+        reason = self._normalize_lifecycle_reason(reason)
+        locked_result = await session.execute(
+            select(Subject).where(Subject.id == subject.id).with_for_update()
+        )
+        locked_subject = await self._first_scalar(locked_result)
+        if isinstance(locked_subject, Subject):
+            subject = locked_subject
+        if await lock_service.is_modification_blocked(
+            session,
+            subject,
+            object_type="subject",
+            object_id=subject.id,
+        ):
+            raise BusinessRuleError(
+                message="A frozen or locked subject phase cannot be reversed",
+                details={"reason": "SUBJECT_PHASE_REVERSAL_LOCKED"},
+            )
+        previous_phase_id = await self._previous_phase_id(session, subject)
+        if previous_phase_id is None:
+            raise BusinessRuleError(
+                message="The subject has no previous phase to restore",
+                details={"reason": "SUBJECT_PHASE_HISTORY_EMPTY"},
+            )
+
+        phases = await self._design.list_subject_phase_definitions(
+            session, subject.study_version_id
+        )
+        phase_by_id = {phase.id: phase for phase in phases}
+        previous_phase = phase_by_id.get(previous_phase_id)
+        if previous_phase is None:
+            raise BusinessRuleError(
+                message="The previous phase is no longer available in the bound design",
+                details={"reason": "SUBJECT_PREVIOUS_PHASE_UNAVAILABLE"},
+            )
+
+        old_phase_id = subject.current_phase_definition_id
+        old_status = SubjectStatus(subject.status)
+        subject.current_phase_definition_id = previous_phase_id
+        entered_path = await self._entered_phase_path(session, subject)
+        previous_index = (
+            entered_path.index(previous_phase_id) if previous_phase_id in entered_path else -1
+        )
+        retained_path = entered_path[: previous_index + 1]
+        if not any(
+            phase_by_id.get(phase_id)
+            and phase_by_id[phase_id].phase_type == SubjectPhaseType.arm.value
+            for phase_id in retained_path
+        ):
+            subject.arm_definition_id = None
+        if old_status is SubjectStatus.completed:
+            subject.status = SubjectStatus.on_treatment
+        subject.updated_at = datetime.now(UTC)
+        await session.flush()
+
+        await audit_service.record(
+            session,
+            entity_type="subject",
+            entity_id=subject.id,
+            action="phase_reversal",
+            study_id=subject.study_id,
+            site_id=subject.site_id,
+            subject_id=subject.id,
+            actor_id=actor_id,
+            field_name="current_phase_definition_id",
+            old_value=str(old_phase_id) if old_phase_id else None,
+            new_value=str(previous_phase_id),
+            reason=reason,
+        )
+        logger.info(
+            "Subject phase reversed: id=%s actor=%s",
+            subject.id,
+            actor_id,
+        )
+        return subject
+
     async def list_visible_visits(
         self, session: AsyncSession, subject: Subject
     ) -> list[VisitInstance]:
-        """List Study Data visits allowed by the subject's current phase/arm."""
-        allowed_ids: set[UUID] | None = None
-        if subject.current_phase_definition_id is not None:
-            phases = await self._design.list_subject_phase_definitions(
-                session, subject.study_version_id
-            )
-            phase = next(
-                (item for item in phases if item.id == subject.current_phase_definition_id),
-                None,
-            )
-            if phase is None:
-                allowed_ids = set()
-            elif phase.phase_type == SubjectPhaseType.arm.value:
-                arms = await self._design.list_arm_definitions(session, subject.study_version_id)
-                arm = next(
-                    (item for item in arms if item.id == subject.arm_definition_id),
-                    None,
-                )
-                allowed_ids = set(arm.visit_definition_ids) if arm else set()
-            elif phase.phase_type in {
-                SubjectPhaseType.registered.value,
-                SubjectPhaseType.screen_failure.value,
-                SubjectPhaseType.common.value,
-            }:
-                allowed_ids = set(phase.visit_definition_ids)
-            else:
-                allowed_ids = set()
+        """List Study Data visits accumulated through the subject's phase path."""
+        allowed_ids = await self.visible_visit_definition_ids(session, subject)
 
         result = await session.execute(
             select(VisitInstance)
@@ -393,7 +586,131 @@ class SubjectService:
         instances = list(result.scalars().all())
         if allowed_ids is None:
             return instances
-        return [visit for visit in instances if visit.visit_definition_id in allowed_ids]
+        return [
+            visit
+            for visit in instances
+            if visit.status == VisitInstanceStatus.unscheduled
+            or visit.visit_definition_id in allowed_ids
+        ]
+
+    async def visible_visit_definition_ids(
+        self, session: AsyncSession, subject: Subject
+    ) -> set[UUID] | None:
+        """Return visit definitions accumulated along the subject's phase path.
+
+        ``None`` means that the published design has no phase configuration, so
+        all visits remain visible for backward compatibility. Once any phases
+        are configured, the immutable phase lifecycle audit trail determines
+        the currently active path, including reversals. This preserves visits
+        from retained prior phases without exposing reversed, sibling, or
+        future branches.
+        """
+        phases = await self._design.list_subject_phase_definitions(
+            session, subject.study_version_id
+        )
+        if not phases:
+            return None
+        if subject.current_phase_definition_id is None:
+            return set()
+
+        entered_phase_path = await self._entered_phase_path(session, subject)
+        phase_by_id = {phase.id: phase for phase in phases}
+        entered_phases = [
+            phase_by_id[phase_id] for phase_id in entered_phase_path if phase_id in phase_by_id
+        ]
+        if not entered_phases:
+            return set()
+
+        arm_visit_ids: set[UUID] | None = None
+        if subject.arm_definition_id is not None and any(
+            phase.phase_type == SubjectPhaseType.arm.value for phase in entered_phases
+        ):
+            arm_schedule = await self._design.get_schedule_of_assessment(
+                session,
+                subject.study_version_id,
+                subject.arm_definition_id,
+            )
+            arm_visit_ids = {
+                entry.visit_definition_id
+                for entry in arm_schedule.entries
+                if entry.visit_definition_id is not None
+            }
+
+        visible_ids: set[UUID] = set()
+        arm_is_active = False
+        for phase in entered_phases:
+            if phase.phase_type == SubjectPhaseType.arm.value:
+                arm_is_active = True
+                continue
+            if phase.phase_type not in {
+                SubjectPhaseType.registered.value,
+                SubjectPhaseType.screen_failure.value,
+                SubjectPhaseType.common.value,
+                SubjectPhaseType.complete.value,
+            }:
+                continue
+            phase_visit_ids = set(phase.visit_definition_ids)
+            if arm_is_active and arm_visit_ids is not None:
+                phase_visit_ids.intersection_update(arm_visit_ids)
+            visible_ids.update(phase_visit_ids)
+        return visible_ids
+
+    async def _entered_phase_path(self, session: AsyncSession, subject: Subject) -> list[UUID]:
+        """Replay transitions and reversals into the subject's active phase path."""
+        current_phase_id = subject.current_phase_definition_id
+        if current_phase_id is None:
+            return []
+
+        result = await session.execute(
+            select(AuditEvent.action, AuditEvent.old_value, AuditEvent.new_value)
+            .where(
+                AuditEvent.entity_type == "subject",
+                AuditEvent.entity_id == subject.id,
+                AuditEvent.action.in_(("phase_transition", "phase_reversal")),
+                AuditEvent.field_name == "current_phase_definition_id",
+            )
+            .order_by(AuditEvent.timestamp, AuditEvent.id)
+        )
+        entered_path: list[UUID] = []
+        for action, old_value, new_value in result.all():
+            parsed_ids: list[UUID | None] = []
+            for value in (old_value, new_value):
+                if value is None:
+                    parsed_ids.append(None)
+                    continue
+                try:
+                    parsed_ids.append(UUID(value))
+                except (TypeError, ValueError):
+                    logger.warning(
+                        "Ignoring malformed subject phase audit value: subject_id=%s",
+                        subject.id,
+                    )
+                    parsed_ids.append(None)
+            old_phase_id, new_phase_id = parsed_ids
+
+            if action == "phase_reversal":
+                if new_phase_id in entered_path:
+                    entered_path = entered_path[: entered_path.index(new_phase_id) + 1]
+                elif new_phase_id is not None:
+                    entered_path.append(new_phase_id)
+                continue
+
+            if old_phase_id is not None:
+                if old_phase_id in entered_path:
+                    entered_path = entered_path[: entered_path.index(old_phase_id) + 1]
+                else:
+                    entered_path.append(old_phase_id)
+            if new_phase_id is not None:
+                if new_phase_id in entered_path:
+                    entered_path = entered_path[: entered_path.index(new_phase_id) + 1]
+                else:
+                    entered_path.append(new_phase_id)
+
+        if current_phase_id in entered_path:
+            entered_path = entered_path[: entered_path.index(current_phase_id) + 1]
+        else:
+            entered_path.append(current_phase_id)
+        return entered_path
 
     # ------------------------------------------------------------------
     # Status transition (Req 7.3, 7.6)
@@ -405,14 +722,14 @@ class SubjectService:
         subject: Subject,
         target_status: SubjectStatus,
         actor_id: UUID,
+        reason: str | None = None,
     ) -> Subject:
         """Transition a Subject's status along the allowed state machine.
 
         Legal transitions (Requirement 7.3):
-            Screening    → {Screen Failed, Enrolled}
-            Enrolled     → {Randomized, Withdrawn, Early Terminated}
-            Randomized   → On Treatment
-            On Treatment → {Completed, Early Terminated, Lost to Follow-up, Withdrawn}
+            Active states → Inactive or Discontinued
+            Inactive      → Discontinued
+            Other transitions follow the configured clinical lifecycle.
 
         Args:
             session: Active async database session.
@@ -426,6 +743,12 @@ class SubjectService:
         Raises:
             BusinessRuleError: If the transition is illegal (Req 7.3).
         """
+        locked_result = await session.execute(
+            select(Subject).where(Subject.id == subject.id).with_for_update()
+        )
+        locked_subject = await self._first_scalar(locked_result)
+        if isinstance(locked_subject, Subject):
+            subject = locked_subject
         current_status = SubjectStatus(subject.status)
         allowed = _LEGAL_TRANSITIONS.get(current_status, set())
 
@@ -441,6 +764,18 @@ class SubjectService:
                     "allowed_transitions": [s.value for s in allowed],
                 },
             )
+        if target_status in {SubjectStatus.inactive, SubjectStatus.discontinued}:
+            reason = self._normalize_lifecycle_reason(reason or "")
+            if await lock_service.is_modification_blocked(
+                session,
+                subject,
+                object_type="subject",
+                object_id=subject.id,
+            ):
+                raise BusinessRuleError(
+                    message="A frozen or locked subject status cannot be changed",
+                    details={"reason": "SUBJECT_LIFECYCLE_CHANGE_LOCKED"},
+                )
 
         old_status = current_status.value
         subject.status = target_status
@@ -460,6 +795,7 @@ class SubjectService:
             field_name="status",
             old_value=old_status,
             new_value=target_status.value,
+            reason=reason,
         )
 
         logger.info(
@@ -502,9 +838,24 @@ class SubjectService:
             visit.id: visit.visit_definition_id for visit in visit_instances
         }
 
-        schedule = await self._design.get_schedule_of_assessment(session, subject.study_version_id)
+        schedules = [
+            await self._design.get_schedule_of_assessment(
+                session,
+                subject.study_version_id,
+                None,
+            )
+        ]
+        if subject.arm_definition_id is not None:
+            schedules.append(
+                await self._design.get_schedule_of_assessment(
+                    session,
+                    subject.study_version_id,
+                    subject.arm_definition_id,
+                )
+            )
         scheduled_pairs = {
             (entry.visit_definition_id, entry.form_definition_id)
+            for schedule in schedules
             for entry in schedule.entries
             if entry.visit_definition_id is not None and entry.form_definition_id is not None
         }
@@ -516,8 +867,41 @@ class SubjectService:
             .where(FormInstance.subject_id == subject.id)
             .order_by(FormInstance.created_at)
         )
+        forms = list(form_result.scalars().all())
+        from app.models.edc.form_record import FormRecord
+        from app.services.edc.operational_service import edc_operational_service
+
+        supports_operational_state = all(
+            hasattr(form, "data_entry_status") and hasattr(form, "data_revision") for form in forms
+        )
+        if supports_operational_state:
+            operational_statuses = await edc_operational_service.form_statuses(session, forms)
+            record_counts = dict(
+                (
+                    await session.execute(
+                        select(FormRecord.form_instance_id, func.count(FormRecord.id))
+                        .where(
+                            FormRecord.form_instance_id.in_(
+                                [form.id for form in forms] or [UUID(int=0)]
+                            ),
+                            FormRecord.deleted_at.is_(None),
+                        )
+                        .group_by(FormRecord.form_instance_id)
+                    )
+                ).all()
+            )
+        else:
+            operational_statuses = {}
+            record_counts = {}
         forms_by_visit: dict[UUID | None, list[dict]] = {}
-        for form in form_result.scalars().all():
+        added_in_error_visit_ids = {
+            visit.id
+            for visit in visit_instances
+            if visit.status == VisitInstanceStatus.added_in_error
+        }
+        for form in forms:
+            if form.visit_instance_id in added_in_error_visit_ids:
+                continue
             visit_definition_id = visit_definition_by_instance.get(form.visit_instance_id)
             is_scheduled = (
                 visit_definition_id,
@@ -530,7 +914,10 @@ class SubjectService:
                 "form_instance_id": form.id,
                 "form_definition_id": form.form_definition_id,
                 "name": getattr(definition, "name", None),
-                "status": str(form.status),
+                "status": getattr(form, "data_entry_status", form.status),
+                "operational_status": operational_statuses.get(form.id),
+                "repeating_record_count": int(record_counts.get(form.id, 0)),
+                "source_form_url": f"/subjects/{subject.id}/forms/{form.id}",
             }
             forms_by_visit.setdefault(form.visit_instance_id, []).append(entry)
 
@@ -594,8 +981,14 @@ class SubjectService:
         subject: Subject,
         reason: str,
         actor_id: UUID,
+        *,
+        subject_number_confirmation: str,
     ) -> Subject:
-        """Soft-delete a Subject, retaining the record (Requirement 22.2).
+        """Remove a Screening subject that was entered in error.
+
+        The row and all related clinical history are retained. A subject that
+        has progressed, contains clinical data, is locked, or has downstream
+        EDC/PV/CTMS records must use a lifecycle status instead.
 
         Args:
             session: Active async database session.
@@ -608,16 +1001,73 @@ class SubjectService:
 
         Raises:
             ConflictError: If the subject is already soft-deleted.
+            BusinessRuleError: If removal is not allowed for the record.
+            ValidationError: If the reason or typed confirmation is invalid.
         """
+        reason = self._normalize_lifecycle_reason(reason)
+        if subject_number_confirmation.strip() != subject.subject_number:
+            raise ValidationError(
+                message="Subject number confirmation does not match",
+                details={"reason": "SUBJECT_NUMBER_CONFIRMATION_MISMATCH"},
+            )
+
         if subject.deleted_at is not None:
             raise ConflictError(
                 message="Subject is already deleted",
                 details={"subject_id": str(subject.id)},
             )
 
-        subject.deleted_at = datetime.now(UTC)
+        locked_result = await session.execute(
+            select(Subject).where(Subject.id == subject.id).with_for_update()
+        )
+        locked_subject = await self._first_scalar(locked_result)
+        if isinstance(locked_subject, Subject):
+            subject = locked_subject
+
+        if subject.deleted_at is not None:
+            raise ConflictError(
+                message="Subject is already deleted",
+                details={"subject_id": str(subject.id)},
+            )
+
+        if SubjectStatus(subject.status) is not SubjectStatus.screening:
+            raise BusinessRuleError(
+                message=(
+                    "Only a Screening subject entered in error may be removed; "
+                    "use the appropriate subject lifecycle status instead"
+                ),
+                details={
+                    "reason": "SUBJECT_REMOVAL_STATUS_NOT_ELIGIBLE",
+                    "subject_status": SubjectStatus(subject.status).value,
+                },
+            )
+
+        if await lock_service.is_modification_blocked(
+            session,
+            subject,
+            object_type="subject",
+            object_id=subject.id,
+        ):
+            raise BusinessRuleError(
+                message="A frozen or locked subject cannot be removed",
+                details={"reason": "SUBJECT_REMOVAL_LOCKED"},
+            )
+
+        blockers = await self._subject_removal_blockers(session, subject)
+        if blockers:
+            raise BusinessRuleError(
+                message=(
+                    "Subject cannot be removed because clinical, safety, or operational "
+                    "records already exist; use the appropriate lifecycle status instead"
+                ),
+                details={"reason": "SUBJECT_REMOVAL_HAS_RECORDS", "blockers": blockers},
+            )
+
+        now = datetime.now(UTC)
+        subject.deleted_at = now
         subject.deleted_by = actor_id
         subject.deletion_reason = reason
+        subject.updated_at = now
         await session.flush()
 
         # Write Audit_Event (same transaction)
@@ -634,18 +1084,159 @@ class SubjectService:
         )
 
         logger.info(
-            "Subject soft-deleted: id=%s actor=%s reason=%s",
+            "Subject soft-deleted: id=%s actor=%s",
             subject.id,
             actor_id,
-            reason,
         )
+        return subject
+
+    async def restore(
+        self,
+        session: AsyncSession,
+        subject: Subject,
+        reason: str,
+        actor_id: UUID,
+    ) -> Subject:
+        """Restore a retained subject after an erroneous soft deletion."""
+        reason = self._normalize_lifecycle_reason(reason)
+        locked_result = await session.execute(
+            select(Subject).where(Subject.id == subject.id).with_for_update()
+        )
+        locked_subject = await self._first_scalar(locked_result)
+        if isinstance(locked_subject, Subject):
+            subject = locked_subject
+        if subject.deleted_at is None:
+            raise ConflictError(
+                message="Subject is not deleted",
+                details={"subject_id": str(subject.id)},
+            )
+
+        deleted_at = subject.deleted_at
+        deleted_by = subject.deleted_by
+        deletion_reason = subject.deletion_reason
+        subject.deleted_at = None
+        subject.deleted_by = None
+        subject.deletion_reason = None
+        subject.updated_at = datetime.now(UTC)
+        await session.flush()
+
+        await audit_service.record(
+            session,
+            entity_type="subject",
+            entity_id=subject.id,
+            action="restore",
+            study_id=subject.study_id,
+            site_id=subject.site_id,
+            subject_id=subject.id,
+            actor_id=actor_id,
+            old_value=(
+                f"deleted_at={deleted_at.isoformat()}, deleted_by={deleted_by}, "
+                f"deletion_reason={deletion_reason}"
+            ),
+            new_value="deleted_at=None, deleted_by=None, deletion_reason=None",
+            reason=reason,
+        )
+        logger.info("Subject restored: id=%s actor=%s", subject.id, actor_id)
+        return subject
+
+    async def switch_site(
+        self,
+        session: AsyncSession,
+        subject: Subject,
+        *,
+        site_id: UUID,
+        reason: str,
+        actor_id: UUID,
+    ) -> Subject:
+        """Move an entered-in-error Screening subject to another active Site."""
+        reason = self._normalize_lifecycle_reason(reason)
+        locked_result = await session.execute(
+            select(Subject).where(Subject.id == subject.id).with_for_update()
+        )
+        locked_subject = await self._first_scalar(locked_result)
+        if isinstance(locked_subject, Subject):
+            subject = locked_subject
+        if subject.site_id == site_id:
+            raise ConflictError(
+                message="Subject is already assigned to this site",
+                details={"site_id": str(site_id)},
+            )
+        if SubjectStatus(subject.status) is not SubjectStatus.screening:
+            raise BusinessRuleError(
+                message="Only a Screening subject without clinical activity may switch sites",
+                details={"reason": "SUBJECT_SITE_TRANSFER_STATUS_NOT_ELIGIBLE"},
+            )
+        target_site = (
+            (
+                await session.execute(
+                    select(Site).where(
+                        Site.id == site_id,
+                        Site.study_id == subject.study_id,
+                        Site.status == SiteStatus.active,
+                        Site.deleted_at.is_(None),
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if target_site is None:
+            raise NotFoundError(
+                message="Active destination site not found within this study",
+                details={"site_id": str(site_id), "study_id": str(subject.study_id)},
+            )
+        if await lock_service.is_modification_blocked(
+            session,
+            subject,
+            object_type="subject",
+            object_id=subject.id,
+        ):
+            raise BusinessRuleError(
+                message="A frozen or locked subject cannot switch sites",
+                details={"reason": "SUBJECT_SITE_TRANSFER_LOCKED"},
+            )
+        blockers = await self._subject_removal_blockers(session, subject)
+        if blockers:
+            raise BusinessRuleError(
+                message=(
+                    "Subject cannot switch sites after clinical, safety, or operational "
+                    "records exist"
+                ),
+                details={"reason": "SUBJECT_SITE_TRANSFER_HAS_RECORDS", "blockers": blockers},
+            )
+
+        old_site_id = subject.site_id
+        subject.site_id = site_id
+        subject.updated_at = datetime.now(UTC)
+        await session.flush()
+        await audit_service.record(
+            session,
+            entity_type="subject",
+            entity_id=subject.id,
+            action="site_transfer",
+            study_id=subject.study_id,
+            site_id=site_id,
+            subject_id=subject.id,
+            actor_id=actor_id,
+            field_name="site_id",
+            old_value=str(old_site_id),
+            new_value=str(site_id),
+            reason=reason,
+        )
+        logger.info("Subject site switched: id=%s actor=%s", subject.id, actor_id)
         return subject
 
     # ------------------------------------------------------------------
     # Get by ID
     # ------------------------------------------------------------------
 
-    async def get_subject(self, session: AsyncSession, subject_id: UUID) -> Subject:
+    async def get_subject(
+        self,
+        session: AsyncSession,
+        subject_id: UUID,
+        *,
+        include_deleted: bool = False,
+    ) -> Subject:
         """Retrieve a non-deleted Subject by its primary key.
 
         Args:
@@ -658,9 +1249,10 @@ class SubjectService:
         Raises:
             NotFoundError: If no subject exists with the given ID or it is soft-deleted.
         """
-        result = await session.execute(
-            select(Subject).where(Subject.id == subject_id, Subject.deleted_at.is_(None))
-        )
+        query = select(Subject).where(Subject.id == subject_id)
+        if not include_deleted:
+            query = query.where(Subject.deleted_at.is_(None))
+        result = await session.execute(query)
         subject = result.scalars().first()
         if subject is None:
             raise NotFoundError(
@@ -680,6 +1272,12 @@ class SubjectService:
         pagination: PaginationParams,
         site_id: UUID | None = None,
         status: SubjectStatus | None = None,
+        search: str | None = None,
+        phase_id: UUID | None = None,
+        authorized_site_ids: set[UUID] | None = None,
+        quality_state: str | None = None,
+        sort: str = "created_desc",
+        include_deleted: bool = False,
     ) -> PaginatedResponse:
         """List non-deleted subjects for a study with optional filters.
 
@@ -693,18 +1291,213 @@ class SubjectService:
         Returns:
             PaginatedResponse containing Subject instances.
         """
-        query = select(Subject).where(Subject.study_id == study_id, Subject.deleted_at.is_(None))
+        query = select(Subject).where(Subject.study_id == study_id)
+        if not include_deleted:
+            query = query.where(Subject.deleted_at.is_(None))
         if site_id is not None:
             query = query.where(Subject.site_id == site_id)
+        if authorized_site_ids is not None:
+            query = query.where(Subject.site_id.in_(authorized_site_ids))
         if status is not None:
             query = query.where(Subject.status == status)
-        query = query.order_by(Subject.created_at.desc())
+        if phase_id is not None:
+            query = query.where(Subject.current_phase_definition_id == phase_id)
+        if search and search.strip():
+            query = query.where(Subject.subject_number.ilike(f"%{search.strip()}%"))
+        active_query = exists(
+            select(Query.id).where(
+                Query.subject_id == Subject.id,
+                Query.status.in_(
+                    (
+                        QueryStatus.open.value,
+                        QueryStatus.answered.value,
+                        QueryStatus.reopened.value,
+                    )
+                ),
+            )
+        )
+        incomplete_form = exists(
+            select(FormInstance.id).where(
+                FormInstance.subject_id == Subject.id,
+                FormInstance.data_entry_status != "Submitted",
+            )
+        )
+        stale_review = exists(
+            select(ReviewStatus.id)
+            .join(
+                FormInstance,
+                FormInstance.id == ReviewStatus.form_instance_id,
+            )
+            .where(
+                FormInstance.subject_id == Subject.id,
+                ReviewStatus.is_reviewed.is_(True),
+                ReviewStatus.reviewed_revision != FormInstance.data_revision,
+            )
+        )
+        if quality_state == "queried":
+            query = query.where(active_query)
+        elif quality_state == "incomplete":
+            query = query.where(incomplete_form)
+        elif quality_state == "stale_review":
+            query = query.where(stale_review)
+        elif quality_state == "clean":
+            query = query.where(~active_query, ~incomplete_form, ~stale_review)
+        order_by = {
+            "created_asc": Subject.created_at.asc(),
+            "subject_asc": Subject.subject_number.asc(),
+            "subject_desc": Subject.subject_number.desc(),
+        }.get(sort, Subject.created_at.desc())
+        query = query.order_by(order_by)
 
         return await paginate(session, query, pagination)
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_lifecycle_reason(reason: str) -> str:
+        normalized = reason.strip()
+        if not normalized:
+            raise ValidationError(
+                message="A reason is required",
+                details={"reason": "SUBJECT_LIFECYCLE_REASON_REQUIRED"},
+            )
+        if len(normalized) > 4000:
+            raise ValidationError(
+                message="Reason must be at most 4000 characters",
+                details={"reason": "SUBJECT_LIFECYCLE_REASON_TOO_LONG"},
+            )
+        return normalized
+
+    @staticmethod
+    async def _previous_phase_id(
+        session: AsyncSession,
+        subject: Subject,
+    ) -> UUID | None:
+        current_phase_id = subject.current_phase_definition_id
+        if current_phase_id is None:
+            return None
+        result = await session.execute(
+            select(AuditEvent.old_value)
+            .where(
+                AuditEvent.entity_type == "subject",
+                AuditEvent.entity_id == subject.id,
+                AuditEvent.action == "phase_transition",
+                AuditEvent.field_name == "current_phase_definition_id",
+                AuditEvent.new_value == str(current_phase_id),
+            )
+            .order_by(AuditEvent.timestamp.desc(), AuditEvent.id.desc())
+            .limit(1)
+        )
+        value = result.scalar_one_or_none()
+        if inspect.isawaitable(value):
+            value = await value
+        if not isinstance(value, str) or not value:
+            return None
+        try:
+            return UUID(value)
+        except ValueError:
+            logger.warning(
+                "Ignoring malformed previous subject phase audit value: subject_id=%s",
+                subject.id,
+            )
+            return None
+
+    @staticmethod
+    async def _statement_has_row(session: AsyncSession, statement) -> bool:
+        result = await session.execute(statement.limit(1))
+        row = result.first()
+        if inspect.isawaitable(row):
+            row = await row
+        if row is None:
+            return False
+        row_type = type(row)
+        return isinstance(row, tuple) or row_type.__module__.startswith("sqlalchemy.")
+
+    @staticmethod
+    async def _first_scalar(result):
+        scalars = result.scalars()
+        if inspect.isawaitable(scalars):
+            scalars = await scalars
+        first = scalars.first()
+        if inspect.isawaitable(first):
+            first = await first
+        return first
+
+    async def _subject_removal_blockers(
+        self,
+        session: AsyncSession,
+        subject: Subject,
+    ) -> list[str]:
+        """Return stable blocker codes without exposing regulated payloads."""
+        blockers: list[str] = []
+        if int(subject.data_revision or 0) > 0:
+            blockers.append("CLINICAL_DATA")
+
+        checks = (
+            (
+                "CLINICAL_DATA",
+                select(FieldValue.id)
+                .join(FormInstance, FormInstance.id == FieldValue.form_instance_id)
+                .where(FormInstance.subject_id == subject.id),
+            ),
+            (
+                "REPEATING_RECORDS",
+                select(FormRecord.id)
+                .join(FormInstance, FormInstance.id == FormRecord.form_instance_id)
+                .where(FormInstance.subject_id == subject.id),
+            ),
+            ("QUERIES", select(Query.id).where(Query.subject_id == subject.id)),
+            (
+                "ATTACHMENTS",
+                select(FileAttachment.id).where(
+                    FileAttachment.subject_id == subject.id,
+                    FileAttachment.deleted_at.is_(None),
+                ),
+            ),
+            (
+                "SAFETY_CASES",
+                select(SafetyCase.id).where(
+                    SafetyCase.subject_reference == subject.id,
+                    SafetyCase.deleted_at.is_(None),
+                ),
+            ),
+            (
+                "CTMS_MILESTONES",
+                select(OperationalMilestone.id).where(
+                    OperationalMilestone.subject_id == subject.id,
+                    OperationalMilestone.deleted_at.is_(None),
+                ),
+            ),
+            (
+                "CTMS_FINANCIAL_EVENTS",
+                select(FinancialEvent.id).where(FinancialEvent.subject_id == subject.id),
+            ),
+            (
+                "CTMS_OPERATIONAL_RECORDS",
+                select(StudyOperationRecord.id).where(
+                    StudyOperationRecord.subject_id == subject.id,
+                    StudyOperationRecord.deleted_at.is_(None),
+                ),
+            ),
+            (
+                "CTMS_PROJECTIONS",
+                select(CTMSOperationalProjection.id).where(
+                    CTMSOperationalProjection.deleted_at.is_(None),
+                    or_(
+                        CTMSOperationalProjection.subject_id == subject.id,
+                        CTMSOperationalProjection.source_record_id == subject.id,
+                    ),
+                ),
+            ),
+        )
+        for code, statement in checks:
+            if code in blockers:
+                continue
+            if await self._statement_has_row(session, statement):
+                blockers.append(code)
+        return blockers
 
     @staticmethod
     def _available_next_phases(phases, transitions, current_phase_id: UUID | None):

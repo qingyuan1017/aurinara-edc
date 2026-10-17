@@ -134,6 +134,9 @@ class Role(Base):
     is_system: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, comment="True for built-in roles"
     )
+    platform_managed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    platform_revision: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    platform_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )

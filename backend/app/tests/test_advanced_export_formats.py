@@ -13,6 +13,8 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from app.models.shared.export import Export, ExportStatus, ExportType
+from app.schemas.designer.raw_data_variable_setting import RawDatasetVariableResponse
+from app.services.edc.raw_dataset_export_service import RawDatasetPackage, RawDatasetTable
 from app.workers.export_worker import (
     ODM_NS,
     serialize_excel,
@@ -39,6 +41,30 @@ ROWS = [
         "value": "72.5",
     },
 ]
+
+
+def _raw_package(study_id: uuid.UUID) -> RawDatasetPackage:
+    columns = [
+        RawDatasetVariableResponse(
+            name=name,
+            data_type="string",
+            label=name,
+            source="fixed" if name != "AGE" else "field",
+        )
+        for name in ("PROTOCOL", "SITE", "AGE")
+    ]
+    return RawDatasetPackage(
+        study_id=str(study_id),
+        generated_at="2026-10-15T12:00:00Z",
+        datasets=[
+            RawDatasetTable(
+                name="DM",
+                columns=columns,
+                rows=[{"PROTOCOL": "P-001", "SITE": "SITE-01", "AGE": "45"}],
+                subject_keys=["SUBJ-001"],
+            )
+        ],
+    )
 
 
 def test_json_export_round_trips_canonical_rows() -> None:
@@ -130,7 +156,7 @@ async def test_advanced_export_dispatches_to_advanced_worker() -> None:
     [
         (ExportType.excel, "xlsx"),
         (ExportType.json, "json"),
-        (ExportType.sas_xpt, "xpt"),
+        (ExportType.sas_xpt, "zip"),
         (ExportType.odm_xml, "xml"),
     ],
 )
@@ -182,6 +208,11 @@ async def test_advanced_worker_generates_and_completes_each_format(
             new_callable=AsyncMock,
         ),
         patch("app.workers.export_worker._get_export_dir", return_value=tmp_path),
+        patch(
+            "app.workers.export_worker.raw_dataset_export_service.build_package",
+            new_callable=AsyncMock,
+            return_value=_raw_package(export.study_id),
+        ),
     ):
         await run_advanced_export(session, export)
 

@@ -3,18 +3,18 @@ import { api, type PaginatedResponse } from '@/lib/api'
 import { DetailCard, EmptyState, ErrorState, LoadingState, PageContainer, PageHeader, StatusBadge } from '@/components/patterns'
 import { Button } from '@/components/ui/button'
 
-interface Notification { id: string; type: string; payload_json: Record<string, unknown>; status: 'Unread' | 'Read' | 'Archived'; created_at: string }
+interface Notification { id: string; module: string; study_id?: string | null; site_id?: string | null; type: string; payload_json: Record<string, unknown>; status: 'Unread' | 'Read' | 'Archived'; created_at: string; destination_path?: string | null }
 
 function notificationText(item: Notification) {
   const payload = item.payload_json
   return String(payload.message ?? payload.text ?? payload.title ?? `A ${item.type.toLowerCase()} event needs your attention.`)
 }
 
-export function NotificationsPage() {
+export function NotificationsPage({ module }: { module?: 'CTMS' | 'EDC' }) {
   const client = useQueryClient()
   const query = useQuery({
-    queryKey: ['notifications'],
-    queryFn: async () => (await api.get<PaginatedResponse<Notification>>('/notifications', { params: { page: 1, page_size: 50 } })).data,
+    queryKey: ['notifications', module],
+    queryFn: async () => (await api.get<PaginatedResponse<Notification>>('/notifications', { params: { page: 1, page_size: 50, module } })).data,
   })
   const action = useMutation({
     mutationFn: ({ id, verb }: { id: string; verb: 'read' | 'archive' }) => api.post(`/notifications/${id}/${verb}`),
@@ -23,7 +23,7 @@ export function NotificationsPage() {
 
   return (
     <PageContainer>
-      <PageHeader title="Notifications" description="Workflow events assigned to you." />
+      <PageHeader title={module === 'CTMS' ? 'CTMS Alerts & Notifications' : 'Notifications'} description={module === 'CTMS' ? 'Operational events from authorized studies and sites.' : 'Workflow events assigned to you.'} />
 
       {query.error ? <ErrorState state="error" message="Notifications could not be loaded." /> : null}
       {query.isLoading ? <LoadingState label="notifications" /> : null}
@@ -47,6 +47,7 @@ export function NotificationsPage() {
             >
               <p className="text-sm text-foreground">{notificationText(item)}</p>
               <p className="mt-2 text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString()}</p>
+              {item.destination_path ? <Button asChild size="sm" variant="link" className="mt-2 h-auto p-0"><a href={item.destination_path}>Open operational record</a></Button> : null}
             </DetailCard>
           ))}
         </section>

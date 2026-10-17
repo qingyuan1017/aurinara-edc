@@ -44,11 +44,15 @@ from app.schemas.shared.base import (
 class StudyCreate(BaseCreateSchema):
     """Request body for creating a new Study (Requirement 4.1)."""
 
-    study_code: str = Field(..., min_length=1, max_length=100, description="Globally unique study code")
+    study_code: str = Field(
+        ..., min_length=1, max_length=100, description="Globally unique study code"
+    )
     protocol_number: str | None = Field(None, max_length=100)
     title: str = Field(..., min_length=1, max_length=500)
     sponsor: str | None = Field(None, max_length=255)
-    phase: str | None = Field(None, max_length=50, description="e.g. Phase I, Phase II, Phase III, Phase IV")
+    phase: str | None = Field(
+        None, max_length=50, description="e.g. Phase I, Phase II, Phase III, Phase IV"
+    )
     therapeutic_area: str | None = Field(None, max_length=255)
     indication: str | None = Field(None, max_length=255)
 

@@ -14,7 +14,7 @@ function inferTone(status: string): StatusTone {
   const normalized = status.trim().toLowerCase()
   if (['ready', 'active', 'completed', 'complete', 'submitted', 'enrolled', 'current', 'success', 'closed'].includes(normalized)) return 'success'
   if (['stale', 'pending', 'in progress', 'screening', 'warning', 'refreshing'].includes(normalized)) return 'warning'
-  if (['error', 'failed', 'withdrawn', 'locked', 'blocked', 'destructive', 'denied'].includes(normalized)) return 'destructive'
+  if (['error', 'failed', 'withdrawn', 'inactive', 'discontinued', 'locked', 'blocked', 'destructive', 'denied'].includes(normalized)) return 'destructive'
   if (['info', 'informational', 'offline'].includes(normalized)) return 'info'
   return 'secondary'
 }

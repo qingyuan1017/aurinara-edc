@@ -152,13 +152,12 @@ describe('CTMS entity management', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Create Site' }))
     let drawer = screen.getByRole('dialog', { name: 'Create Site' })
-    fireEvent.change(within(drawer).getByRole('combobox', { name: 'Study *' }), { target: { value: 'study-1' } })
     fireEvent.change(within(drawer).getByRole('textbox', { name: 'Name *' }), { target: { value: 'New Research Site' } })
     fireEvent.change(within(drawer).getByRole('textbox', { name: 'State *' }), { target: { value: 'New York' } })
     fireEvent.change(within(drawer).getByRole('textbox', { name: 'City *' }), { target: { value: 'Albany' } })
     fireEvent.click(within(drawer).getByRole('button', { name: 'Create Site' }))
 
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/ctms/studies/study-1/sites', {
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/ctms/sites', {
       name: 'New Research Site',
       state: 'New York',
       city: 'Albany',
@@ -166,7 +165,6 @@ describe('CTMS entity management', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Site' }))
     drawer = screen.getByRole('dialog', { name: 'Edit Site' })
-    expect(within(drawer).queryByRole('combobox', { name: 'Study *' })).not.toBeInTheDocument()
     fireEvent.change(within(drawer).getByRole('textbox', { name: 'Name *' }), { target: { value: 'General Hospital Research Center' } })
     fireEvent.click(within(drawer).getByRole('button', { name: 'Save Site' }))
 
@@ -186,16 +184,13 @@ describe('CTMS entity management', () => {
     expect(screen.getByRole('tab', { name: 'Investigational Product' })).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Name *' })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create entity' }))
-    let drawer = screen.getByRole('dialog', { name: 'Create Site' })
+    fireEvent.click(screen.getByRole('button', { name: 'Add Site' }))
+    let drawer = screen.getByRole('dialog', { name: 'Add Site' })
     expect(within(drawer).queryByRole('tab')).not.toBeInTheDocument()
-    expect(within(drawer).getByRole('textbox', { name: 'Name *' })).toBeRequired()
-    expect(within(drawer).queryByRole('textbox', { name: 'Canonical Site ID *' })).not.toBeInTheDocument()
-    expect(within(drawer).queryByRole('combobox', { name: 'Canonical Site *' })).not.toBeInTheDocument()
-    expect(within(drawer).getByRole('textbox', { name: 'State *' })).toBeRequired()
-    expect(within(drawer).getByRole('textbox', { name: 'City *' })).toBeRequired()
-    await within(drawer).findByRole('option', { name: 'United States' })
-    expect(within(drawer).getByRole('combobox', { name: 'Country' })).toHaveTextContent('United States')
+    await within(drawer).findByRole('option', { name: /General Hospital/ })
+    expect(within(drawer).getByRole('combobox', { name: 'Available Site *' })).toHaveTextContent('General Hospital')
+    expect(within(drawer).getByRole('textbox', { name: 'Study Site ID *' })).toBeRequired()
+    expect(within(drawer).queryByRole('textbox', { name: 'Name *' })).not.toBeInTheDocument()
 
     fireEvent.click(within(drawer).getByRole('button', { name: 'Close sheet' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Staff' }))
@@ -268,25 +263,21 @@ describe('CTMS entity management', () => {
     }))
   })
 
-  it('creates a Site in CTMS without asking the user to enter its generated ID', async () => {
+  it('adds an available Site with a Study-specific Site ID', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {} } as never)
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Create entity' }))
-    const drawer = screen.getByRole('dialog', { name: 'Create Site' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Site' }))
+    const drawer = screen.getByRole('dialog', { name: 'Add Site' })
 
-    fireEvent.change(within(drawer).getByRole('textbox', { name: 'Name *' }), { target: { value: 'General Hospital' } })
-    fireEvent.change(within(drawer).getByRole('combobox', { name: 'Country' }), { target: { value: 'US' } })
-    fireEvent.change(within(drawer).getByRole('textbox', { name: 'State *' }), { target: { value: 'New York' } })
-    fireEvent.change(within(drawer).getByRole('textbox', { name: 'City *' }), { target: { value: 'New York' } })
-    fireEvent.change(within(drawer).getByRole('textbox', { name: 'Address' }), { target: { value: '1 Main Street' } })
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Create Site' }))
+    const siteSelect = await within(drawer).findByRole('combobox', { name: 'Available Site *' })
+    await within(drawer).findByRole('option', { name: /General Hospital/ })
+    fireEvent.change(siteSelect, { target: { value: '44444444-4444-4444-8444-444444444444' } })
+    fireEvent.change(within(drawer).getByRole('textbox', { name: 'Study Site ID *' }), { target: { value: 'SITE-101' } })
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Add Site' }))
 
     await waitFor(() => expect(post).toHaveBeenCalledWith('/ctms/studies/study-1/sites', {
-      name: 'General Hospital',
-      country: 'US',
-      state: 'New York',
-      city: 'New York',
-      address: '1 Main Street',
+      entity_id: '44444444-4444-4444-8444-444444444444',
+      site_number: 'SITE-101',
     }))
   })
 })

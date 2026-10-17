@@ -45,7 +45,9 @@ describe('Study Data subject phase control', () => {
         current_phase_definition_id: 'phase-1',
         current_phase_name: 'Registered',
         current_phase_type: 'registered',
+        previous_phase: { id: 'phase-0', name: 'Consent', phase_type: 'registered', display_order: 0, visit_definition_ids: [] },
         phases: [
+          { id: 'phase-0', name: 'Consent', phase_type: 'registered', display_order: 0, visit_definition_ids: [] },
           { id: 'phase-1', name: 'Registered', phase_type: 'registered', display_order: 1, visit_definition_ids: ['visit-1'] },
           { id: 'phase-2', name: 'Randomization', phase_type: 'arm', display_order: 2, visit_definition_ids: [] },
           { id: 'phase-3', name: 'Complete', phase_type: 'complete', display_order: 3, visit_definition_ids: [] },
@@ -58,12 +60,15 @@ describe('Study Data subject phase control', () => {
       return Promise.resolve({ data: [] })
     })
     vi.mocked(api.patch).mockResolvedValue({ data: {} } as never)
+    vi.mocked(api.post).mockResolvedValue({ data: {} } as never)
   })
 
   it('prompts for a configured arm before entering an arm phase', async () => {
     renderPage()
 
     expect(await screen.findByRole('status', { name: 'Subject status: Registered' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mark inactive' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Discontinue' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Move to Complete' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Move to Randomization' }))
 
@@ -74,6 +79,27 @@ describe('Study Data subject phase control', () => {
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
       '/subjects/subject-1/phase',
       { phase_definition_id: 'phase-2', arm_definition_id: 'arm-1' },
+    ))
+  })
+
+  it('requires an audit reason before reversing to the prior phase', async () => {
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reverse to Consent' }))
+    const dialog = screen.getByRole('dialog', { name: 'Reverse subject phase' })
+    expect(dialog).toHaveTextContent('without deleting any visits, forms, or audit history')
+    const confirm = screen.getByRole('button', { name: 'Reverse phase' })
+    fireEvent.click(confirm)
+    expect(screen.getByRole('alert')).toHaveTextContent('A reason is required.')
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Reason for change/ }), {
+      target: { value: 'Registered phase selected in error' },
+    })
+    fireEvent.click(confirm)
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(
+      '/subjects/subject-1/phase/reverse',
+      { reason: 'Registered phase selected in error' },
     ))
   })
 })

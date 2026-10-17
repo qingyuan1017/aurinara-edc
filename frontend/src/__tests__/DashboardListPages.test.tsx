@@ -1,5 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DataCleaningDashboardPage, StudyDashboardPage } from '@/features/dashboards'
 import { SiteListPage } from '@/features/sites'
@@ -166,23 +168,219 @@ describe('dashboard and list page composition', () => {
   })
 
   it('preserves subject search parameters, selected-site mutation context, and server totals', async () => {
-    const get = vi.spyOn(api, 'get').mockResolvedValue({
+    const get = vi.spyOn(api, 'get').mockImplementation(async (url) => ({
+      data: String(url).endsWith('/enrollment-readiness')
+        ? { study_id: 'study-1', ready: true, published_version_id: 'version-1', published_version_number: '1.0', authorized_active_site_count: 1, blockers: [] }
+        : String(url).endsWith('/sites')
+          ? { items: [{ id: 'site-1', site_number: '001', name: 'North Clinic', status: 'active' }], page: 1, page_size: 100, total: 1 }
+          : {
+              items: [{ id: 'subject-1', subject_number: 'SUBJ-001', site_id: 'site-1', site_name: 'North Clinic', status: 'Enrolled', current_phase_name: 'Treatment', current_phase_type: 'common', created_at: '2026-01-01T00:00:00Z' }],
+              page: 1,
+              page_size: 10,
+              total: 1,
+            },
+    } as never))
+
+    renderWithQueryClient(<SubjectListPage studyId="study-1" />)
+    expect(await screen.findByText('1 total subjects · server ordered')).toBeInTheDocument()
+    expect(screen.getByText('North Clinic')).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Subject status: Enrolled' })).toBeInTheDocument()
+    expect(screen.getByText('Phase: Treatment')).toBeInTheDocument()
+    expect(get).toHaveBeenCalledWith('/studies/study-1/subjects', { params: { page: 1, page_size: 10 } })
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search subjects' }), { target: { value: 'SUBJ' } })
+    await waitFor(() => expect(get).toHaveBeenLastCalledWith('/studies/study-1/subjects', { params: { page: 1, page_size: 10, search: 'SUBJ' } }))
+  })
+
+  it('shows the sanitized backend message when subject creation fails', async () => {
+    vi.spyOn(api, 'get').mockImplementation(async (url) => ({
+      data: String(url).endsWith('/enrollment-readiness')
+        ? { study_id: 'study-1', ready: true, published_version_id: 'version-1', published_version_number: '1.0', authorized_active_site_count: 1, blockers: [] }
+        : String(url).endsWith('/sites')
+        ? { items: [{ id: 'site-1', site_number: '001', name: 'North Clinic' }], page: 1, page_size: 100, total: 1 }
+        : { items: [], page: 1, page_size: 10, total: 0 },
+    } as never))
+    const config = { headers: {} } as InternalAxiosRequestConfig
+    vi.spyOn(api, 'post').mockRejectedValue(new AxiosError(
+      'Request failed',
+      'ERR_BAD_REQUEST',
+      config,
+      undefined,
+      {
+        config,
+        data: { error: { code: 'AuthenticationError', message: 'Missing authentication credentials' } },
+        headers: {},
+        status: 401,
+        statusText: 'Unauthorized',
+      },
+    ))
+
+    renderWithQueryClient(<SubjectListPage studyId="study-1" />)
+    const addSubject = await screen.findByRole('button', { name: 'Add subject' })
+    await waitFor(() => expect(addSubject).toBeEnabled())
+    fireEvent.click(addSubject)
+    const siteSelect = await screen.findByRole('combobox', { name: 'Subject site' })
+    await screen.findByRole('option', { name: '001 — North Clinic' })
+    fireEvent.change(siteSelect, { target: { value: 'site-1' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Missing authentication credentials')
+  })
+
+  it('rejects stale cross-study context and posts only an explicitly authorized site', async () => {
+    const user = userEvent.setup()
+    useStudyContext.setState({ selectedStudyId: 'other-study', selectedSiteId: 'site-from-other-study' })
+    vi.spyOn(api, 'get').mockImplementation(async (url) => ({
+      data: String(url).endsWith('/enrollment-readiness')
+        ? { study_id: 'study-1', ready: true, published_version_id: 'version-1', published_version_number: '1.0', authorized_active_site_count: 1, blockers: [] }
+        : String(url).endsWith('/sites')
+        ? { items: [{ id: 'site-current', site_number: '002', name: 'Current Study Site' }], page: 1, page_size: 100, total: 1 }
+        : { items: [], page: 1, page_size: 10, total: 0 },
+    } as never))
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { id: 'subject-1' } } as never)
+
+    renderWithQueryClient(<SubjectListPage studyId="study-1" />)
+    const addSubject = await screen.findByRole('button', { name: 'Add subject' })
+    await waitFor(() => expect(addSubject).toBeEnabled())
+    fireEvent.click(addSubject)
+
+    const siteSelect = await screen.findByRole('combobox', { name: 'Subject site' })
+    await screen.findByRole('option', { name: '002 — Current Study Site' })
+    expect(siteSelect).toHaveValue('')
+    expect(screen.queryByRole('option', { name: 'site-from-other-study' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
+
+    await user.selectOptions(siteSelect, 'site-current')
+    const subjectNumberInput = screen.getByLabelText('Subject number (optional)')
+    fireEvent.change(subjectNumberInput, { target: { value: '123' } })
+    expect(subjectNumberInput).toHaveValue('123')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create' })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/studies/study-1/subjects', {
+      site_id: 'site-current',
+      subject_number: '123',
+    }))
+  })
+
+  it('blocks subject creation until a study design is published', async () => {
+    vi.spyOn(api, 'get').mockImplementation(async (url) => ({
+      data: String(url).endsWith('/enrollment-readiness')
+        ? {
+            study_id: 'study-1',
+            ready: false,
+            published_version_id: null,
+            published_version_number: null,
+            authorized_active_site_count: 1,
+            blockers: [{ code: 'NO_PUBLISHED_DESIGN', message: 'Publish a valid study design before enrolling subjects.' }],
+          }
+        : String(url).endsWith('/sites')
+          ? { items: [{ id: 'site-1', site_number: '001', name: 'North Clinic', status: 'active' }], page: 1, page_size: 100, total: 1 }
+          : { items: [], page: 1, page_size: 10, total: 0 },
+    } as never))
+
+    renderWithQueryClient(<SubjectListPage studyId="study-1" />)
+
+    expect(await screen.findByText('Subject enrollment is not ready.')).toBeInTheDocument()
+    expect(screen.getByText('Publish a valid study design before enrolling subjects.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open study versioning' })).toHaveAttribute('href', '/studies/study-1/versions')
+    expect(screen.getByRole('button', { name: 'Add subject' })).toBeDisabled()
+  })
+
+  it('requires the subject number and audit reason before removal', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'user-1',
+        email: 'manager@example.com',
+        first_name: 'Data',
+        last_name: 'Manager',
+        roles: [],
+        permissions: [PERMISSIONS.SUBJECT_DELETE, PERMISSIONS.SUBJECT_RESTORE],
+      },
+      isAuthenticated: true,
+    })
+    vi.spyOn(api, 'get').mockResolvedValue({
       data: {
-        items: [{ id: 'subject-1', subject_number: 'SUBJ-001', site_id: 'site-1', site_name: 'North Clinic', status: 'Enrolled', current_phase_name: 'Treatment', current_phase_type: 'common', created_at: '2026-01-01T00:00:00Z' }],
+        items: [{
+          id: 'subject-1',
+          subject_number: 'SUBJ-001',
+          site_id: 'site-1',
+          site_name: 'North Clinic',
+          status: 'Screening',
+          created_at: '2026-01-01T00:00:00Z',
+        }],
         page: 1,
         page_size: 10,
         total: 1,
       },
     } as never)
+    const remove = vi.spyOn(api, 'delete').mockResolvedValue({ data: {} } as never)
 
     renderWithQueryClient(<SubjectListPage studyId="study-1" />)
-    expect(await screen.findByText('1 total subjects · server ordered')).toBeInTheDocument()
-    expect(screen.getByText('North Clinic')).toBeInTheDocument()
-    expect(screen.getByRole('status', { name: 'Subject status: Treatment' })).toBeInTheDocument()
-    expect(get).toHaveBeenCalledWith('/studies/study-1/subjects', { params: { page: 1, page_size: 10 } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Open actions for SUBJ-001' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove entered in error' }))
+    expect(screen.getByRole('button', { name: 'Remove subject' })).toBeDisabled()
 
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Search subjects' }), { target: { value: 'SUBJ' } })
-    await waitFor(() => expect(get).toHaveBeenLastCalledWith('/studies/study-1/subjects', { params: { page: 1, page_size: 10, search: 'SUBJ' } }))
+    fireEvent.change(screen.getByLabelText('Type SUBJ-001 to confirm'), {
+      target: { value: 'SUBJ-001' },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: /Removal reason/ }), {
+      target: { value: 'Duplicate subject created during setup' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove subject' }))
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('/subjects/subject-1', {
+      data: {
+        reason: 'Duplicate subject created during setup',
+        subject_number_confirmation: 'SUBJ-001',
+      },
+    }))
+  })
+
+  it('offers inactive and discontinue from the subject-row actions menu', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 'user-1',
+        email: 'manager@example.com',
+        first_name: 'Data',
+        last_name: 'Manager',
+        roles: [],
+        permissions: [PERMISSIONS.SUBJECT_UPDATE],
+      },
+      isAuthenticated: true,
+    })
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: {
+        items: [{
+          id: 'subject-1',
+          subject_number: 'SUBJ-001',
+          site_id: 'site-1',
+          site_name: 'North Clinic',
+          status: 'Enrolled',
+          created_at: '2026-01-01T00:00:00Z',
+        }],
+        page: 1,
+        page_size: 10,
+        total: 1,
+      },
+    } as never)
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {} } as never)
+
+    renderWithQueryClient(<SubjectListPage studyId="study-1" />)
+    expect(screen.queryByRole('button', { name: 'Mark inactive' })).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Open actions for SUBJ-001' }))
+    expect(screen.getByRole('menuitem', { name: 'Discontinue' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mark inactive' }))
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Reason for change/ }), {
+      target: { value: 'Subject is temporarily inactive' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Mark inactive' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/subjects/subject-1/deactivate', {
+      reason: 'Subject is temporarily inactive',
+    }))
   })
 
   it('keeps dashboard deep-link breadcrumbs and search state intact', () => {

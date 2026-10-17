@@ -32,10 +32,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit_service
+from app.core.edit_check_dsl import evaluate_rule
 from app.core.exceptions import BusinessRuleError, NotFoundError, ValidationError
+from app.core.expression_evaluator import ExpressionError, evaluate_expression
+from app.models.designer.edit_check import ValidationResult
 from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
 from app.models.edc.form_metadata import CodelistItem, FieldDefinition
+from app.models.edc.visit import VisitInstanceStatus
+from app.services.designer.edit_check_service import edit_check_service
 from app.services.edc.lock_service import lock_service
+from app.services.edc.revision_service import clinical_revision_service
 from app.services.edc.signature_service import signature_service
 from app.services.shared.notification_service import notification_service
 
@@ -143,13 +149,23 @@ class DataCaptureService:
                 reason=None,
             )
 
-        # Update status to In Progress (Req 10.1)
+        if form_instance.design_version_id is not None:
+            await self._apply_calculated_fields(session, form_instance, actor_id)
+
+        # Update only the data-entry dimension; quality and control states are
+        # independent and are derived from their dedicated records.
+        if self._data_entry_status(form_instance) == FormInstanceStatus.not_started:
+            form_instance.data_entry_status = FormInstanceStatus.in_progress.value
         if form_instance.status == FormInstanceStatus.not_started:
             form_instance.status = FormInstanceStatus.in_progress
 
         # Sync data_jsonb from field_values (Req 23.3)
         await self._sync_data_jsonb(session, form_instance)
-        await self._invalidate_signed_form(session, form_instance, actor_id=actor_id)
+        if form_instance.design_version_id is not None:
+            await self._invalidate_signed_form(session, form_instance, actor_id=actor_id)
+            await edit_check_service.evaluate_form_instance(
+                session, form_instance, actor_id=actor_id
+            )
 
         form_instance.updated_at = datetime.now(UTC)
         await session.flush()
@@ -193,13 +209,14 @@ class DataCaptureService:
         await self._guard_modification(session, form_instance)
 
         # Only allow submission from In Progress or Not Started
-        if form_instance.status not in (
+        entry_status = self._data_entry_status(form_instance)
+        if entry_status not in (
             FormInstanceStatus.not_started,
             FormInstanceStatus.in_progress,
         ):
             raise BusinessRuleError(
-                message=f"Cannot submit a form in '{form_instance.status}' status",
-                details={"current_status": str(form_instance.status)},
+                message=f"Cannot submit a form in '{entry_status.value}' status",
+                details={"current_status": entry_status.value},
             )
 
         # Get field definitions for this form
@@ -211,6 +228,33 @@ class DataCaptureService:
         # Validate
         errors = await self._validate_submission(session, field_definitions, field_value_map)
 
+        blocking_results: list[ValidationResult] = []
+        if form_instance.design_version_id is not None:
+            await edit_check_service.evaluate_form_instance(
+                session, form_instance, actor_id=actor_id
+            )
+            blocking_results = list(
+                (
+                    await session.execute(
+                        select(ValidationResult).where(
+                            ValidationResult.form_instance_id == form_instance.id,
+                            ValidationResult.is_resolved.is_(False),
+                            ValidationResult.severity == "error",
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        errors.extend(
+            {
+                "field_id": str(result.field_definition_id) if result.field_definition_id else None,
+                "error": "edit_check",
+                "message": result.message,
+            }
+            for result in blocking_results
+        )
+
         if errors:
             # Req 10.4: preserve values and return errors
             raise ValidationError(
@@ -220,6 +264,7 @@ class DataCaptureService:
 
         # Validation passed — set status to Submitted
         form_instance.status = FormInstanceStatus.submitted
+        form_instance.data_entry_status = FormInstanceStatus.submitted.value
         form_instance.submitted_at = datetime.now(UTC)
         form_instance.submitted_by = actor_id
         form_instance.updated_at = datetime.now(UTC)
@@ -281,7 +326,7 @@ class DataCaptureService:
             BusinessRuleError: If Frozen/Locked (Req 10.7).
             ValidationError: If reason is missing for post-submission change (Req 10.5).
         """
-        status = FormInstanceStatus(form_instance.status)
+        status = self._data_entry_status(form_instance)
         # Validate the reason before hierarchy lookup for editable
         # post-submission forms. Frozen/locked lifecycle states retain their
         # lock error precedence in _guard_modification.
@@ -308,7 +353,10 @@ class DataCaptureService:
 
         # Sync data_jsonb
         await self._sync_data_jsonb(session, form_instance)
-        await self._invalidate_signed_form(session, form_instance, actor_id=actor_id, reason=reason)
+        if form_instance.design_version_id is not None:
+            await self._invalidate_signed_form(
+                session, form_instance, actor_id=actor_id, reason=reason
+            )
         form_instance.updated_at = datetime.now(UTC)
         await session.flush()
 
@@ -355,14 +403,17 @@ class DataCaptureService:
         field_value.is_not_applicable = True
         field_value.updated_at = datetime.now(UTC)
         field_value.updated_by = actor_id
+        if not old_na:
+            clinical_revision_service.bump_form(form_instance, field_value=field_value)
         # Sync data_jsonb
         await self._sync_data_jsonb(session, form_instance)
-        await self._invalidate_signed_form(
-            session,
-            form_instance,
-            actor_id=actor_id,
-            reason="Field marked not applicable after signature.",
-        )
+        if form_instance.design_version_id is not None:
+            await self._invalidate_signed_form(
+                session,
+                form_instance,
+                actor_id=actor_id,
+                reason="Field marked not applicable after signature.",
+            )
         form_instance.updated_at = datetime.now(UTC)
         await session.flush()
 
@@ -397,18 +448,22 @@ class DataCaptureService:
     ) -> None:
         """Invalidate a form signature after a post-signature data mutation.
 
-        Only the explicit ``Signed`` lifecycle state triggers this lookup. It
-        keeps ordinary draft/submission mutations free of signature queries
-        while ensuring every edit to an electronically signed form is checked.
+        Signature state is independent from data-entry status, so every actual
+        mutation checks for a valid signature and invalidates only when the
+        canonical signed snapshot changed.
         """
-        if FormInstanceStatus(form_instance.status) != FormInstanceStatus.signed:
-            return
         await signature_service.invalidate_if_changed(
             session,
             form_instance,
             actor_id=actor_id,
             reason=reason,
         )
+
+    @staticmethod
+    def _data_entry_status(form_instance: FormInstance) -> FormInstanceStatus:
+        """Read the new dimension with a one-release legacy-status fallback."""
+        value = form_instance.data_entry_status or form_instance.status
+        return FormInstanceStatus(value)
 
     # ------------------------------------------------------------------
     # Internal: guard modifications (Req 10.7)
@@ -430,6 +485,17 @@ class DataCaptureService:
         target contract is the integration point for FileAttachmentService.
         """
         target: Any = form_instance
+        if (
+            form_instance.visit_instance is not None
+            and form_instance.visit_instance.status == VisitInstanceStatus.added_in_error
+        ):
+            raise BusinessRuleError(
+                message="Cannot modify a form belonging to a visit marked as added in error",
+                details={
+                    "form_instance_id": str(form_instance.id),
+                    "visit_instance_id": str(form_instance.visit_instance_id),
+                },
+            )
         status = FormInstanceStatus(form_instance.status)
         # Preserve the lifecycle-state error and avoid hierarchy queries for
         # legacy forms that predate FreezeLock rows.
@@ -534,6 +600,7 @@ class DataCaptureService:
                 design_version_id=form_instance.design_version_id,
             )
             session.add(field_value)
+            clinical_revision_service.bump_form(form_instance, field_value=field_value)
             await session.flush()
 
             # Audit: create (Req 10.8)
@@ -556,6 +623,7 @@ class DataCaptureService:
                 field_value.value = serialized
                 field_value.updated_at = datetime.now(UTC)
                 field_value.updated_by = actor_id
+                clinical_revision_service.bump_form(form_instance, field_value=field_value)
                 await session.flush()
 
                 # Audit: update (Req 10.8)
@@ -665,9 +733,26 @@ class DataCaptureService:
         """
         errors: list[dict[str, Any]] = []
 
+        context = {
+            definition.variable_name: self._deserialize_value(field_value_map[definition.id].value)
+            if definition.id in field_value_map
+            else None
+            for definition in field_definitions
+        }
+        context.update(
+            {
+                definition.odm_oid: self._deserialize_value(field_value_map[definition.id].value)
+                if definition.id in field_value_map
+                else None
+                for definition in field_definitions
+            }
+        )
+
         for field_def in field_definitions:
             # Skip read-only and calculated fields for user-input validation
             if field_def.is_read_only or field_def.is_calculated:
+                continue
+            if field_def.visibility_rule and not evaluate_rule(field_def.visibility_rule, context):
                 continue
 
             fv = field_value_map.get(field_def.id)
@@ -755,6 +840,48 @@ class DataCaptureService:
                     )
 
         return errors
+
+    async def _apply_calculated_fields(
+        self,
+        session: AsyncSession,
+        form_instance: FormInstance,
+        actor_id: UUID,
+    ) -> None:
+        definitions = await self._get_field_definitions(session, form_instance)
+        values = await self._get_field_value_map(session, form_instance)
+        context = {
+            definition.variable_name: self._deserialize_value(values[definition.id].value)
+            if definition.id in values
+            else None
+            for definition in definitions
+        }
+        context.update(
+            {
+                definition.odm_oid: self._deserialize_value(values[definition.id].value)
+                if definition.id in values
+                else None
+                for definition in definitions
+            }
+        )
+        for definition in definitions:
+            if not definition.is_calculated or not definition.calculation_expression:
+                continue
+            try:
+                calculated = evaluate_expression(definition.calculation_expression, context)
+            except ExpressionError as exc:
+                raise ValidationError(
+                    message="Calculated field evaluation failed",
+                    details={"field_id": str(definition.id), "reason": exc.message},
+                ) from exc
+            await self._upsert_field_value(
+                session,
+                form_instance=form_instance,
+                field_definition_id=definition.id,
+                new_value=calculated,
+                actor_id=actor_id,
+                reason="System-calculated field",
+            )
+            context[definition.variable_name] = calculated
 
     # ------------------------------------------------------------------
     # Internal: type validation

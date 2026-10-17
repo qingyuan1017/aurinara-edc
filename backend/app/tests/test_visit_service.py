@@ -16,11 +16,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import BusinessRuleError, NotFoundError, ValidationError
 from app.models.edc.study import StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject, SubjectStatus
 from app.models.edc.visit import VisitDefinition, VisitInstance, VisitInstanceStatus
-from app.schemas.edc.visit import UnscheduledVisitCreate, VisitDefinitionCreate
+from app.schemas.edc.visit import AddableVisitCreate, UnscheduledVisitCreate, VisitDefinitionCreate
 from app.services.edc.visit_service import (
     WINDOW_AFTER,
     WINDOW_BEFORE,
@@ -32,8 +32,15 @@ from app.services.edc.visit_service import (
 
 
 @pytest.fixture
-def service():
-    return VisitService()
+def design_service():
+    service = AsyncMock()
+    service.permits_unscheduled_visits = AsyncMock(return_value=True)
+    return service
+
+
+@pytest.fixture
+def service(design_service):
+    return VisitService(design_service=design_service)
 
 
 @pytest.fixture
@@ -66,6 +73,7 @@ def _make_definition(
     target_day: int | None = 7,
     window_before: int | None = 2,
     window_after: int | None = 2,
+    addable: bool = False,
 ) -> VisitDefinition:
     return VisitDefinition(
         id=uuid.uuid4(),
@@ -78,6 +86,8 @@ def _make_definition(
         window_after=window_after,
         display_order=1,
         is_required=True,
+        definition_kind="visit",
+        addable=addable,
         created_at=datetime.now(UTC),
     )
 
@@ -98,6 +108,7 @@ def _make_subject() -> Subject:
 def _make_instance(
     definition: VisitDefinition | None = None,
     status: VisitInstanceStatus = VisitInstanceStatus.scheduled,
+    is_user_added: bool = False,
 ) -> VisitInstance:
     instance = VisitInstance(
         id=uuid.uuid4(),
@@ -105,6 +116,7 @@ def _make_instance(
         visit_definition_id=definition.id if definition else None,
         name="Visit 1",
         status=status,
+        is_user_added=is_user_added,
         created_at=datetime.now(UTC),
     )
     instance.visit_definition = definition
@@ -176,9 +188,7 @@ class TestDefineVisitDelegates:
             "app.services.edc.visit_service.visit_definition_service.define_visit",
             new=AsyncMock(return_value=sentinel),
         ) as mock_define:
-            result = await service.define_visit(
-                mock_session, version, data, actor_id
-            )
+            result = await service.define_visit(mock_session, version, data, actor_id)
 
         assert result is sentinel
         mock_define.assert_awaited_once_with(mock_session, version, data, actor_id)
@@ -204,15 +214,15 @@ class TestInitializeInstances:
 
         with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            instances = await service.initialize_instances(
-                mock_session, subject, actor_id
-            )
+            instances = await service.initialize_instances(mock_session, subject, actor_id)
 
         assert len(instances) == 2
         for instance in instances:
             assert instance.subject_id == subject.id
             assert instance.status == VisitInstanceStatus.scheduled
         assert mock_audit.record.await_count == 2
+        statement = mock_session.execute.await_args.args[0]
+        assert "visit_definitions.addable IS false" in str(statement)
 
     async def test_initialize_with_no_definitions_returns_empty(
         self, service, mock_session, actor_id
@@ -224,12 +234,131 @@ class TestInitializeInstances:
 
         with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            instances = await service.initialize_instances(
-                mock_session, subject, actor_id
-            )
+            instances = await service.initialize_instances(mock_session, subject, actor_id)
 
         assert instances == []
         mock_audit.record.assert_not_awaited()
+
+    async def test_initialize_scopes_to_phase_and_skips_existing_instances(
+        self, service, mock_session, actor_id
+    ):
+        subject = _make_subject()
+        existing_definition = _make_definition(subject.study_version_id)
+        new_definition = _make_definition(subject.study_version_id)
+        definitions_result = MagicMock()
+        definitions_result.scalars.return_value.all.return_value = [
+            existing_definition,
+            new_definition,
+        ]
+        existing_result = MagicMock()
+        existing_result.scalars.return_value.all.return_value = [existing_definition.id]
+        mock_session.execute.side_effect = [definitions_result, existing_result]
+
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            instances = await service.initialize_instances(
+                mock_session,
+                subject,
+                actor_id,
+                definition_ids={existing_definition.id, new_definition.id},
+                skip_existing=True,
+            )
+
+        assert [instance.visit_definition_id for instance in instances] == [new_definition.id]
+        assert mock_audit.record.await_count == 1
+
+    async def test_initialize_empty_phase_does_not_query_or_create(
+        self, service, mock_session, actor_id
+    ):
+        subject = _make_subject()
+
+        instances = await service.initialize_instances(
+            mock_session,
+            subject,
+            actor_id,
+            definition_ids=set(),
+            skip_existing=True,
+        )
+
+        assert instances == []
+        mock_session.execute.assert_not_awaited()
+
+
+class TestAddableVisits:
+    async def test_create_addable_uses_real_definition_and_initializes_forms(
+        self, service, mock_session, actor_id
+    ):
+        subject = _make_subject()
+        definition = _make_definition(subject.study_version_id)
+        definition.addable = True
+        definition.definition_kind = "visit"
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [definition]
+        mock_session.execute = AsyncMock(return_value=result)
+
+        with (
+            patch("app.services.edc.visit_service.audit_service") as mock_audit,
+            patch("app.services.edc.visit_service.form_instance_service") as mock_forms,
+        ):
+            mock_audit.record = AsyncMock()
+            mock_forms.initialize_for_visit = AsyncMock(return_value=[])
+            instance = await service.create_addable(
+                mock_session,
+                subject,
+                AddableVisitCreate(visit_definition_id=definition.id),
+                actor_id,
+            )
+
+        assert instance.visit_definition_id == definition.id
+        assert instance.subject_id == subject.id
+        assert instance.status == VisitInstanceStatus.scheduled
+        assert instance.is_user_added is True
+        mock_forms.initialize_for_visit.assert_awaited_once_with(
+            mock_session, subject, instance, actor_id
+        )
+        assert mock_audit.record.await_args.kwargs["action"] == "create_addable"
+
+    async def test_create_addable_unscheduled_definition_sets_unscheduled_status(
+        self, service, mock_session, actor_id
+    ):
+        subject = _make_subject()
+        definition = _make_definition(subject.study_version_id, addable=True)
+        definition.visit_type = "unscheduled"
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [definition]
+        mock_session.execute = AsyncMock(return_value=result)
+
+        with (
+            patch("app.services.edc.visit_service.audit_service") as mock_audit,
+            patch("app.services.edc.visit_service.form_instance_service") as mock_forms,
+        ):
+            mock_audit.record = AsyncMock()
+            mock_forms.initialize_for_visit = AsyncMock(return_value=[])
+            instance = await service.create_addable(
+                mock_session,
+                subject,
+                AddableVisitCreate(visit_definition_id=definition.id),
+                actor_id,
+                allowed_definition_ids=set(),
+            )
+
+        assert instance.status == VisitInstanceStatus.unscheduled
+
+    async def test_create_addable_rejects_non_addable_definition(
+        self, service, mock_session, actor_id
+    ):
+        subject = _make_subject()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=result)
+
+        with pytest.raises(ValidationError, match="not addable"):
+            await service.create_addable(
+                mock_session,
+                subject,
+                AddableVisitCreate(visit_definition_id=uuid.uuid4()),
+                actor_id,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -285,9 +414,7 @@ class TestRecordVisitDate:
 
         assert result.window_status == WINDOW_AFTER
 
-    async def test_record_without_baseline_sets_no_window(
-        self, service, mock_session, actor_id
-    ):
+    async def test_record_without_baseline_sets_no_window(self, service, mock_session, actor_id):
         definition = _make_definition(target_day=7)
         instance = _make_instance(definition)
 
@@ -300,9 +427,7 @@ class TestRecordVisitDate:
         assert result.visit_date == date(2024, 1, 8)
         assert result.window_status is None
 
-    async def test_record_unscheduled_instance_no_definition(
-        self, service, mock_session, actor_id
-    ):
+    async def test_record_unscheduled_instance_no_definition(self, service, mock_session, actor_id):
         instance = _make_instance(definition=None)
 
         with patch("app.services.edc.visit_service.audit_service") as mock_audit:
@@ -345,30 +470,23 @@ class TestRecordVisitDate:
 
 
 class TestCreateUnscheduled:
-    async def test_create_unscheduled_sets_status(
-        self, service, mock_session, actor_id
-    ):
+    async def test_create_unscheduled_sets_status(self, service, mock_session, actor_id):
         subject = _make_subject()
         data = UnscheduledVisitCreate(name="Unscheduled AE Visit")
 
         with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
-            instance = await service.create_unscheduled(
-                mock_session, subject, data, actor_id
-            )
+            instance = await service.create_unscheduled(mock_session, subject, data, actor_id)
 
         assert instance.subject_id == subject.id
         assert instance.visit_definition_id is None
         assert instance.name == "Unscheduled AE Visit"
         assert instance.status == VisitInstanceStatus.unscheduled
+        assert instance.is_user_added is True
 
-    async def test_create_unscheduled_writes_audit_event(
-        self, service, mock_session, actor_id
-    ):
+    async def test_create_unscheduled_writes_audit_event(self, service, mock_session, actor_id):
         subject = _make_subject()
-        data = UnscheduledVisitCreate(
-            name="Unscheduled Visit", visit_date=date(2024, 2, 1)
-        )
+        data = UnscheduledVisitCreate(name="Unscheduled Visit", visit_date=date(2024, 2, 1))
 
         with patch("app.services.edc.visit_service.audit_service") as mock_audit:
             mock_audit.record = AsyncMock()
@@ -379,6 +497,22 @@ class TestCreateUnscheduled:
             assert call_kwargs["entity_type"] == "visit_instance"
             assert call_kwargs["action"] == "create_unscheduled"
             assert call_kwargs["subject_id"] == subject.id
+
+    async def test_create_unscheduled_rejects_design_without_capability(
+        self, service, design_service, mock_session, actor_id
+    ):
+        design_service.permits_unscheduled_visits.return_value = False
+        subject = _make_subject()
+
+        with pytest.raises(BusinessRuleError, match="does not permit unscheduled visits"):
+            await service.create_unscheduled(
+                mock_session,
+                subject,
+                UnscheduledVisitCreate(name="Unscheduled Visit"),
+                actor_id,
+            )
+
+        mock_session.add.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -397,9 +531,7 @@ class TestMarkMissed:
         assert result.status == VisitInstanceStatus.missed
         assert result.updated_at is not None
 
-    async def test_mark_missed_writes_audit_event(
-        self, service, mock_session, actor_id
-    ):
+    async def test_mark_missed_writes_audit_event(self, service, mock_session, actor_id):
         instance = _make_instance(status=VisitInstanceStatus.scheduled)
 
         with patch("app.services.edc.visit_service.audit_service") as mock_audit:
@@ -412,6 +544,54 @@ class TestMarkMissed:
             assert call_kwargs["action"] == "mark_missed"
             assert call_kwargs["field_name"] == "status"
             assert call_kwargs["new_value"] == VisitInstanceStatus.missed.value
+
+    async def test_mark_missed_rejects_added_in_error(self, service, mock_session, actor_id):
+        instance = _make_instance(status=VisitInstanceStatus.added_in_error, is_user_added=True)
+
+        with pytest.raises(BusinessRuleError, match="cannot be modified"):
+            await service.mark_missed(mock_session, instance, actor_id)
+
+
+class TestMarkAddedInError:
+    async def test_marks_empty_user_added_visit_and_audits_reason(
+        self, service, mock_session, actor_id
+    ):
+        instance = _make_instance(is_user_added=True)
+        service._has_clinical_data = AsyncMock(return_value=False)
+
+        with patch("app.services.edc.visit_service.audit_service") as mock_audit:
+            mock_audit.record = AsyncMock()
+            result = await service.mark_added_in_error(
+                mock_session, instance, actor_id, "Created for the wrong subject"
+            )
+
+        assert result.status == VisitInstanceStatus.added_in_error
+        call_kwargs = mock_audit.record.call_args.kwargs
+        assert call_kwargs["action"] == "mark_added_in_error"
+        assert call_kwargs["old_value"] == VisitInstanceStatus.scheduled.value
+        assert call_kwargs["new_value"] == VisitInstanceStatus.added_in_error.value
+        assert call_kwargs["reason"] == "Created for the wrong subject"
+
+    async def test_rejects_protocol_generated_visit(self, service, mock_session, actor_id):
+        instance = _make_instance(is_user_added=False)
+
+        with pytest.raises(BusinessRuleError, match="Only a user-added visit"):
+            await service.mark_added_in_error(mock_session, instance, actor_id, "Wrong visit")
+
+    async def test_rejects_visit_with_clinical_data(self, service, mock_session, actor_id):
+        instance = _make_instance(is_user_added=True)
+        service._has_clinical_data = AsyncMock(return_value=True)
+
+        with pytest.raises(BusinessRuleError, match="after clinical data entry"):
+            await service.mark_added_in_error(mock_session, instance, actor_id, "Wrong visit")
+
+        assert instance.status == VisitInstanceStatus.scheduled
+
+    async def test_rejects_blank_reason(self, service, mock_session, actor_id):
+        instance = _make_instance(is_user_added=True)
+
+        with pytest.raises(ValidationError, match="Reason is required"):
+            await service.mark_added_in_error(mock_session, instance, actor_id, "   ")
 
 
 # ---------------------------------------------------------------------------
