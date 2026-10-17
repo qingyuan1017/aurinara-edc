@@ -4,6 +4,10 @@ Description: Aurinara EDC consumer stack for the Aurinara Platform foundation.
 Parameters:
   Environment: {Type: String, AllowedValues: [staging, production]}
   VpcCidr: {Type: String, Default: 10.30.0.0/16}
+  VpcId: {Type: AWS::EC2::VPC::Id}
+  AppSubnetIds: {Type: CommaDelimitedList}
+  RunnerSubnetIds: {Type: CommaDelimitedList}
+  DataSubnetIds: {Type: CommaDelimitedList}
   BaseDomain: {Type: String}
   DnsProvider: {Type: String, AllowedValues: [cloudflare, route53], Default: cloudflare}
   HostedZoneId: {Type: String, Default: ''}
@@ -45,6 +49,10 @@ Resources:
       Parameters:
         Environment: !Ref Environment
         VpcCidr: !Ref VpcCidr
+        VpcId: !Ref VpcId
+        AppSubnetIds: !Join [',', !Ref AppSubnetIds]
+        RunnerSubnetIds: !Join [',', !Ref RunnerSubnetIds]
+        DataSubnetIds: !Join [',', !Ref DataSubnetIds]
         PlatformPrivateLinkServiceName: !Ref PlatformPrivateLinkServiceName
   Data:
     Type: AWS::CloudFormation::Stack

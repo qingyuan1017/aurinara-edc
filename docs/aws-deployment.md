@@ -1,10 +1,11 @@
 # AWS deployment: Aurinara EDC consumer
 
 Aurinara EDC is a consumer of the matching `aurinara-platform` environment
-stack. It creates its own VPC, PostgreSQL database, KMS key, attachment and SPA
-buckets, projection queue/DLQ, ECS API/projection/export services, CloudFront,
-WAF, backup, audit, alarms, and budget. Shared Cognito, the Platform event bus,
-and the Platform PrivateLink service remain Platform-owned.
+stack. It uses that environment's VPC and private subnets, while retaining its
+own security groups, PostgreSQL database, KMS key, attachment and SPA buckets,
+projection queue/DLQ, ECS API/projection/export services, CloudFront, WAF,
+backup, audit, alarms, and budget. Shared networking, Cognito, the Platform
+event bus, and the Platform PrivateLink service remain Platform-owned.
 
 ## Bootstrap
 

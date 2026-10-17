@@ -19,6 +19,11 @@ platform_output() {
 }
 
 platform_service=$(platform_output PlatformPrivateLinkServiceName)
+vpc_id=$(platform_output VpcId)
+vpc_cidr=$(platform_output VpcCidr)
+app_subnet_ids=$(platform_output AppSubnetIds)
+runner_subnet_ids=$(platform_output RunnerSubnetIds)
+data_subnet_ids=$(platform_output DataSubnetIds)
 platform_private_url=$(platform_output PlatformPrivateUrl)
 platform_public_url=$(platform_output PlatformUrl)
 event_bus=$(platform_output EventBusName)
@@ -43,7 +48,8 @@ deploy() {
     --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
     --no-fail-on-empty-changeset \
     --parameter-overrides \
-      Environment="$environment" VpcCidr="$vpc_cidr" BaseDomain="$BASE_DOMAIN" \
+      Environment="$environment" VpcCidr="$vpc_cidr" VpcId="$vpc_id" \
+      AppSubnetIds="$app_subnet_ids" RunnerSubnetIds="$runner_subnet_ids" DataSubnetIds="$data_subnet_ids" BaseDomain="$BASE_DOMAIN" \
       DnsProvider="$dns_provider" HostedZoneId="$hosted_zone_id" CertificateArn="$CERTIFICATE_ARN" \
       ApplicationImage="$service_image" MigrationApplicationImage="$migration_image" DatabaseInstanceClass="$database_class" AlarmEmail="$alarm_email" ServicesEnabled="$enabled" \
       PlatformPrivateLinkServiceName="$platform_service" PlatformPrivateUrl="$platform_private_url" PlatformPublicUrl="$platform_public_url" PlatformEventBusName="$event_bus" \
