@@ -73,7 +73,7 @@ jobs:
           VITE_COGNITO_REDIRECT_URI: https://edc-staging.${{ vars.BASE_DOMAIN || 'aurinara.com' }}/auth/cognito/callback
           VITE_COGNITO_SCOPES: openid email profile
           VITE_MANAGED_LOGIN_ONLY: 'true'
-        run: npm ci && npm run build
+        run: npm ci && npm run api:gen && npm run build
       - name: Publish and smoke test
         run: |
           bucket=$(aws cloudformation describe-stacks --stack-name aurinara-edc-staging --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)
@@ -134,7 +134,7 @@ jobs:
           VITE_COGNITO_REDIRECT_URI: https://edc.${{ vars.BASE_DOMAIN || 'aurinara.com' }}/auth/cognito/callback
           VITE_COGNITO_SCOPES: openid email profile
           VITE_MANAGED_LOGIN_ONLY: 'true'
-        run: npm ci && npm run build
+        run: npm ci && npm run api:gen && npm run build
       - run: |
           bucket=$(aws cloudformation describe-stacks --stack-name aurinara-edc-production --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)
           distribution=$(aws cloudformation describe-stacks --stack-name aurinara-edc-production --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" --output text)
