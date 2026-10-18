@@ -108,7 +108,6 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'aurinara-edc-${Environment}-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration: {Status: Enabled}
       BucketEncryption: {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: aws:kms, KMSMasterKeyID: !Ref DataKey}, BucketKeyEnabled: true}]}
       PublicAccessBlockConfiguration: &PublicBlock {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
@@ -125,7 +124,6 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'aurinara-edc-${Environment}-frontend-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration: {Status: Enabled}
       BucketEncryption: {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: aws:kms, KMSMasterKeyID: !Ref DataKey}, BucketKeyEnabled: true}]}
       PublicAccessBlockConfiguration: *PublicBlock
@@ -134,7 +132,6 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'aurinara-edc-${Environment}-logs-${AWS::AccountId}-${AWS::Region}'
       OwnershipControls: {Rules: [{ObjectOwnership: BucketOwnerPreferred}]}
       AccessControl: LogDeliveryWrite
       VersioningConfiguration: {Status: Enabled}
