@@ -76,7 +76,10 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub aurinara-edc-${Environment}
+      DBInstanceIdentifier: !If
+        - IsBudget
+        - !Sub aurinara-edc-${Environment}-budget
+        - !Sub aurinara-edc-${Environment}
       Engine: postgres
       EngineVersion: '16.9'
       DBName: aurinara_edc
