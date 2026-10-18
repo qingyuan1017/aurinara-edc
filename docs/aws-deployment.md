@@ -67,6 +67,8 @@ the task role; no static AWS credentials are injected.
 - Retained application, frontend, and access-log buckets use
   CloudFormation-generated names so retained data cannot block clean stack
   replacement. Read their physical names from the environment stack outputs.
+- The retained application log group also uses a CloudFormation-generated name
+  so a prior rollback cannot block compute-stack recreation.
 - Roll back services to a previous image digest only. Use expand/contract and
   forward repair for schema changes; never auto-restore the database.
 - Test RDS point-in-time restore and S3 version/AWS Backup restore before launch

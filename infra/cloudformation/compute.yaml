@@ -44,7 +44,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Properties: {LogGroupName: !Sub '/aurinara-edc/${Environment}/application', RetentionInDays: !If [IsProduction, 365, 90], KmsKeyId: !Ref DataKeyArn}
+    Properties: {RetentionInDays: !If [IsProduction, 365, 90], KmsKeyId: !Ref DataKeyArn}
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
