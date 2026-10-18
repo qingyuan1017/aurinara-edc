@@ -4,8 +4,9 @@ Aurinara EDC is a consumer of the matching `aurinara-platform` environment
 stack. It uses that environment's VPC and private subnets, while retaining its
 own security groups, PostgreSQL database, KMS key, attachment and SPA buckets,
 projection queue/DLQ, ECS API/projection/export services, CloudFront, WAF,
-backup, audit, alarms, and budget. Shared networking, Cognito, the Platform
-event bus, and the Platform PrivateLink service remain Platform-owned.
+backup, alarms, and budget. Shared networking, Cognito, the Platform-owned
+suite CloudTrail, event bus, and the Platform PrivateLink service remain
+Platform-owned.
 
 ## Bootstrap
 
@@ -59,8 +60,8 @@ the task role; no static AWS credentials are injected.
 - Images must be digest-pinned; mutable tags are rejected by CloudFormation.
 - ECS services remain at zero until migrations and role seeding succeed.
 - Production uses Multi-AZ RDS, 35-day backups, deletion protection, retained
-  versioned S3, AWS Backup, encrypted logs, CloudTrail data events, alarms, and
-  termination protection.
+  versioned S3, AWS Backup, encrypted logs, Platform-owned CloudTrail management
+  and S3 object data events, alarms, and termination protection.
 - Roll back services to a previous image digest only. Use expand/contract and
   forward repair for schema changes; never auto-restore the database.
 - Test RDS point-in-time restore and S3 version/AWS Backup restore before launch

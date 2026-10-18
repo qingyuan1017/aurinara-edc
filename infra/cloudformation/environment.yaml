@@ -128,9 +128,6 @@ Resources:
         ProjectionDlqName: !GetAtt Data.Outputs.ProjectionDlqName
         BackupVaultName: !GetAtt Data.Outputs.BackupVaultName
         DistributionId: !GetAtt Edge.Outputs.DistributionId
-        ArtifactBucketName: !GetAtt Data.Outputs.AttachmentBucketName
-        AccessLogBucketName: !GetAtt Data.Outputs.AccessLogBucketName
-        DataKeyArn: !GetAtt Data.Outputs.DataKeyArn
 
 Outputs:
   ApplicationUrl:
