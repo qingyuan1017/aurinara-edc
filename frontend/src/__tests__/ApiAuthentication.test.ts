@@ -5,7 +5,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, getApiErrorMessage } from '@/lib/api'
+import { api, getApiErrorMessage, getLoginRedirectUrl } from '@/lib/api'
 
 function response(
   config: InternalAxiosRequestConfig,
@@ -97,5 +97,13 @@ describe('API authentication lifecycle', () => {
 
     expect(getApiErrorMessage(error, 'Fallback')).toBe('Missing authentication credentials')
     expect(getApiErrorMessage(new Error('internal detail'), 'Fallback')).toBe('Fallback')
+  })
+
+  it('preserves the current screen when reauthentication is required', () => {
+    window.history.replaceState({}, '', '/studies/study-1/subjects?page=2#subject-7')
+
+    expect(getLoginRedirectUrl()).toBe(
+      '/login?redirect=%2Fstudies%2Fstudy-1%2Fsubjects%3Fpage%3D2%23subject-7',
+    )
   })
 })

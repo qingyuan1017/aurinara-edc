@@ -24,7 +24,7 @@ describe('Cognito browser authentication', () => {
     vi.stubEnv('VITE_COGNITO_DOMAIN', 'example.auth.us-east-1.amazoncognito.com')
     vi.stubEnv('VITE_COGNITO_CLIENT_ID', 'public-client')
     vi.stubEnv('VITE_COGNITO_REDIRECT_URI', 'http://localhost:5173/auth/callback')
-    const url = new URL(await buildCognitoAuthorizeUrl())
+    const url = new URL(await buildCognitoAuthorizeUrl('/studies/study-1?tab=subjects'))
     expect(url.origin).toBe('https://example.auth.us-east-1.amazoncognito.com')
     expect(url.pathname).toBe('/oauth2/authorize')
     expect(url.searchParams.get('client_id')).toBe('public-client')
@@ -32,6 +32,7 @@ describe('Cognito browser authentication', () => {
     expect(url.searchParams.get('code_challenge_method')).toBe('S256')
     expect(url.searchParams.get('state')).toBe(sessionStorage.getItem('cognito_oauth_state'))
     expect(sessionStorage.getItem('cognito_pkce_verifier')).toBeTruthy()
+    expect(sessionStorage.getItem('cognito_return_to')).toBe('/studies/study-1?tab=subjects')
   })
 
   it('rejects callback state mismatches and consumes valid state once', async () => {
@@ -42,8 +43,22 @@ describe('Cognito browser authentication', () => {
     expect(() => consumeCognitoCallbackState('wrong-state')).toThrow()
     await buildCognitoAuthorizeUrl()
     const validState = sessionStorage.getItem('cognito_oauth_state')
-    expect(consumeCognitoCallbackState(validState)).toBeTruthy()
+    expect(consumeCognitoCallbackState(validState)).toMatchObject({
+      verifier: expect.any(String),
+      returnTo: '/',
+    })
     expect(() => consumeCognitoCallbackState(validState)).toThrow()
+  })
+
+  it('rejects cross-origin and callback return destinations', async () => {
+    vi.stubEnv('VITE_COGNITO_DOMAIN', 'example.auth.us-east-1.amazoncognito.com')
+    vi.stubEnv('VITE_COGNITO_CLIENT_ID', 'public-client')
+    vi.stubEnv('VITE_COGNITO_REDIRECT_URI', 'http://localhost:5173/auth/callback')
+
+    await buildCognitoAuthorizeUrl('//attacker.example/path')
+    expect(sessionStorage.getItem('cognito_return_to')).toBe('/')
+    await buildCognitoAuthorizeUrl('/auth/cognito/callback?code=old')
+    expect(sessionStorage.getItem('cognito_return_to')).toBe('/')
   })
 
   it('never routes Cognito refresh tokens to local refresh', () => {
@@ -62,7 +77,7 @@ describe('Cognito browser authentication', () => {
       access_token: 'access', refresh_token: 'refresh', id_token: 'id',
     })
     expect(localStorage.getItem('auth_provider')).toBe('cognito')
-    expect(localStorage.getItem('access_token')).toBe('access')
+    expect(localStorage.getItem('access_token')).toBe('id')
     expect(get).toHaveBeenCalledWith('/auth/me')
     expect(useAuthStore.getState().isAuthenticated).toBe(true)
     get.mockRestore()

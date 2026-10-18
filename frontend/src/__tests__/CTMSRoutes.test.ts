@@ -13,6 +13,8 @@ describe('route registration and deep-link preservation', () => {
   it('registers every public and EDC route family without changing path parameters', () => {
     const paths = [
       router.buildLocation({ to: '/login' }).pathname,
+      router.buildLocation({ to: '/auth/callback' }).pathname,
+      router.buildLocation({ to: '/auth/cognito/callback' }).pathname,
       router.buildLocation({ to: '/forgot-password' }).pathname,
       router.buildLocation({ to: '/reset-password' }).pathname,
       router.buildLocation({ to: '/accept-invitation' }).pathname,
@@ -52,6 +54,8 @@ describe('route registration and deep-link preservation', () => {
 
     expect(paths).toEqual([
       '/login',
+      '/auth/callback',
+      '/auth/cognito/callback',
       '/forgot-password',
       '/reset-password',
       '/accept-invitation',

@@ -90,6 +90,12 @@ function clearAuthenticationSession(): void {
   localStorage.removeItem("auth_provider");
 }
 
+/** Build a same-origin login URL that can resume the interrupted screen. */
+export function getLoginRedirectUrl(): string {
+  const next = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  return `/login?redirect=${encodeURIComponent(next)}`;
+}
+
 // Handle 401 responses globally — attempt token refresh or redirect to login
 api.interceptors.response.use(
   (response) => response,
@@ -129,7 +135,7 @@ api.interceptors.response.use(
         // Refresh failed — clear tokens and redirect to login
         clearAuthenticationSession();
         if (window.location.pathname !== "/login") {
-          window.location.assign("/login");
+          window.location.assign(getLoginRedirectUrl());
         }
         return Promise.reject(error);
       }

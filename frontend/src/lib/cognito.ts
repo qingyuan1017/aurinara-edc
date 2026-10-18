@@ -11,6 +11,21 @@ export interface CognitoTokenResponse {
 
 const COGNITO_STATE_KEY = 'cognito_oauth_state'
 const COGNITO_VERIFIER_KEY = 'cognito_pkce_verifier'
+const COGNITO_RETURN_TO_KEY = 'cognito_return_to'
+
+export interface CognitoCallbackState {
+  verifier: string
+  returnTo: string
+}
+
+/** Keep post-login navigation on this origin and out of the callback route. */
+export function sanitizeCognitoReturnTo(returnTo: string | null | undefined): string {
+  if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) return '/'
+  if (returnTo.startsWith('/auth/callback') || returnTo.startsWith('/auth/cognito/callback')) {
+    return '/'
+  }
+  return returnTo
+}
 
 export function getCognitoConfig() {
   const domain = import.meta.env.VITE_COGNITO_DOMAIN?.trim()
@@ -42,7 +57,7 @@ async function createChallenge(verifier: string): Promise<string> {
   return base64Url(new Uint8Array(digest))
 }
 
-export async function buildCognitoAuthorizeUrl(): Promise<string> {
+export async function buildCognitoAuthorizeUrl(returnTo = '/'): Promise<string> {
   const { domain, clientId, redirectUri, scopes } = getCognitoConfig()
   if (!domain || !clientId || !redirectUri) {
     throw new Error('Cognito authentication is not configured')
@@ -51,6 +66,7 @@ export async function buildCognitoAuthorizeUrl(): Promise<string> {
   const verifier = randomUrlSafe(48)
   sessionStorage.setItem(COGNITO_STATE_KEY, state)
   sessionStorage.setItem(COGNITO_VERIFIER_KEY, verifier)
+  sessionStorage.setItem(COGNITO_RETURN_TO_KEY, sanitizeCognitoReturnTo(returnTo))
   const normalizedDomain = domain.replace(/\/$/, '').replace(/^https?:\/\//, '')
   const params = new URLSearchParams({
     response_type: 'code',
@@ -64,15 +80,17 @@ export async function buildCognitoAuthorizeUrl(): Promise<string> {
   return `https://${normalizedDomain}/oauth2/authorize?${params.toString()}`
 }
 
-export function consumeCognitoCallbackState(state: string | null): string {
+export function consumeCognitoCallbackState(state: string | null): CognitoCallbackState {
   const expectedState = sessionStorage.getItem(COGNITO_STATE_KEY)
   const verifier = sessionStorage.getItem(COGNITO_VERIFIER_KEY)
+  const returnTo = sessionStorage.getItem(COGNITO_RETURN_TO_KEY)
   sessionStorage.removeItem(COGNITO_STATE_KEY)
   sessionStorage.removeItem(COGNITO_VERIFIER_KEY)
+  sessionStorage.removeItem(COGNITO_RETURN_TO_KEY)
   if (!state || !expectedState || state !== expectedState || !verifier) {
     throw new Error('Invalid Cognito callback state')
   }
-  return verifier
+  return { verifier, returnTo: sanitizeCognitoReturnTo(returnTo) }
 }
 
 export async function exchangeCognitoCode(

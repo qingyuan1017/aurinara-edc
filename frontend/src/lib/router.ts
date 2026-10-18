@@ -44,12 +44,26 @@ const rootRoute = createRootRoute({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
+    const redirect = search.redirect
+    return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')
+      ? { redirect }
+      : {}
+  },
   component: () => createElement(LoginPage),
 })
 
 const cognitoCallbackRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/auth/callback',
+  component: () => createElement(CognitoCallbackPage),
+})
+
+// Production Cognito clients already use this callback. Keep the shorter
+// local-development callback above as a compatible alias.
+const deployedCognitoCallbackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/auth/cognito/callback',
   component: () => createElement(CognitoCallbackPage),
 })
 
@@ -677,6 +691,7 @@ const auditRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   loginRoute,
   cognitoCallbackRoute,
+  deployedCognitoCallbackRoute,
   forgotPasswordRoute,
   resetPasswordRoute,
   acceptInvitationRoute,

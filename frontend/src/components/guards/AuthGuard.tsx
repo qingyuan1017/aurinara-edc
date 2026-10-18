@@ -15,7 +15,8 @@ export function AuthGuard() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ to: '/login' })
+      const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      navigate({ to: '/login', search: { redirect } })
     } else if (!user) {
       void refreshUser()
     }

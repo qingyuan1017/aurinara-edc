@@ -85,7 +85,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (!tokens.refresh_token) {
       throw new Error('Cognito did not return a refresh token')
     }
-    localStorage.setItem('access_token', tokens.access_token)
+    // Cognito ID tokens carry the SPA audience and verified user profile used
+    // by EDC and the shared Platform. Access tokens identify the OAuth client
+    // and are reserved for service-token validation by Platform.
+    localStorage.setItem('access_token', tokens.id_token ?? tokens.access_token)
     localStorage.setItem('refresh_token', tokens.refresh_token)
     localStorage.setItem('auth_provider', 'cognito')
     set({ isAuthenticated: true })

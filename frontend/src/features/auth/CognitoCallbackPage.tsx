@@ -19,10 +19,10 @@ export function CognitoCallbackPage() {
       }
       const code = params.get('code')
       if (!code) throw new Error('Cognito callback did not include an authorization code')
-      const verifier = consumeCognitoCallbackState(params.get('state'))
+      const { verifier, returnTo } = consumeCognitoCallbackState(params.get('state'))
       const tokens = await exchangeCognitoCode(code, verifier)
       await useAuthStore.getState().completeCognitoLogin(tokens)
-      if (!cancelled) await navigate({ to: '/' })
+      if (!cancelled) await navigate({ to: returnTo })
     }
     void complete().catch(() => {
       if (!cancelled) setError('Hosted sign-in could not be completed. Please try again.')

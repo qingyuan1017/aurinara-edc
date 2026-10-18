@@ -10,7 +10,7 @@ import {
   signInWithCognito,
   type CognitoSignInResult,
 } from '@/lib/cognito-sdk'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import type { AxiosError } from 'axios'
 import type { ApiError } from '@/lib/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -32,6 +32,8 @@ export function LoginPage() {
   const login = useAuthStore((s) => s.login)
   const isLoading = useAuthStore((s) => s.isLoading)
   const navigate = useNavigate()
+  const { redirect } = useSearch({ from: '/login' })
+  const returnTo = redirect ?? '/'
   const [error, setError] = useState<string | null>(null)
   const [showMfa, setShowMfa] = useState(false)
   // SDK-path Cognito challenge (MFA / NEW_PASSWORD_REQUIRED). Null when no
@@ -54,7 +56,7 @@ export function LoginPage() {
   const startCognitoLogin = async () => {
     setError(null)
     try {
-      window.location.assign(await buildCognitoAuthorizeUrl())
+      window.location.assign(await buildCognitoAuthorizeUrl(returnTo))
     } catch {
       setError('Hosted sign-in is not available.')
     }
@@ -66,7 +68,7 @@ export function LoginPage() {
     if (result.status === 'SUCCESS') {
       setChallenge(null)
       await useAuthStore.getState().completeCognitoLogin(result.tokens)
-      await navigate({ to: '/' })
+      await navigate({ to: returnTo })
       return
     }
     setError(null)
@@ -117,7 +119,7 @@ export function LoginPage() {
 
     try {
       await login(data.email, data.password, data.mfa_code)
-      await navigate({ to: '/' })
+      await navigate({ to: returnTo })
     } catch (err) {
       const axiosError = err as AxiosError<ApiError>
       const detail = axiosError.response?.data?.detail
