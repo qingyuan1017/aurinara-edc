@@ -90,6 +90,10 @@ if aws cloudformation describe-stacks --stack-name "$stack_name" >/dev/null 2>&1
   [[ -n "$current_profile" && "$current_profile" != None ]] || current_profile=standard
 fi
 
+if [[ "$deployment_profile" != "$current_profile" ]]; then
+  services_enabled=false
+fi
+
 if [[ "$deployment_profile" == budget && "$current_profile" != budget ]]; then
   existing_alb=$(aws elbv2 describe-load-balancers \
     --names "ae-${environment}-alb" \
