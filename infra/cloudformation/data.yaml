@@ -179,7 +179,7 @@ Resources:
     Type: AWS::Backup::BackupVault
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Properties: {BackupVaultName: !Sub 'aurinara-edc-${Environment}', EncryptionKeyArn: !GetAtt DataKey.Arn}
+    Properties: {BackupVaultName: !Ref AWS::StackName, EncryptionKeyArn: !GetAtt DataKey.Arn}
   BackupRole:
     Type: AWS::IAM::Role
     Properties:
