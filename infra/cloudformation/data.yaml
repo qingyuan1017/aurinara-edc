@@ -6,10 +6,15 @@ Parameters:
   DataSubnetIds: {Type: List<AWS::EC2::Subnet::Id>}
   DatabaseSecurityGroupId: {Type: AWS::EC2::SecurityGroup::Id}
   DatabaseInstanceClass: {Type: String}
+  DeploymentProfile: {Type: String, AllowedValues: [standard, budget], Default: standard}
   PlatformEventBusName: {Type: String}
 
 Conditions:
   IsProduction: !Equals [!Ref Environment, production]
+  IsBudget: !Equals [!Ref DeploymentProfile, budget]
+  UseMultiAz: !And
+    - !Condition IsProduction
+    - !Not [!Condition IsBudget]
 
 Resources:
   DataKey:
@@ -76,8 +81,8 @@ Resources:
       EngineVersion: '16.9'
       DBName: aurinara_edc
       DBInstanceClass: !Ref DatabaseInstanceClass
-      AllocatedStorage: !If [IsProduction, 100, 50]
-      MaxAllocatedStorage: !If [IsProduction, 500, 200]
+      AllocatedStorage: !If [IsBudget, 50, !If [IsProduction, 100, 50]]
+      MaxAllocatedStorage: !If [IsBudget, 200, !If [IsProduction, 500, 200]]
       StorageType: gp3
       StorageEncrypted: true
       KmsKeyId: !Ref DataKey
@@ -86,15 +91,15 @@ Resources:
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
       VPCSecurityGroups: [!Ref DatabaseSecurityGroupId]
       DBParameterGroupName: !Ref DatabaseParameters
-      MultiAZ: !If [IsProduction, true, false]
+      MultiAZ: !If [UseMultiAz, true, false]
       PubliclyAccessible: false
-      BackupRetentionPeriod: !If [IsProduction, 35, 7]
+      BackupRetentionPeriod: !If [IsBudget, 14, !If [IsProduction, 35, 7]]
       DeletionProtection: !If [IsProduction, true, false]
-      EnablePerformanceInsights: true
-      PerformanceInsightsKMSKeyId: !Ref DataKey
-      PerformanceInsightsRetentionPeriod: !If [IsProduction, 731, 7]
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt EnhancedMonitoringRole.Arn
+      EnablePerformanceInsights: !If [IsBudget, false, true]
+      PerformanceInsightsKMSKeyId: !If [IsBudget, !Ref AWS::NoValue, !Ref DataKey]
+      PerformanceInsightsRetentionPeriod: !If [IsBudget, !Ref AWS::NoValue, !If [IsProduction, 731, 7]]
+      MonitoringInterval: !If [IsBudget, 0, 60]
+      MonitoringRoleArn: !If [IsBudget, !Ref AWS::NoValue, !GetAtt EnhancedMonitoringRole.Arn]
       EnableCloudwatchLogsExports: [postgresql, upgrade]
       CopyTagsToSnapshot: true
   EnhancedMonitoringRole:

@@ -3,6 +3,7 @@ Description: Aurinara EDC consumer stack for the Aurinara Platform foundation.
 
 Parameters:
   Environment: {Type: String, AllowedValues: [staging, production]}
+  DeploymentProfile: {Type: String, AllowedValues: [standard, budget], Default: standard}
   VpcCidr: {Type: String, Default: 10.30.0.0/16}
   VpcId: {Type: AWS::EC2::VPC::Id}
   AppSubnetIds: {Type: CommaDelimitedList}
@@ -29,9 +30,17 @@ Parameters:
   ServiceTokenUrl: {Type: String}
   ServiceClientId: {Type: String}
   ServiceClientSecretArn: {Type: String}
+  SharedAlbArn: {Type: String}
+  SharedAlbDnsName: {Type: String}
+  SharedAlbFullName: {Type: String}
+  SharedAlbListenerArn: {Type: String}
+  SharedAlbSecurityGroupId: {Type: AWS::EC2::SecurityGroup::Id}
+  SharedWebAclArn: {Type: String}
+  SharedVpcOriginId: {Type: String}
 
 Conditions:
   IsProduction: !Equals [!Ref Environment, production]
+  IsBudget: !Equals [!Ref DeploymentProfile, budget]
 
 Rules:
   Route53HostedZoneRequired:
@@ -52,6 +61,8 @@ Resources:
         AppSubnetIds: !Join [',', !Ref AppSubnetIds]
         RunnerSubnetIds: !Join [',', !Ref RunnerSubnetIds]
         DataSubnetIds: !Join [',', !Ref DataSubnetIds]
+        DeploymentProfile: !Ref DeploymentProfile
+        SharedAlbSecurityGroupId: !Ref SharedAlbSecurityGroupId
   Data:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -61,6 +72,7 @@ Resources:
         DataSubnetIds: !GetAtt Network.Outputs.DataSubnetIds
         DatabaseSecurityGroupId: !GetAtt Network.Outputs.DatabaseSecurityGroupId
         DatabaseInstanceClass: !Ref DatabaseInstanceClass
+        DeploymentProfile: !Ref DeploymentProfile
         PlatformEventBusName: !Ref PlatformEventBusName
   Compute:
     Type: AWS::CloudFormation::Stack
@@ -68,6 +80,7 @@ Resources:
       TemplateURL: compute.yaml
       Parameters:
         Environment: !Ref Environment
+        DeploymentProfile: !Ref DeploymentProfile
         ServicesEnabled: !Ref ServicesEnabled
         ApplicationImage: !Ref ApplicationImage
         MigrationApplicationImage: !Ref MigrationApplicationImage
@@ -95,6 +108,10 @@ Resources:
         ServiceTokenUrl: !Ref ServiceTokenUrl
         ServiceClientId: !Ref ServiceClientId
         ServiceClientSecretArn: !Ref ServiceClientSecretArn
+        SharedAlbArn: !Ref SharedAlbArn
+        SharedAlbDnsName: !Ref SharedAlbDnsName
+        SharedAlbFullName: !Ref SharedAlbFullName
+        SharedAlbListenerArn: !Ref SharedAlbListenerArn
   Edge:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -112,12 +129,16 @@ Resources:
         AccessLogBucketDomainName: !GetAtt Data.Outputs.AccessLogBucketDomainName
         AlbArn: !GetAtt Compute.Outputs.AlbArn
         AlbDnsName: !GetAtt Compute.Outputs.AlbDnsName
+        SharedWebAclArn: !If [IsBudget, !Ref SharedWebAclArn, '']
+        SharedVpcOriginId: !If [IsBudget, !Ref SharedVpcOriginId, '']
+        OriginRoutingValue: edc
   Operations:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL: operations.yaml
       Parameters:
         Environment: !Ref Environment
+        DeploymentProfile: !Ref DeploymentProfile
         AlarmEmail: !Ref AlarmEmail
         ClusterName: !GetAtt Compute.Outputs.ClusterName
         ApiServiceName: !GetAtt Compute.Outputs.ApiServiceName
@@ -143,3 +164,4 @@ Outputs:
   WorkerSecurityGroupId: {Value: !GetAtt Network.Outputs.WorkerSecurityGroupId}
   DatabaseIdentifier: {Value: !GetAtt Data.Outputs.DatabaseIdentifier}
   PlatformPublicUrl: {Value: !Ref PlatformPublicUrl}
+  DeploymentProfile: {Value: !Ref DeploymentProfile}

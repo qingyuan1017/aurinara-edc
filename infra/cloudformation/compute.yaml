@@ -3,6 +3,7 @@ Description: Aurinara EDC ECS API, projection/export workers, migrations, and in
 
 Parameters:
   Environment: {Type: String, AllowedValues: [staging, production]}
+  DeploymentProfile: {Type: String, AllowedValues: [standard, budget], Default: standard}
   ServicesEnabled: {Type: String, AllowedValues: ['true', 'false'], Default: 'false'}
   ApplicationImage: {Type: String, AllowedPattern: '^.+@sha256:[0-9a-f]{64}$'}
   MigrationApplicationImage: {Type: String, AllowedPattern: '^.+@sha256:[0-9a-f]{64}$'}
@@ -28,23 +29,36 @@ Parameters:
   ServiceTokenUrl: {Type: String}
   ServiceClientId: {Type: String}
   ServiceClientSecretArn: {Type: String}
+  SharedAlbArn: {Type: String}
+  SharedAlbDnsName: {Type: String}
+  SharedAlbFullName: {Type: String}
+  SharedAlbListenerArn: {Type: String}
 
 Conditions:
   IsProduction: !Equals [!Ref Environment, production]
+  IsBudget: !Equals [!Ref DeploymentProfile, budget]
+  IsStandard: !Not [!Condition IsBudget]
   ServicesActive: !Equals [!Ref ServicesEnabled, 'true']
+  ApplicationImageReady: !Equals [!Ref ApplicationImage, !Ref MigrationApplicationImage]
+  BudgetWorkersActive: !And
+    - !Condition IsBudget
+    - !Condition ServicesActive
+    - !Condition ApplicationImageReady
 
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: !Sub aurinara-edc-${Environment}
-      ClusterSettings: [{Name: containerInsights, Value: enhanced}]
+      CapacityProviders: [FARGATE, FARGATE_SPOT]
+      DefaultCapacityProviderStrategy: [{CapacityProvider: FARGATE, Weight: 1}]
+      ClusterSettings: [{Name: containerInsights, Value: !If [IsBudget, disabled, enhanced]}]
       Configuration: {ExecuteCommandConfiguration: {Logging: NONE}}
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Properties: {RetentionInDays: !If [IsProduction, 365, 90], KmsKeyId: !Ref DataKeyArn}
+    Properties: {RetentionInDays: !If [IsBudget, 30, !If [IsProduction, 365, 90]], KmsKeyId: !Ref DataKeyArn}
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -72,6 +86,7 @@ Resources:
 
   InternalLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: IsStandard
     Properties:
       Name: !Sub ae-${Environment}-alb
       Scheme: internal
@@ -91,14 +106,30 @@ Resources:
       TargetGroupAttributes: [{Key: deregistration_delay.timeout_seconds, Value: '30'}]
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties: {LoadBalancerArn: !Ref InternalLoadBalancer, Port: 80, Protocol: HTTP, DefaultActions: [{Type: forward, TargetGroupArn: !Ref ApiTargetGroup}]}
+    Condition: IsStandard
+    Properties:
+      LoadBalancerArn: !Ref InternalLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig: {StatusCode: '404', ContentType: text/plain, MessageBody: Not found}
+  ApiRoutingRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !If [IsBudget, !Ref SharedAlbListenerArn, !Ref Listener]
+      Priority: 200
+      Conditions:
+        - Field: http-header
+          HttpHeaderConfig: {HttpHeaderName: X-Aurinara-Product, Values: [edc]}
+      Actions: [{Type: forward, TargetGroupArn: !Ref ApiTargetGroup}]
 
   ApiTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Sub aurinara-edc-${Environment}-api
-      Cpu: '1024'
-      Memory: '2048'
+      Cpu: !If [IsBudget, '512', '1024']
+      Memory: !If [IsBudget, '1024', '2048']
       NetworkMode: awsvpc
       RequiresCompatibilities: [FARGATE]
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
@@ -115,7 +146,10 @@ Resources:
           MountPoints: [{SourceVolume: scratch, ContainerPath: /tmp, ReadOnly: false}]
         - Name: api
           Image: !Ref ApplicationImage
-          Command: [python, scripts/aws_entrypoint.py, gunicorn, 'app.main:app', --bind, '0.0.0.0:8000', --workers, '2', --worker-class, uvicorn.workers.UvicornWorker, --access-logfile, '-']
+          Command: !If
+            - IsBudget
+            - [python, scripts/aws_entrypoint.py, gunicorn, 'app.main:app', --bind, '0.0.0.0:8000', --workers, '1', --worker-class, uvicorn.workers.UvicornWorker, --access-logfile, '-']
+            - [python, scripts/aws_entrypoint.py, gunicorn, 'app.main:app', --bind, '0.0.0.0:8000', --workers, '2', --worker-class, uvicorn.workers.UvicornWorker, --access-logfile, '-']
           DependsOn: [{ContainerName: scratch-init, Condition: SUCCESS}]
           Essential: true
           PortMappings: [{ContainerPort: 8000, Protocol: tcp}]
@@ -130,8 +164,8 @@ Resources:
             - {Name: DATABASE_PORT, Value: '5432'}
             - {Name: DATABASE_NAME, Value: aurinara_edc}
             - {Name: DATABASE_USER, Value: aurinara_edc}
-            - {Name: DATABASE_POOL_SIZE, Value: '10'}
-            - {Name: DATABASE_MAX_OVERFLOW, Value: '20'}
+            - {Name: DATABASE_POOL_SIZE, Value: !If [IsBudget, '5', '10']}
+            - {Name: DATABASE_MAX_OVERFLOW, Value: !If [IsBudget, '5', '20']}
             - {Name: DEBUG, Value: 'false'}
             - {Name: LOCAL_AUTH_ENABLED, Value: 'false'}
             - {Name: AUTH_ISSUER, Value: !Ref JwtIssuer}
@@ -167,12 +201,12 @@ Resources:
           LogConfiguration: {LogDriver: awslogs, Options: {awslogs-group: !Ref ApplicationLogGroup, awslogs-region: !Ref AWS::Region, awslogs-stream-prefix: api}}
   ApiService:
     Type: AWS::ECS::Service
-    DependsOn: Listener
+    DependsOn: ApiRoutingRule
     Properties:
       ServiceName: api
       Cluster: !Ref Cluster
       TaskDefinition: !Ref ApiTaskDefinition
-      DesiredCount: !If [ServicesActive, 2, 0]
+      DesiredCount: !If [ServicesActive, !If [IsBudget, 1, 2], 0]
       LaunchType: FARGATE
       HealthCheckGracePeriodSeconds: 90
       DeploymentConfiguration: {DeploymentCircuitBreaker: {Enable: true, Rollback: true}, MinimumHealthyPercent: 50, MaximumPercent: 200}
@@ -183,8 +217,8 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Sub aurinara-edc-${Environment}-projection
-      Cpu: '512'
-      Memory: '1024'
+      Cpu: !If [IsBudget, '256', '512']
+      Memory: !If [IsBudget, '512', '1024']
       NetworkMode: awsvpc
       RequiresCompatibilities: [FARGATE]
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
@@ -192,7 +226,10 @@ Resources:
       ContainerDefinitions:
         - Name: projection
           Image: !Ref ApplicationImage
-          Command: [python, scripts/aws_entrypoint.py, python, -m, app.workers.platform_projection_worker, --watch]
+          Command: !If
+            - IsBudget
+            - [python, scripts/aws_entrypoint.py, python, -m, app.workers.platform_projection_worker]
+            - [python, scripts/aws_entrypoint.py, python, -m, app.workers.platform_projection_worker, --watch]
           Essential: true
           ReadonlyRootFilesystem: true
           Environment: *ApplicationEnvironment
@@ -205,7 +242,7 @@ Resources:
       ServiceName: platform-projection
       Cluster: !Ref Cluster
       TaskDefinition: !Ref ProjectionTaskDefinition
-      DesiredCount: !If [ServicesActive, !If [IsProduction, 2, 1], 0]
+      DesiredCount: !If [ServicesActive, !If [IsBudget, 0, !If [IsProduction, 2, 1]], 0]
       LaunchType: FARGATE
       DeploymentConfiguration: {DeploymentCircuitBreaker: {Enable: true, Rollback: true}, MinimumHealthyPercent: 50, MaximumPercent: 200}
       NetworkConfiguration: {AwsvpcConfiguration: {AssignPublicIp: DISABLED, SecurityGroups: [!Ref WorkerSecurityGroupId], Subnets: !Ref AppSubnetIds}}
@@ -231,7 +268,10 @@ Resources:
           MountPoints: [{SourceVolume: scratch, ContainerPath: /tmp, ReadOnly: false}]
         - Name: export
           Image: !Ref ApplicationImage
-          Command: [python, scripts/aws_entrypoint.py, python, -m, app.workers.export_queue_worker, --watch]
+          Command: !If
+            - IsBudget
+            - [python, scripts/aws_entrypoint.py, python, -m, app.workers.export_queue_worker, --batch-size, '10']
+            - [python, scripts/aws_entrypoint.py, python, -m, app.workers.export_queue_worker, --watch]
           DependsOn: [{ContainerName: scratch-init, Condition: SUCCESS}]
           Essential: true
           ReadonlyRootFilesystem: true
@@ -246,10 +286,67 @@ Resources:
       ServiceName: export-worker
       Cluster: !Ref Cluster
       TaskDefinition: !Ref ExportTaskDefinition
-      DesiredCount: !If [ServicesActive, 1, 0]
+      DesiredCount: !If [ServicesActive, !If [IsBudget, 0, 1], 0]
       LaunchType: FARGATE
       DeploymentConfiguration: {DeploymentCircuitBreaker: {Enable: true, Rollback: true}, MinimumHealthyPercent: 0, MaximumPercent: 200}
       NetworkConfiguration: {AwsvpcConfiguration: {AssignPublicIp: DISABLED, SecurityGroups: [!Ref WorkerSecurityGroupId], Subnets: !Ref AppSubnetIds}}
+
+  ScheduledWorkerRole:
+    Type: AWS::IAM::Role
+    Condition: IsBudget
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: events.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      Policies:
+        - PolicyName: RunBudgetWorkers
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecs:RunTask
+                Resource: '*'
+                Condition: {ArnEquals: {'ecs:cluster': !GetAtt Cluster.Arn}}
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: [!GetAtt TaskExecutionRole.Arn, !GetAtt ApplicationTaskRole.Arn]
+                Condition: {StringEquals: {'iam:PassedToService': ecs-tasks.amazonaws.com}}
+  ProjectionWorkerSchedule:
+    Type: AWS::Events::Rule
+    Condition: BudgetWorkersActive
+    Properties:
+      Description: Consume Platform projection events with bounded latency
+      ScheduleExpression: rate(1 minute)
+      State: ENABLED
+      Targets:
+        - Id: projection-worker
+          Arn: !GetAtt Cluster.Arn
+          RoleArn: !GetAtt ScheduledWorkerRole.Arn
+          EcsParameters:
+            TaskDefinitionArn: !Ref ProjectionTaskDefinition
+            TaskCount: 1
+            CapacityProviderStrategy: [{CapacityProvider: FARGATE_SPOT, Weight: 1}]
+            PlatformVersion: LATEST
+            NetworkConfiguration:
+              AwsVpcConfiguration: {AssignPublicIp: DISABLED, SecurityGroups: [!Ref WorkerSecurityGroupId], Subnets: !Ref AppSubnetIds}
+  ExportWorkerSchedule:
+    Type: AWS::Events::Rule
+    Condition: BudgetWorkersActive
+    Properties:
+      Description: Process queued exports without an always-on worker
+      ScheduleExpression: rate(5 minutes)
+      State: ENABLED
+      Targets:
+        - Id: export-worker
+          Arn: !GetAtt Cluster.Arn
+          RoleArn: !GetAtt ScheduledWorkerRole.Arn
+          EcsParameters:
+            TaskDefinitionArn: !Ref ExportTaskDefinition
+            TaskCount: 1
+            CapacityProviderStrategy: [{CapacityProvider: FARGATE_SPOT, Weight: 1}]
+            PlatformVersion: LATEST
+            NetworkConfiguration:
+              AwsVpcConfiguration: {AssignPublicIp: DISABLED, SecurityGroups: [!Ref WorkerSecurityGroupId], Subnets: !Ref AppSubnetIds}
   MigrationTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -283,6 +380,7 @@ Resources:
 
   ApiScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: IsStandard
     Properties:
       MinCapacity: !If [ServicesActive, 2, 0]
       MaxCapacity: 10
@@ -292,6 +390,7 @@ Resources:
       ServiceNamespace: ecs
   ApiScaling:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: IsStandard
     Properties:
       PolicyName: api-cpu
       PolicyType: TargetTrackingScaling
@@ -302,7 +401,7 @@ Outputs:
   ClusterName: {Value: !Ref Cluster}
   ApiServiceName: {Value: !GetAtt ApiService.Name}
   MigrationTaskDefinitionArn: {Value: !Ref MigrationTaskDefinition}
-  AlbArn: {Value: !Ref InternalLoadBalancer}
-  AlbDnsName: {Value: !GetAtt InternalLoadBalancer.DNSName}
-  AlbFullName: {Value: !GetAtt InternalLoadBalancer.LoadBalancerFullName}
+  AlbArn: {Value: !If [IsBudget, !Ref SharedAlbArn, !Ref InternalLoadBalancer]}
+  AlbDnsName: {Value: !If [IsBudget, !Ref SharedAlbDnsName, !GetAtt InternalLoadBalancer.DNSName]}
+  AlbFullName: {Value: !If [IsBudget, !Ref SharedAlbFullName, !GetAtt InternalLoadBalancer.LoadBalancerFullName]}
   ApiTargetGroupFullName: {Value: !GetAtt ApiTargetGroup.TargetGroupFullName}

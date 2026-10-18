@@ -5,6 +5,7 @@ stack_name=${1:?missing stack name}
 environment=${2:?missing environment}
 vpc_cidr=${3:?missing VPC CIDR}
 database_class=${4:?missing database class}
+deployment_profile=${DEPLOYMENT_PROFILE:-standard}
 dns_provider=${DNS_PROVIDER:-cloudflare}
 hosted_zone_id=${HOSTED_ZONE_ID:-}
 alarm_email=${ALARM_EMAIL:-}
@@ -12,6 +13,7 @@ alarm_email=${ALARM_EMAIL:-}
 required=(APPLICATION_IMAGE BASE_DOMAIN CERTIFICATE_ARN PLATFORM_STACK_NAME CLOUDFORMATION_EXECUTION_ROLE_ARN)
 for name in "${required[@]}"; do [[ -n "${!name:-}" ]] || { echo "$name is required" >&2; exit 1; }; done
 [[ "$dns_provider" == cloudflare || "$dns_provider" == route53 ]] || { echo "DNS_PROVIDER must be cloudflare or route53" >&2; exit 1; }
+[[ "$deployment_profile" == standard || "$deployment_profile" == budget ]] || { echo "DEPLOYMENT_PROFILE must be standard or budget" >&2; exit 1; }
 [[ "$dns_provider" != route53 || -n "$hosted_zone_id" ]] || { echo "HOSTED_ZONE_ID is required for Route 53" >&2; exit 1; }
 
 platform_output() {
@@ -35,6 +37,13 @@ cognito_domain=$(platform_output CognitoDomain)
 token_url=$(platform_output TokenUrl)
 service_client=$(platform_output EdcServiceClientId)
 service_secret=$(platform_output EdcServiceClientSecretArn)
+shared_alb_arn=$(platform_output SharedAlbArn)
+shared_alb_dns_name=$(platform_output SharedAlbDnsName)
+shared_alb_full_name=$(platform_output SharedAlbFullName)
+shared_alb_listener_arn=$(platform_output SharedAlbListenerArn)
+shared_alb_security_group_id=$(platform_output SharedAlbSecurityGroupId)
+shared_web_acl_arn=$(platform_output SharedWebAclArn)
+shared_vpc_origin_id=$(platform_output SharedVpcOriginId)
 
 deploy() {
   local service_image=$1
@@ -46,18 +55,23 @@ deploy() {
     --role-arn "$CLOUDFORMATION_EXECUTION_ROLE_ARN" \
     --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
     --no-fail-on-empty-changeset \
+    --tags aurinara:suite=aurinara aurinara:environment="$environment" aurinara:profile="$deployment_profile" \
     --parameter-overrides \
-      Environment="$environment" VpcCidr="$vpc_cidr" VpcId="$vpc_id" \
+      Environment="$environment" DeploymentProfile="$deployment_profile" VpcCidr="$vpc_cidr" VpcId="$vpc_id" \
       AppSubnetIds="$app_subnet_ids" RunnerSubnetIds="$runner_subnet_ids" DataSubnetIds="$data_subnet_ids" BaseDomain="$BASE_DOMAIN" \
       DnsProvider="$dns_provider" HostedZoneId="$hosted_zone_id" CertificateArn="$CERTIFICATE_ARN" \
       ApplicationImage="$service_image" MigrationApplicationImage="$migration_image" DatabaseInstanceClass="$database_class" AlarmEmail="$alarm_email" ServicesEnabled="$enabled" \
       PlatformPrivateUrl="$platform_private_url" PlatformPublicUrl="$platform_public_url" PlatformEventBusName="$event_bus" \
       SharedIdentityKeyArn="$identity_key" UserPoolId="$user_pool" SpaClientId="$spa_client" JwtIssuer="$jwt_issuer" JwtJwksUrl="$jwks_url" \
-      CognitoDomain="$cognito_domain" ServiceTokenUrl="$token_url" ServiceClientId="$service_client" ServiceClientSecretArn="$service_secret"
+      CognitoDomain="$cognito_domain" ServiceTokenUrl="$token_url" ServiceClientId="$service_client" ServiceClientSecretArn="$service_secret" \
+      SharedAlbArn="$shared_alb_arn" SharedAlbDnsName="$shared_alb_dns_name" SharedAlbFullName="$shared_alb_full_name" \
+      SharedAlbListenerArn="$shared_alb_listener_arn" SharedAlbSecurityGroupId="$shared_alb_security_group_id" SharedWebAclArn="$shared_web_acl_arn" \
+      SharedVpcOriginId="$shared_vpc_origin_id"
 }
 
 current_image=$APPLICATION_IMAGE
 services_enabled=false
+current_profile=standard
 if aws cloudformation describe-stacks --stack-name "$stack_name" >/dev/null 2>&1; then
   stack_status=""
   for _ in {1..90}; do
@@ -72,6 +86,19 @@ if aws cloudformation describe-stacks --stack-name "$stack_name" >/dev/null 2>&1
   current_image=$(aws cloudformation describe-stacks --stack-name "$stack_name" --query "Stacks[0].Parameters[?ParameterKey=='ApplicationImage'].ParameterValue" --output text)
   services_enabled=$(aws cloudformation describe-stacks --stack-name "$stack_name" --query "Stacks[0].Parameters[?ParameterKey=='ServicesEnabled'].ParameterValue" --output text)
   [[ "$services_enabled" == true ]] || services_enabled=false
+  current_profile=$(aws cloudformation describe-stacks --stack-name "$stack_name" --query "Stacks[0].Parameters[?ParameterKey=='DeploymentProfile'].ParameterValue" --output text)
+  [[ -n "$current_profile" && "$current_profile" != None ]] || current_profile=standard
+fi
+
+if [[ "$deployment_profile" == budget && "$current_profile" != budget ]]; then
+  existing_alb=$(aws elbv2 describe-load-balancers \
+    --names "ae-${environment}-alb" \
+    --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || true)
+  if [[ -n "$existing_alb" && "$existing_alb" != None ]]; then
+    aws elbv2 modify-load-balancer-attributes \
+      --load-balancer-arn "$existing_alb" \
+      --attributes Key=deletion_protection.enabled,Value=false >/dev/null
+  fi
 fi
 
 deploy "$current_image" "$APPLICATION_IMAGE" "$services_enabled"

@@ -3,10 +3,13 @@
 Aurinara EDC is a consumer of the matching `aurinara-platform` environment
 stack. It uses that environment's VPC and private subnets, while retaining its
 own security groups, PostgreSQL database, KMS key, attachment and SPA buckets,
-projection queue/DLQ, ECS API/projection/export services, CloudFront, WAF,
+projection queue/DLQ, ECS API/projection/export services, CloudFront,
 backup, alarms, and budget. Shared networking, Cognito, the Platform-owned
 suite CloudTrail,
-event bus, and the Platform PrivateLink service remain Platform-owned.
+event bus, ALB, and WAF remain Platform-owned in the production budget profile.
+The authoritative cross-repository topology, cost envelope, cutover order, and
+rollback procedure are in
+`aurinara-platform/docs/budget-deployment-profile.md`.
 
 ## Bootstrap
 
@@ -35,21 +38,24 @@ without email or budget subscriptions.
 
 ## Deploy
 
-The matching Platform stack must already exist and its PrivateLink private-DNS
-state must be `verified`. On a merge to `main`, the delivery workflow builds and
-scans one digest, queries all shared identity/control-plane values directly from
-`aurinara-platform-staging`, deploys EDC staging, runs all Alembic migrations
-plus built-in role seeding, activates the services, publishes the frontend, and
-runs readiness checks. Production uses the same digest after approval and an
-RDS snapshot.
+The matching Platform stack must already exist. Standard deployments require
+its PrivateLink private-DNS state to be `verified`; budget deployments use the
+Platform shared ALB. On a merge to `main`, the delivery workflow builds and
+scans one digest, queries the production Platform outputs, takes an RDS snapshot,
+deploys EDC production after approval, runs all Alembic migrations plus built-in
+role seeding, activates the services, publishes the frontend, and runs readiness
+checks. A manual run with `deploy_staging=true` performs the staging rehearsal
+first.
 
 Staging is `https://edc-staging.<base-domain>`; production is
 `https://edc.<base-domain>`. Cloudflare records stay DNS-only. The browser calls
 EDC through its own CloudFront distribution and calls the Platform Repository
 through the Platform public URL. Backend authorization and object operations use
-PrivateLink.
+PrivateLink in `standard` and the shared internal ALB in `budget`.
 
-The projection service long-polls the environment SQS queue. An EventBridge rule
+In the standard profile the projection service long-polls the environment SQS queue. In
+the budget profile EventBridge starts a drain-to-empty projection task every
+minute and an export task every five minutes on Fargate Spot. An EventBridge rule
 on the Platform bus targets that queue, the queue policy allows only that rule,
 and failed messages redrive after five receives. The export service uses the
 database-backed durable export queue and writes immutable attachments through
@@ -59,7 +65,9 @@ the task role; no static AWS credentials are injected.
 
 - Images must be digest-pinned; mutable tags are rejected by CloudFormation.
 - ECS services remain at zero until migrations and role seeding succeed.
-- Production uses Multi-AZ RDS, 35-day backups, deletion protection, retained
+- Standard production uses Multi-AZ RDS and 35-day backups. Budget production
+  uses a separate Single-AZ `db.t4g.small` database, 14-day backups, one API
+  task, and scheduled workers. Both profiles keep deletion protection, retained
   versioned S3, AWS Backup, encrypted logs, Platform-owned CloudTrail management
   and S3 object data events, alarms, and termination protection.
 - Backup vault names use the unique nested-stack name so retained recovery
