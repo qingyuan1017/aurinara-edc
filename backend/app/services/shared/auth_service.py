@@ -274,9 +274,7 @@ class AuthService:
             mfa_enabled=loaded_user.mfa_enabled,
             roles=roles,
             authorization_source=(
-                "platform"
-                if get_settings().platform_authorization_mode == "enforced"
-                else "local"
+                "platform" if get_settings().platform_authorization_mode == "enforced" else "local"
             ),
         )
 
@@ -374,7 +372,20 @@ class AuthService:
             InvalidTokenError: If the token is invalid.
             AuthenticationError: If no internal user maps to the token subject.
         """
-        oidc_payload = validate_oidc_token(token)
+        # Cognito access tokens identify their app client with ``client_id``
+        # instead of the OIDC ``aud`` claim.  The generic OIDC validator is
+        # configured for the same issuer in deployed environments, so it can
+        # reject an otherwise valid Cognito access token before the
+        # Cognito-aware validator gets a chance to apply the correct claim
+        # rules.  Preserve a generic validation failure while attempting the
+        # provider-specific path; if Cognito is unavailable, surface the
+        # original failure rather than accepting the token.
+        oidc_error: InvalidTokenError | None = None
+        try:
+            oidc_payload = validate_oidc_token(token)
+        except InvalidTokenError as exc:
+            oidc_payload = None
+            oidc_error = exc
         if oidc_payload is not None:
             provider = get_settings().auth_provider_name
             result = await session.execute(
@@ -404,9 +415,16 @@ class AuthService:
                 raise AuthenticationError("Account is inactive")
             return user
 
-        payload: CognitoTokenPayload | None = validate_cognito_token(token)
+        try:
+            payload: CognitoTokenPayload | None = validate_cognito_token(token)
+        except InvalidTokenError:
+            # Both configured validators rejected the credential.  The
+            # Cognito-specific error is authoritative for a Cognito deployment.
+            raise
 
         if payload is None:
+            if oidc_error is not None:
+                raise oidc_error
             return None
 
         # Immutable provider subject is authoritative. Email is only a one-time

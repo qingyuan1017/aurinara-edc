@@ -21,6 +21,7 @@ from app.core.security import (
     generate_mfa_secret,
     hash_password,
     validate_cognito_token,
+    validate_oidc_token,
     verify_mfa_code,
     verify_password,
     verify_re_auth,
@@ -288,6 +289,31 @@ class TestInactivity:
 class TestCognitoValidation:
     """Test Cognito/OIDC token validation."""
 
+    @patch("app.core.security.jwt.decode")
+    @patch(
+        "app.core.security.jwt.get_unverified_header",
+        return_value={"alg": "RS256", "kid": "key-1"},
+    )
+    @patch("app.core.security._fetch_oidc_jwks", return_value={"keys": [{"kid": "key-1"}]})
+    @patch("app.core.security.get_settings")
+    def test_oidc_id_token_does_not_require_companion_access_token(
+        self, settings, jwks, header, decode
+    ):
+        settings.return_value.auth_issuer = "https://issuer"
+        settings.return_value.auth_audience = "client"
+        settings.return_value.auth_jwks_url = "https://issuer/.well-known/jwks.json"
+        settings.return_value.auth_algorithms = "RS256"
+        decode.return_value = {
+            "sub": "subject-1",
+            "iss": "https://issuer",
+            "aud": "client",
+            "iat": datetime.now(UTC).timestamp(),
+            "exp": datetime.now(UTC).timestamp() + 300,
+        }
+
+        assert validate_oidc_token("token").sub == "subject-1"
+        assert decode.call_args.kwargs["options"]["verify_at_hash"] is False
+
     def test_returns_none_when_not_configured(self):
         """When Cognito settings are absent, should return None without error."""
         result = validate_cognito_token("some-token")
@@ -357,6 +383,10 @@ class TestCognitoValidation:
             "aud": "client",
         }
         assert validate_cognito_token("token").token_use == "id"
+        assert decode.call_args.kwargs["options"] == {
+            "verify_aud": False,
+            "verify_at_hash": False,
+        }
 
     @pytest.mark.parametrize(
         "claims, message",

@@ -59,6 +59,7 @@ async def test_enforced_platform_mode_rejects_jit_external_user(
     ):
         await auth_service.validate_external_token(db_session, "id-token")
 
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -487,6 +488,52 @@ class TestValidateExternalToken:
         )
         with pytest.raises(AuthenticationError, match="Account is inactive"):
             await auth_service.validate_external_token(db_session, "access-token")
+
+    async def test_cognito_access_token_falls_back_after_generic_oidc_audience_failure(
+        self, auth_service, db_session, active_user
+    ):
+        active_user.external_identity_provider = "oidc"
+        active_user.external_issuer = "https://issuer"
+        active_user.external_subject = "cognito-subject"
+        await db_session.flush()
+
+        payload = CognitoTokenPayload(
+            sub="cognito-subject",
+            token_use="access",
+            iss="https://issuer",
+            exp=datetime.now(UTC) + timedelta(minutes=5),
+            client_id="client",
+        )
+        with (
+            patch(
+                "app.services.shared.auth_service.validate_oidc_token",
+                side_effect=InvalidTokenError("OIDC token validation failed"),
+            ),
+            patch(
+                "app.services.shared.auth_service.validate_cognito_token",
+                return_value=payload,
+            ) as validate_cognito,
+        ):
+            mapped = await auth_service.validate_external_token(db_session, "access-token")
+
+        assert mapped is active_user
+        validate_cognito.assert_called_once_with("access-token")
+
+    async def test_generic_oidc_failure_is_preserved_when_cognito_is_not_configured(
+        self, auth_service, db_session
+    ):
+        with (
+            patch(
+                "app.services.shared.auth_service.validate_oidc_token",
+                side_effect=InvalidTokenError("OIDC token validation failed"),
+            ),
+            patch(
+                "app.services.shared.auth_service.validate_cognito_token",
+                return_value=None,
+            ),
+            pytest.raises(InvalidTokenError, match="OIDC token validation failed"),
+        ):
+            await auth_service.validate_external_token(db_session, "invalid-token")
 
 
 # ---------------------------------------------------------------------------

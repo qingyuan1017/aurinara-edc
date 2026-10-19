@@ -360,7 +360,17 @@ def validate_oidc_token(token: str) -> OidcTokenPayload | None:
             algorithms=algorithms,
             issuer=settings.auth_issuer,
             audience=settings.auth_audience,
-            options={"require_exp": True, "require_sub": True, "require_iat": True},
+            options={
+                "require_exp": True,
+                "require_sub": True,
+                "require_iat": True,
+                # ``at_hash`` binds an ID token to the access token returned in
+                # the same authorization response. Here the ID token is itself
+                # the bearer credential, so no companion access token is
+                # available; signature, issuer, audience and expiry remain
+                # independently verified.
+                "verify_at_hash": False,
+            },
         )
         subject = payload.get("sub")
         if not isinstance(subject, str) or not subject:
@@ -447,7 +457,7 @@ def validate_cognito_token(token: str) -> CognitoTokenPayload | None:
             rsa_key,
             algorithms=["RS256"],
             issuer=expected_issuer,
-            options={"verify_aud": False},
+            options={"verify_aud": False, "verify_at_hash": False},
         )
         token_use = payload.get("token_use")
         if token_use not in {"access", "id"}:
