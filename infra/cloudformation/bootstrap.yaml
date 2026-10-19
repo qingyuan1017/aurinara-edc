@@ -48,7 +48,7 @@ Resources:
               - {Effect: Allow, Action: [kms:Encrypt, kms:GenerateDataKey, kms:DescribeKey], Resource: !Sub 'arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*'}
               - {Effect: Allow, Action: [ecs:DescribeServices, ecs:DescribeTaskDefinition, ecs:DescribeTasks, ecs:ListTasks, ecs:RunTask], Resource: '*'}
               - {Effect: Allow, Action: 'iam:PassRole', Resource: '*', Condition: {StringEquals: {'iam:PassedToService': ecs-tasks.amazonaws.com}}}
-              - {Effect: Allow, Action: [cloudfront:CreateInvalidation, rds:CreateDBSnapshot, rds:DescribeDBSnapshots], Resource: '*'}
+              - {Effect: Allow, Action: [cloudfront:CreateInvalidation, rds:CreateDBSnapshot, rds:DescribeDBSnapshots, rds:AddTagsToResource], Resource: '*'}
               - {Effect: Allow, Action: [elasticloadbalancing:DescribeLoadBalancers, elasticloadbalancing:ModifyLoadBalancerAttributes], Resource: '*'}
   TemplateBucket:
     Type: AWS::S3::Bucket
