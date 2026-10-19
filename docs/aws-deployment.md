@@ -36,6 +36,13 @@ Configure both GitHub environments with the bootstrap outputs:
 `ALARM_EMAIL` is optional; when omitted, alarms and dashboards are created
 without email or budget subscriptions.
 
+The image-build job authenticates from the configured deployment branch and does
+not bind itself to a protected environment. The bootstrap role therefore trusts
+the exact branch OIDC subject as well as the `staging` and `production`
+environment subjects. Staging and production deployment jobs retain their
+environment protection rules; only the production gate is reached on a normal
+push to `main`.
+
 ## Deploy
 
 The matching Platform stack must already exist. Standard deployments require
