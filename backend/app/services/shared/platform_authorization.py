@@ -265,7 +265,7 @@ class PlatformAuthorizationClient:
         return token
 
     def sync_roles(self, roles: list[dict[str, object]]) -> tuple[PlatformRegisteredRole, ...]:
-        """Register the complete EDC role catalog and return canonical mappings."""
+        """Register reviewed EDC built-in roles and return canonical mappings."""
 
         if not self._base_url:
             raise ServiceUnavailableError("Platform authorization is not configured")

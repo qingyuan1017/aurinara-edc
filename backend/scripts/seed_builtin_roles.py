@@ -8,6 +8,7 @@ from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.core.permissions import (
     permission_catalog,
+    platform_role_catalog,
     seed_permission_catalog,
     seed_roles_and_permissions,
 )
@@ -50,6 +51,11 @@ async def seed() -> None:
         registered = platform.sync_permissions(catalog)
         if set(registered) != {str(item["code"]) for item in catalog}:
             raise RuntimeError("Platform did not preserve the EDC permission catalog")
+        role_catalog = platform_role_catalog()
+        registered_roles = platform.sync_roles(role_catalog)
+        expected_role_ids = {str(item["source_role_id"]) for item in role_catalog}
+        if {str(item.id) for item in registered_roles} != expected_role_ids:
+            raise RuntimeError("Platform did not preserve the EDC built-in role identities")
         async with async_session_factory() as session:
             sites = list(
                 (

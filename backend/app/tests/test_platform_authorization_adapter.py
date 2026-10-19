@@ -329,6 +329,23 @@ def test_permission_catalog_registration_does_not_define_roles() -> None:
     assert registered == ("edc.designer.odm.export",)
 
 
+def test_study_creator_role_bundle_is_stable_and_study_scoped() -> None:
+    from app.core.permissions import (
+        PLATFORM_MANAGED_ROLE_IDS,
+        PLATFORM_STUDY_CREATOR_ROLE_NAMES,
+        platform_role_catalog,
+    )
+
+    catalog = {str(item["name"]): item for item in platform_role_catalog()}
+
+    assert set(PLATFORM_STUDY_CREATOR_ROLE_NAMES) <= set(catalog)
+    for name in PLATFORM_STUDY_CREATOR_ROLE_NAMES:
+        assert catalog[name]["source_role_id"] == str(PLATFORM_MANAGED_ROLE_IDS[name])
+        assert catalog[name]["scope_level"] == "study"
+        assert catalog[name]["permissions"]
+        assert all(str(code).startswith("edc.") for code in catalog[name]["permissions"])
+
+
 def test_ctms_site_registration_preserves_the_generated_canonical_id() -> None:
     study_id = uuid4()
     site_id = uuid4()

@@ -51,9 +51,11 @@ python -m scripts.seed_dev_user
 ```
 
 `seed_builtin_roles` is idempotent. In standalone mode it seeds the local fallback roles.
-When Platform authorization is enabled, it registers only the EDC-owned permission
-catalog; role composition and assignment are configured in Platform. It also synchronizes
-existing Sites for Platform-managed Studies. In enforced mode, missing synchronization
+When Platform authorization is enabled, it registers the EDC-owned permission catalog
+and the stable reviewed roles needed for initial administration and automatic
+study-creator access. Other role composition and assignment remain configured in
+Platform. It also synchronizes existing Sites for Platform-managed Studies. In enforced
+mode, missing synchronization
 credentials fail startup setup instead of leaving Platform incomplete.
 
 Start FastAPI and leave this terminal running:

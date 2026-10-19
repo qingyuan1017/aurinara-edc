@@ -25,6 +25,14 @@ Authorization decision IDs and policy versions are copied into immutable EDC aud
 events. Attachments carrying `platform_object_id` are downloaded through the gateway;
 storage keys and credentials never reach the frontend.
 
+The deployment permission sync also registers stable reviewed EDC roles used for
+automatic study ownership. A confirmed user receives only the Platform study-create
+capability. When that user creates a canonical study, Platform atomically assigns the
+study-scoped `Study Administrator`, `Designer_Role`, `Operational_Role`,
+`CTMS_Operations_User`, and `Safety_Manager` bundle. These grants authorize only the
+created study; they do not grant EDC System Administrator or visibility into another
+study.
+
 ## Migration sequence
 
 1. Apply migrations through `0055` and configure the generic OIDC issuer, API audience, JWKS URL,
@@ -40,7 +48,7 @@ storage keys and credentials never reach the frontend.
    ```
 
 4. Import the snapshot into `aurinara-platform`, then register the EDC permission catalog
-   and configure the reviewed least-privilege roles in Platform. Platform role events
+   and synchronize the reviewed built-in roles into Platform. Platform role events
    project the exact role IDs and permission composition back to EDC; unknown permissions
    fail safely instead of granting guessed access.
 5. Subscribe the projection worker to the platform event stream and run authorization in

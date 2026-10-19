@@ -8,6 +8,8 @@ Satisfies Requirements:
 
 from __future__ import annotations
 
+from uuid import NAMESPACE_URL, UUID, uuid5
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -513,6 +515,22 @@ ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
 }
 
 
+PLATFORM_STUDY_CREATOR_ROLE_NAMES = (
+    "Study Administrator",
+    "Designer_Role",
+    "Operational_Role",
+    "CTMS_Operations_User",
+    "Safety_Manager",
+)
+PLATFORM_MANAGED_ROLE_IDS: dict[str, UUID] = {
+    "System Administrator": UUID("e208baf5-110f-5708-a483-d643f9719bfb"),
+    **{
+        name: uuid5(NAMESPACE_URL, f"aurinara-edc:role:{name}")
+        for name in PLATFORM_STUDY_CREATOR_ROLE_NAMES
+    },
+}
+
+
 # ---------------------------------------------------------------------------
 # Seeding routine
 # ---------------------------------------------------------------------------
@@ -572,8 +590,8 @@ async def seed_roles_and_permissions(session: AsyncSession) -> None:
 def permission_catalog() -> list[dict[str, object]]:
     """Return product-owned capabilities for registration in Platform.
 
-    Platform owns role composition. EDC continues to own the stable permission
-    vocabulary and the scope/module metadata needed to constrain role editing.
+    EDC owns the stable permission vocabulary and the scope/module metadata needed
+    to constrain the reviewed built-in roles and later Platform role editing.
     """
 
     system_only = {
@@ -612,6 +630,27 @@ def permission_catalog() -> list[dict[str, object]]:
             }
         )
     return catalog
+
+
+def platform_role_catalog() -> list[dict[str, object]]:
+    """Return stable reviewed roles synchronized into the shared Platform."""
+
+    definitions: list[dict[str, object]] = []
+    for name, role_id in PLATFORM_MANAGED_ROLE_IDS.items():
+        definition = ROLE_DEFINITIONS[name]
+        definitions.append(
+            {
+                "source_role_id": str(role_id),
+                "name": name,
+                "description": f"Built-in {name} role",
+                "scope_level": str(definition["scope"]),
+                "permissions": [
+                    f"edc.{code}"
+                    for code in definition["permissions"]  # type: ignore[union-attr]
+                ],
+            }
+        )
+    return definitions
 
 
 async def seed_permission_catalog(session: AsyncSession) -> None:
