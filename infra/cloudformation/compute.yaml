@@ -97,6 +97,10 @@ Resources:
   ApiTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
+      Name: !If
+        - IsBudget
+        - !Sub ae-${Environment}-api-budget
+        - !Ref AWS::NoValue
       VpcId: !Ref VpcId
       Protocol: HTTP
       Port: 8000
@@ -405,3 +409,4 @@ Outputs:
   AlbDnsName: {Value: !If [IsBudget, !Ref SharedAlbDnsName, !GetAtt InternalLoadBalancer.DNSName]}
   AlbFullName: {Value: !If [IsBudget, !Ref SharedAlbFullName, !GetAtt InternalLoadBalancer.LoadBalancerFullName]}
   ApiTargetGroupFullName: {Value: !GetAtt ApiTargetGroup.TargetGroupFullName}
+
