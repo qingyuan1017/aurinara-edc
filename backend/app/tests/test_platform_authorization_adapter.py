@@ -333,10 +333,15 @@ def test_study_creator_role_bundle_is_stable_and_study_scoped() -> None:
     from app.core.permissions import (
         PLATFORM_MANAGED_ROLE_IDS,
         PLATFORM_STUDY_CREATOR_ROLE_NAMES,
+        permission_catalog,
         platform_role_catalog,
     )
 
     catalog = {str(item["name"]): item for item in platform_role_catalog()}
+    permission_scopes = {
+        f"edc.{item['code']}": set(item["allowed_scope_levels"])
+        for item in permission_catalog()
+    }
 
     assert set(PLATFORM_STUDY_CREATOR_ROLE_NAMES) <= set(catalog)
     for name in PLATFORM_STUDY_CREATOR_ROLE_NAMES:
@@ -344,6 +349,10 @@ def test_study_creator_role_bundle_is_stable_and_study_scoped() -> None:
         assert catalog[name]["scope_level"] == "study"
         assert catalog[name]["permissions"]
         assert all(str(code).startswith("edc.") for code in catalog[name]["permissions"])
+        assert all(
+            catalog[name]["scope_level"] in permission_scopes[str(code)]
+            for code in catalog[name]["permissions"]
+        )
 
 
 def test_ctms_site_registration_preserves_the_generated_canonical_id() -> None:

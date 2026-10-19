@@ -599,12 +599,12 @@ def permission_catalog() -> list[dict[str, object]]:
         "user.create",
         "user.update",
         "user.deactivate",
-        "user.assign",
         "role.list",
         "role.create",
         "role.update",
         "study.create",
     }
+    system_and_study = {"user.assign"}
     catalog: list[dict[str, object]] = []
     for code in sorted(PERMISSION_CODES):
         module = permission_module(code)
@@ -617,7 +617,7 @@ def permission_catalog() -> list[dict[str, object]]:
                 module = "shared"
         if code in system_only:
             scopes = ["system"]
-        elif module == "designer":
+        elif code in system_and_study or module == "designer":
             scopes = ["system", "study"]
         else:
             scopes = ["system", "study", "site"]
