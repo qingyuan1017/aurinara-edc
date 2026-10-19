@@ -140,6 +140,14 @@ PERMISSION_CODES: set[str] = {
     "safety_audit.read",
 }
 
+
+def platform_permission_code(permission: str) -> str:
+    """Return the canonical shared-control-plane permission code."""
+
+    if permission.startswith(("edc.", "ctms.", "pv.", "platform.", "artifact.")):
+        return permission
+    return f"edc.{permission}"
+
 # ---------------------------------------------------------------------------
 # Role definitions: name -> scope + permission codes
 # ---------------------------------------------------------------------------
@@ -645,7 +653,7 @@ def platform_role_catalog() -> list[dict[str, object]]:
                 "description": f"Built-in {name} role",
                 "scope_level": str(definition["scope"]),
                 "permissions": [
-                    f"edc.{code}"
+                    platform_permission_code(str(code))
                     for code in definition["permissions"]  # type: ignore[union-attr]
                 ],
             }

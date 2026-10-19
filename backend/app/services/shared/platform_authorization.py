@@ -15,6 +15,7 @@ import httpx
 
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ServiceUnavailableError
+from app.core.permissions import platform_permission_code
 from app.models.shared.identity import User
 from app.schemas.shared.permission import normalize_permission_code
 
@@ -66,9 +67,7 @@ def namespaced_permission(permission: str) -> str:
     """Map legacy permission codes to the stable control-plane namespace."""
 
     permission = normalize_permission_code(permission)
-    if permission.startswith(("edc.", "ctms.", "pv.", "platform.", "artifact.")):
-        return permission
-    return f"edc.{permission}"
+    return platform_permission_code(permission)
 
 
 class PlatformAuthorizationClient:

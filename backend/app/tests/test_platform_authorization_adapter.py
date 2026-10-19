@@ -339,7 +339,7 @@ def test_study_creator_role_bundle_is_stable_and_study_scoped() -> None:
 
     catalog = {str(item["name"]): item for item in platform_role_catalog()}
     permission_scopes = {
-        f"edc.{item['code']}": set(item["allowed_scope_levels"])
+        namespaced_permission(str(item["code"])): set(item["allowed_scope_levels"])
         for item in permission_catalog()
     }
 
@@ -348,11 +348,15 @@ def test_study_creator_role_bundle_is_stable_and_study_scoped() -> None:
         assert catalog[name]["source_role_id"] == str(PLATFORM_MANAGED_ROLE_IDS[name])
         assert catalog[name]["scope_level"] == "study"
         assert catalog[name]["permissions"]
-        assert all(str(code).startswith("edc.") for code in catalog[name]["permissions"])
+        assert set(map(str, catalog[name]["permissions"])) <= permission_scopes.keys()
         assert all(
             catalog[name]["scope_level"] in permission_scopes[str(code)]
             for code in catalog[name]["permissions"]
         )
+    assert all(
+        str(code).startswith("ctms.")
+        for code in catalog["CTMS_Operations_User"]["permissions"]
+    )
 
 
 def test_ctms_site_registration_preserves_the_generated_canonical_id() -> None:
