@@ -59,6 +59,38 @@ describe('PermissionGuard', () => {
     expect(screen.getByText('Access Denied')).toBeInTheDocument()
   })
 
+  it('does not flatten a study-scoped permission into another study', () => {
+    useAuthStore.setState({
+      user: {
+        id: '1',
+        email: 'user@example.com',
+        first_name: 'Study',
+        last_name: 'User',
+        permissions: [],
+        roles: [{
+          role_name: 'Data Entry',
+          study_id: 'study-a',
+          permissions: ['form.enter'],
+        }],
+      },
+      isAuthenticated: true,
+    })
+
+    const { rerender } = render(
+      <PermissionGuard permission="form.enter" studyId="study-a">
+        <div data-testid="protected-content">Protected Content</div>
+      </PermissionGuard>,
+    )
+    expect(screen.getByTestId('protected-content')).toBeInTheDocument()
+
+    rerender(
+      <PermissionGuard permission="form.enter" studyId="study-b">
+        <div data-testid="protected-content">Protected Content</div>
+      </PermissionGuard>,
+    )
+    expect(screen.queryByTestId('protected-content')).not.toBeInTheDocument()
+  })
+
   it('renders AccessDenied when user is null (unauthenticated)', () => {
     useAuthStore.setState({ user: null, isAuthenticated: false })
 

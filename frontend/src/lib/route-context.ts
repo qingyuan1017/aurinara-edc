@@ -207,13 +207,14 @@ function segmentLabel(segments: readonly string[], index: number): string {
   const parent = segments[index - 1]
   const grandparent = segments[index - 2]
 
-  if (parent === 'studies') return `Study ${decoded}`
-  if (parent === 'sites') return `Site ${decoded}`
+  if (parent === 'studies') return 'Study'
+  if (parent === 'sites') return 'Site'
   if (parent === 'subjects') return 'Subject'
-  if (parent === 'queries') return `Query ${decoded}`
-  if (grandparent === 'reports' || parent === 'reports') return `Report ${decoded}`
+  if (parent === 'queries') return 'Query'
+  if (grandparent === 'reports' || parent === 'reports') return 'Report'
   if (parent === 'forms') return 'Form'
   if (STATIC_LABELS[decoded]) return STATIC_LABELS[decoded]
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(decoded)) return 'Record'
   return humanizeSegment(decoded)
 }
 

@@ -21,7 +21,8 @@ export function ThemeToggle() {
   const triggerRef = useRef<HTMLButtonElement>(null)
 
   return (
-    <DropdownMenu
+    <div className="relative shrink-0">
+      <DropdownMenu
       onOpenChange={(open) => {
         if (!open) {
           triggerRef.current?.focus()
@@ -32,11 +33,11 @@ export function ThemeToggle() {
         ref={triggerRef}
         aria-label={`Theme: ${mode}`}
         title="Change theme"
-        className="inline-flex size-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="inline-flex size-9 items-center justify-center rounded-md text-foreground transition-all hover:bg-accent hover:text-accent-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <SunMoon className="size-4" aria-hidden="true" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="relative right-0 mt-1">
+      <DropdownMenuContent className="right-0 top-[calc(100%+8px)]">
         <DropdownMenuLabel>Theme</DropdownMenuLabel>
         {THEME_OPTIONS.map(({ mode: optionMode, label, icon: Icon }) => (
           <DropdownMenuItem
@@ -50,6 +51,7 @@ export function ThemeToggle() {
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenu>
+    </div>
   )
 }

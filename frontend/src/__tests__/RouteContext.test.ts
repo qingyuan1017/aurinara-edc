@@ -28,10 +28,10 @@ describe('route context adapter', () => {
 
     expect(breadcrumbs.map((item) => item.label)).toEqual([
       'Studies',
-      'Study study/one',
+      'Study',
       'CTMS',
       'Reports & dashboards',
-      'Report monitoring',
+      'Report',
     ])
     expect(breadcrumbs[1].to).toBe('/studies/study%2Fone')
     expect(breadcrumbs[1].search?.({ ignored: true })).toEqual(search)
@@ -102,7 +102,7 @@ describe('route context adapter', () => {
 
     expect(breadcrumbs.map((item) => item.label)).toEqual([
       'Sites',
-      'Site site one',
+      'Site',
       'CTMS',
       'Site activation',
     ])
@@ -120,5 +120,14 @@ describe('route context adapter', () => {
       'Forms',
       'Form',
     ])
+  })
+
+  it('never exposes an unclassified UUID in a breadcrumb', () => {
+    const breadcrumbs = getRouteBreadcrumbs({
+      pathname: '/admin/events/123e4567-e89b-42d3-a456-426614174000',
+      search: {},
+    })
+
+    expect(breadcrumbs.at(-1)?.label).toBe('Record')
   })
 })

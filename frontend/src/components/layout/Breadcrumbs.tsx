@@ -36,9 +36,11 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
   const routeContext = useRouteContext()
   const segments = routeContext.pathname.split('/').filter(Boolean)
   const subjectIndex = segments.indexOf('subjects') + 1
+  const studyIndex = segments.indexOf('studies') + 1
   const formsIndex = segments.indexOf('forms')
   const formIndex = formsIndex >= 0 ? formsIndex + 1 : -1
   const subjectId = subjectIndex > 0 ? decodeRouteIdentifier(segments[subjectIndex] ?? '') : ''
+  const studyId = studyIndex > 0 ? decodeRouteIdentifier(segments[studyIndex] ?? '') : ''
   const formInstanceId = formIndex > 0 ? decodeRouteIdentifier(segments[formIndex] ?? '') : ''
   const edcStudyScoped = segments[0] === 'studies' && segments[2] === 'edc'
   const ctmsWorkspace = getCTMSWorkspaceFromPath(routeContext.pathname)
@@ -56,9 +58,9 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
     staleTime: 5 * 60 * 1000,
   })
   const { data: ctmsStudy } = useQuery({
-    queryKey: ['study', ctmsWorkspace?.studyId],
-    enabled: !items && ctmsWorkspace?.kind === 'study' && Boolean(ctmsWorkspace.studyId),
-    queryFn: async () => (await api.get<StudyBreadcrumbData>(`/studies/${ctmsWorkspace?.studyId}`)).data,
+    queryKey: ['study', studyId || ctmsWorkspace?.studyId],
+    enabled: !items && Boolean(studyId || (ctmsWorkspace?.kind === 'study' && ctmsWorkspace.studyId)),
+    queryFn: async () => (await api.get<StudyBreadcrumbData>(`/studies/${studyId || ctmsWorkspace?.studyId}`)).data,
     staleTime: 5 * 60 * 1000,
   })
   const search = preserveSearch(routeContext.search)
@@ -73,12 +75,14 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
       { label: ctmsMatch.item.label, current: routeContext.pathname === itemTarget },
     ]
     if (routeContext.pathname !== itemTarget) {
-      const last = routeContext.pathname.split('/').filter(Boolean).at(-1) ?? ''
-      values.push({ label: decodeRouteIdentifier(last), current: true })
+      values.push({ label: 'Record', current: true })
     }
     return values
   })() : null
   const breadcrumbItems = (items ?? ctmsBreadcrumbs ?? routeContext.breadcrumbs).map((item, index) => {
+    if (studyId && index === studyIndex) {
+      return { ...item, label: ctmsStudy ? `${ctmsStudy.study_code} · ${ctmsStudy.title}` : 'Study' }
+    }
     if (subjectId && index === subjectIndex) {
       const subjectNumber = form?.subject_number ?? subject?.subject_number
       return {

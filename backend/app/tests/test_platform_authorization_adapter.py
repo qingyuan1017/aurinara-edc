@@ -8,7 +8,7 @@ import pytest
 
 from app.core.config import Settings
 from app.core.exceptions import AuthorizationError, ServiceUnavailableError
-from app.core.permissions import ROLE_DEFINITIONS
+from app.core.permissions import ROLE_DEFINITIONS, platform_permission_code
 from app.schemas.shared.permission import CTMS_PERMISSION_ALIASES, PV_PERMISSION_ALIASES
 from app.services.shared.permission_service import PermissionService
 from app.services.shared.platform_authorization import (
@@ -125,16 +125,17 @@ def test_service_token_requests_cognito_scope_and_resource() -> None:
 def test_ctms_permission_aliases_match_registered_platform_actions(
     alias: str, canonical: str
 ) -> None:
-    assert namespaced_permission(alias) == canonical
-    assert namespaced_permission(f"ctms.{alias}") == canonical
-    assert namespaced_permission(canonical) == canonical
+    expected = platform_permission_code(canonical)
+    assert namespaced_permission(alias) == expected
+    assert namespaced_permission(f"ctms.{alias}") == expected
+    assert namespaced_permission(canonical) == expected
 
 
 @pytest.mark.parametrize("alias,canonical", PV_PERMISSION_ALIASES.items())
 def test_pv_permission_aliases_match_registered_platform_actions(
     alias: str, canonical: str
 ) -> None:
-    expected = f"edc.{canonical}"
+    expected = f"pv.{canonical}"
     assert namespaced_permission(alias) == expected
     assert namespaced_permission(f"pv.{alias}") == expected
     assert namespaced_permission(canonical) == expected
@@ -153,7 +154,7 @@ def test_every_supported_alias_is_granted_by_a_builtin_role() -> None:
 def test_authorization_request_normalizes_route_permission_before_platform_decision() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/v1/authorization/decisions"
-        assert json.loads(request.content)["action"] == "ctms.operational_data_read"
+        assert json.loads(request.content)["action"] == "ctms.operational_data.read"
         return httpx.Response(
             200,
             json={
@@ -233,57 +234,8 @@ def test_batch_authorization_uses_one_control_plane_request() -> None:
     assert [decision.allowed for decision in decisions] == [True, False]
 
 
-def test_role_catalog_registration_returns_platform_mappings() -> None:
-    source_role_id = uuid4()
-    platform_role_id = uuid4()
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.method == "PUT"
-        assert request.url.path == "/v1/products/aurinara-edc/roles"
-        assert request.headers["Authorization"] == "Bearer service-token"
-        return httpx.Response(
-            200,
-            json=[
-                {
-                    "id": str(platform_role_id),
-                    "source_role_id": str(source_role_id),
-                    "product": "aurinara-edc",
-                    "name": "Data Manager",
-                    "description": "Study data management",
-                    "scope_level": "study",
-                    "assignable": True,
-                    "status": "active",
-                }
-            ],
-        )
-
-    settings = Settings(
-        _env_file=None,
-        environment="test",
-        platform_control_plane_url="https://platform.test",
-        platform_authorization_mode="enforced",
-        platform_service_token_url="https://issuer.test/token",
-        platform_service_client_id="client",
-        platform_service_client_secret="secret",
-    )
-    client = PlatformAuthorizationClient(settings, httpx.MockTransport(handler))
-    client._token = ("service-token", float("inf"))
-
-    registered = client.sync_roles(
-        [
-            {
-                "source_role_id": str(source_role_id),
-                "name": "Data Manager",
-                "description": "Study data management",
-                "scope_level": "study",
-                "permissions": ["edc.query.create"],
-            }
-        ]
-    )
-
-    assert registered[0].id == platform_role_id
-    assert registered[0].source_role_id == source_role_id
-    assert registered[0].scope_level == "study"
+def test_product_client_cannot_synchronize_roles() -> None:
+    assert not hasattr(PlatformAuthorizationClient, "sync_roles")
 
 
 def test_permission_catalog_registration_does_not_define_roles() -> None:
@@ -329,34 +281,13 @@ def test_permission_catalog_registration_does_not_define_roles() -> None:
     assert registered == ("edc.designer.odm.export",)
 
 
-def test_study_creator_role_bundle_is_stable_and_study_scoped() -> None:
-    from app.core.permissions import (
-        PLATFORM_MANAGED_ROLE_IDS,
-        PLATFORM_STUDY_CREATOR_ROLE_NAMES,
-        permission_catalog,
-        platform_role_catalog,
-    )
+def test_permission_catalog_uses_owned_platform_namespaces() -> None:
+    from app.core.permissions import permission_catalog
 
-    catalog = {str(item["name"]): item for item in platform_role_catalog()}
-    permission_scopes = {
-        namespaced_permission(str(item["code"])): set(item["allowed_scope_levels"])
-        for item in permission_catalog()
-    }
-
-    assert set(PLATFORM_STUDY_CREATOR_ROLE_NAMES) <= set(catalog)
-    for name in PLATFORM_STUDY_CREATOR_ROLE_NAMES:
-        assert catalog[name]["source_role_id"] == str(PLATFORM_MANAGED_ROLE_IDS[name])
-        assert catalog[name]["scope_level"] == "study"
-        assert catalog[name]["permissions"]
-        assert set(map(str, catalog[name]["permissions"])) <= permission_scopes.keys()
-        assert all(
-            catalog[name]["scope_level"] in permission_scopes[str(code)]
-            for code in catalog[name]["permissions"]
-        )
-    assert all(
-        str(code).startswith("ctms.")
-        for code in catalog["CTMS_Operations_User"]["permissions"]
-    )
+    codes = {namespaced_permission(str(item["code"])) for item in permission_catalog()}
+    assert codes
+    assert all(code.startswith(("edc.", "ctms.", "pv.")) for code in codes)
+    assert any(code.startswith("pv.") for code in codes)
 
 
 def test_ctms_site_registration_preserves_the_generated_canonical_id() -> None:

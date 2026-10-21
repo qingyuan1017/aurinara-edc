@@ -12,7 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DataTableShell, FormActions, FormField, PageContainer, PageHeader } from '@/components/patterns'
 import { DraftGate, getApiErrorMessage } from './shared'
 
-function CodingSettingsEditor({ versionId, readOnly }: { versionId: string; readOnly: boolean }) {
+interface CodingForm { name: string; form_code: string; sections?: Array<{ fields?: Array<{ id: string; label: string; variable_name: string }> }> }
+
+function CodingSettingsEditor({ studyId, versionId, readOnly }: { studyId: string; versionId: string; readOnly: boolean }) {
   const queryClient = useQueryClient()
   const [dictionary, setDictionary] = useState('')
   const [codingRule, setCodingRule] = useState('')
@@ -20,6 +22,9 @@ function CodingSettingsEditor({ versionId, readOnly }: { versionId: string; read
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const listQuery = useQuery({ queryKey: ['designer-coding-settings', versionId], queryFn: async () => (await api.get<CodingSettingResponse[]>(`/designer/versions/${versionId}/coding-settings`)).data })
+  const formsQuery = useQuery({ queryKey: ['coding-field-options', studyId, versionId], queryFn: async () => (await api.get<CodingForm[]>(`/designer/studies/${studyId}/forms`, { params: { study_version_id: versionId } })).data })
+  const fieldOptions = (formsQuery.data ?? []).flatMap((form) => (form.sections ?? []).flatMap((section) => (section.fields ?? []).map((field) => ({ id: field.id, label: `${form.form_code} · ${field.label} (${field.variable_name})` }))))
+  const fieldLabels = new Map(fieldOptions.map((field) => [field.id, field.label]))
 
   const create = useMutation({
     mutationFn: async () => {
@@ -56,8 +61,8 @@ function CodingSettingsEditor({ versionId, readOnly }: { versionId: string; read
               <FormField label="Coding rule" name="coding-rule" description="Optional rule describing how coding is applied.">
                 <Textarea value={codingRule} onChange={(event) => setCodingRule(event.target.value)} placeholder="Auto-code verbatim AE terms." />
               </FormField>
-              <FormField label="Field definition ID" name="coding-field" description="Optional. Scope the setting to a specific field.">
-                <Input value={fieldId} onChange={(event) => setFieldId(event.target.value)} placeholder="uuid" />
+              <FormField label="Clinical field" name="coding-field" description="Optional. Scope the setting to a specific field.">
+                <select value={fieldId} onChange={(event) => setFieldId(event.target.value)} disabled={formsQuery.isLoading} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">All eligible fields</option>{fieldOptions.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select>
               </FormField>
               <FormActions pending={create.isPending} submitLabel="Add setting" pendingLabel="Adding…" />
             </form>
@@ -78,7 +83,7 @@ function CodingSettingsEditor({ versionId, readOnly }: { versionId: string; read
                   <TableRow key={row.id}>
                     <TableCell className="font-medium">{row.dictionary_reference}</TableCell>
                     <TableCell>{row.coding_rule || '—'}</TableCell>
-                    <TableCell className="max-w-[8rem] truncate" title={row.field_definition_id ?? undefined}>{row.field_definition_id ?? 'All'}</TableCell>
+                    <TableCell>{row.field_definition_id ? fieldLabels.get(row.field_definition_id) ?? 'Unavailable field' : 'All eligible fields'}</TableCell>
                   </TableRow>
                 ))}</TableBody>
               </Table>
@@ -94,7 +99,7 @@ export function CodingSettingsPage({ studyId }: { studyId: string }) {
   return (
     <PermissionGuard permission={PERMISSIONS.DESIGNER_CODING_SETTING_CONFIGURE} studyId={studyId}>
       <DraftGate studyId={studyId}>
-        {(versionId, selection) => <CodingSettingsEditor versionId={versionId} readOnly={selection.isReadOnly} />}
+        {(versionId, selection) => <CodingSettingsEditor studyId={studyId} versionId={versionId} readOnly={selection.isReadOnly} />}
       </DraftGate>
     </PermissionGuard>
   )

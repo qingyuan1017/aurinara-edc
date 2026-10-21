@@ -97,10 +97,9 @@ export function WorkspaceSwitcher({ collapsed = false, mobile = false, onNavigat
   const title = workspace?.kind === 'study' ? (selectedStudy?.study_code ?? 'Study workspace') : 'Portfolio'
   const subtitle = workspace?.kind === 'study' ? (selectedStudy?.title ?? 'Loading study…') : 'Global Workspace'
 
-  return <div ref={containerRef} className={cn('relative border-b border-sidebar-border p-2', mobile && 'px-0')} data-testid="workspace-switcher">
-    {!collapsed || mobile ? <span className="mb-1 block px-1 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/50">Workspace</span> : null}
-    <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((value) => !value)} title={collapsed && !mobile ? `${title} — ${subtitle}` : undefined} className={cn('flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/60 p-2 text-left transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring', collapsed && !mobile && 'justify-center border-0 bg-transparent px-1')}>
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground"><LayoutDashboard className="size-4" aria-hidden="true" /></span>
+  return <div ref={containerRef} className={cn('relative p-2', mobile && 'px-2')} data-testid="workspace-switcher">
+    <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((value) => !value)} title={collapsed && !mobile ? `${title} — ${subtitle}` : undefined} className={cn('flex h-12 w-full items-center gap-2 overflow-hidden rounded-md p-2 text-start text-sm transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring', collapsed && !mobile && 'mx-auto size-8 justify-center p-0')}>
+      <span className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"><LayoutDashboard className="size-4" aria-hidden="true" /></span>
       <span className={cn('min-w-0 flex-1', collapsed && !mobile && 'sr-only')}><span className="block truncate text-xs font-semibold text-sidebar-foreground">{title}</span><span className="block truncate text-[0.6875rem] text-sidebar-foreground/60">{subtitle}</span></span>
       {(!collapsed || mobile) ? <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/50" aria-hidden="true" /> : null}
     </button>

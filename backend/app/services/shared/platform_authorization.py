@@ -31,14 +31,6 @@ class PlatformDecision:
     reason_code: str
 
 
-@dataclass(frozen=True, slots=True)
-class PlatformRegisteredRole:
-    id: UUID
-    source_role_id: UUID
-    name: str
-    scope_level: str
-
-
 class AuthorizationGateway(Protocol):
     mode: str
 
@@ -262,33 +254,6 @@ class PlatformAuthorizationClient:
         with self._lock:
             self._token = (token, time.monotonic() + expires_in - 15)
         return token
-
-    def sync_roles(self, roles: list[dict[str, object]]) -> tuple[PlatformRegisteredRole, ...]:
-        """Register reviewed EDC built-in roles and return canonical mappings."""
-
-        if not self._base_url:
-            raise ServiceUnavailableError("Platform authorization is not configured")
-        try:
-            response = self._client.put(
-                f"{self._base_url}/v1/products/aurinara-edc/roles",
-                headers={"Authorization": f"Bearer {self.service_token()}"},
-                json={"roles": roles},
-            )
-            response.raise_for_status()
-            payload = response.json()
-            return tuple(
-                PlatformRegisteredRole(
-                    id=UUID(item["id"]),
-                    source_role_id=UUID(item["source_role_id"]),
-                    name=str(item["name"]),
-                    scope_level=str(item["scope_level"]),
-                )
-                for item in payload
-            )
-        except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
-            raise ServiceUnavailableError(
-                "Platform role registration is temporarily unavailable"
-            ) from error
 
     def sync_permissions(self, permissions: list[dict[str, object]]) -> tuple[str, ...]:
         """Register the EDC-owned capability catalog without defining roles."""

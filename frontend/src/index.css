@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400&family=Inter:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 /*
@@ -21,8 +21,8 @@
   --color-muted-foreground: #567567;
   --color-accent: #e4ece7;
   --color-accent-foreground: #0d2e38;
-  --color-destructive: hsl(0 84.2% 60.2%);
-  --color-destructive-foreground: hsl(210 40% 98%);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(0.985 0 0);
   --color-border: #d8ded9;
   --color-input: #cbd6d2;
   --color-ring: #d9ad4f;
@@ -35,7 +35,7 @@
   --color-sidebar-accent-foreground: #fbfaf6;
   --color-sidebar-border: #ffffff26;
   --color-sidebar-ring: #e8c477;
-  --color-elevated: #fbfaf6;
+  --color-elevated: #ffffff;
   --color-elevated-foreground: #0d2e38;
   --color-success: #567567;
   --color-success-foreground: hsl(0 0% 100%);
@@ -45,11 +45,11 @@
   --color-info-foreground: hsl(0 0% 100%);
   --color-focus: #d9ad4f;
 
-  --radius: 0.5rem;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  --radius: 0.625rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
   --radius-2xl: 1rem;
   --shadow-xs: 0 1px 2px 0 hsl(222.2 47.4% 11.2% / 0.04);
   --shadow-sm: 0 1px 2px 0 hsl(222.2 47.4% 11.2% / 0.06), 0 1px 3px 0 hsl(222.2 47.4% 11.2% / 0.04);
@@ -57,7 +57,7 @@
   --shadow-lg: 0 10px 15px -3px hsl(222.2 47.4% 11.2% / 0.08), 0 4px 6px -4px hsl(222.2 47.4% 11.2% / 0.08);
   --shadow-xl: 0 20px 25px -5px hsl(222.2 47.4% 11.2% / 0.1), 0 8px 10px -6px hsl(222.2 47.4% 11.2% / 0.1);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
@@ -78,8 +78,8 @@
   --color-muted-foreground: #567567;
   --color-accent: #e4ece7;
   --color-accent-foreground: #0d2e38;
-  --color-destructive: hsl(0 84.2% 60.2%);
-  --color-destructive-foreground: hsl(210 40% 98%);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(0.985 0 0);
   --color-border: #d8ded9;
   --color-input: #cbd6d2;
   --color-ring: #d9ad4f;
@@ -92,7 +92,7 @@
   --color-sidebar-accent-foreground: #fbfaf6;
   --color-sidebar-border: #ffffff26;
   --color-sidebar-ring: #e8c477;
-  --color-elevated: #fbfaf6;
+  --color-elevated: #ffffff;
   --color-elevated-foreground: #0d2e38;
   --color-success: #567567;
   --color-success-foreground: hsl(0 0% 100%);
@@ -102,11 +102,11 @@
   --color-info-foreground: hsl(0 0% 100%);
   --color-focus: #d9ad4f;
 
-  --radius: 0.5rem;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  --radius: 0.625rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
   --radius-2xl: 1rem;
   --shadow-xs: 0 1px 2px 0 hsl(222.2 47.4% 11.2% / 0.04);
   --shadow-sm: 0 1px 2px 0 hsl(222.2 47.4% 11.2% / 0.06), 0 1px 3px 0 hsl(222.2 47.4% 11.2% / 0.04);
@@ -129,7 +129,7 @@
   --font-weight-heading: 600;
   --font-weight-label: 500;
   --sidebar-width: 16rem;
-  --sidebar-width-collapsed: 4rem;
+  --sidebar-width-collapsed: 3rem;
   --header-height: 4rem;
   --content-max-width: 90rem;
   --content-gutter: 1rem;
@@ -157,8 +157,8 @@
   --color-muted-foreground: #a9beb7;
   --color-accent: #1a4f5d;
   --color-accent-foreground: #fbfaf6;
-  --color-destructive: hsl(0 62.8% 30.6%);
-  --color-destructive-foreground: hsl(210 40% 98%);
+  --color-destructive: oklch(0.704 0.191 22.216);
+  --color-destructive-foreground: oklch(0.985 0 0);
   --color-border: #ffffff26;
   --color-input: #3f626a;
   --color-ring: #e8c477;
@@ -218,31 +218,26 @@
 
   body {
     background-color: var(--color-background);
-    background-image: radial-gradient(rgb(13 46 56 / 0.045) 1px, transparent 1px);
-    background-size: 4px 4px;
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: "rlig" 1, "calt" 1;
     transition: background-color var(--duration-normal) var(--ease-standard), color var(--duration-normal) var(--ease-standard);
   }
 
-  h1,
-  h2,
-  h3,
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
   .font-display {
-    font-family: var(--font-display);
-    letter-spacing: -0.015em;
+    font-family: var(--font-sans);
   }
 
   ::selection {
     background: #e8c477;
     color: #0d2e38;
   }
-}
-
-.dark body,
-[data-theme="dark"] body {
-  background-image: radial-gradient(rgb(247 244 236 / 0.045) 1px, transparent 1px);
 }
 
 @media (prefers-reduced-motion: reduce) {

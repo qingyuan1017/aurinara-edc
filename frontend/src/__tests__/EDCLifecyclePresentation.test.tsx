@@ -53,16 +53,20 @@ describe('EDC lifecycle presentation migrations', () => {
   })
 
   it('keeps query creation contract and presents the workflow in an accessible dialog', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [], page: 1, page_size: 50, total: 0 } } as never)
+    vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({ data: url.endsWith('/subjects')
+      ? { items: [{ id: 'subject-1', subject_number: 'SUBJ-001', site_id: 'site-1', site_number: '101' }], page: 1, page_size: 100, total: 1 }
+      : { items: [], page: 1, page_size: 50, total: 0 } } as never))
     const post = vi.spyOn(api, 'post').mockResolvedValue({ data: {} } as never)
     renderWithQueryClient(<QueryListPage studyId="study-1" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'New query' }))
-    fireEvent.change(screen.getByLabelText('Affected object ID'), { target: { value: 'form-1' } })
+    const subjectSelect = screen.getByLabelText('Affected subject')
+    await screen.findByRole('option', { name: /SUBJ-001/ })
+    fireEvent.change(subjectSelect, { target: { value: 'subject-1' } })
     fireEvent.change(screen.getByLabelText('Describe the issue'), { target: { value: 'Confirm the source date.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
 
-    await waitFor(() => expect(post).toHaveBeenCalledWith('/studies/study-1/queries', { target_type: 'Subject', target_id: 'form-1', text: 'Confirm the source date.', assigned_role: null }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/studies/study-1/queries', { target_type: 'Subject', target_id: 'subject-1', text: 'Confirm the source date.', assigned_role: null }))
   })
 
   it('keeps visit date recording while hiding creation when the design has no addable visits', async () => {

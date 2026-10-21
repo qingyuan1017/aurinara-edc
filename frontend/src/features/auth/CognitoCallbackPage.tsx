@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AuthPageLayout } from './AuthPageLayout'
@@ -8,10 +8,11 @@ import { consumeCognitoCallbackState, exchangeCognitoCode } from '@/lib/cognito'
 export function CognitoCallbackPage() {
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
+  const completion = useRef<Promise<string> | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    const complete = async () => {
+    completion.current ??= (async () => {
       const params = new URLSearchParams(window.location.search)
       const providerError = params.get('error_description') || params.get('error')
       if (providerError) {
@@ -22,9 +23,11 @@ export function CognitoCallbackPage() {
       const { verifier, returnTo } = consumeCognitoCallbackState(params.get('state'))
       const tokens = await exchangeCognitoCode(code, verifier)
       await useAuthStore.getState().completeCognitoLogin(tokens)
+      return returnTo
+    })()
+    void completion.current.then(async (returnTo) => {
       if (!cancelled) await navigate({ to: returnTo })
-    }
-    void complete().catch(() => {
+    }).catch(() => {
       if (!cancelled) setError('Hosted sign-in could not be completed. Please try again.')
     })
     return () => { cancelled = true }
