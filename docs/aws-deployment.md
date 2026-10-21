@@ -55,7 +55,7 @@ checks. A manual run with `deploy_staging=true` performs the staging rehearsal
 first.
 
 Staging is `https://edc-staging.<base-domain>`; production is
-`https://edc.<base-domain>`. Cloudflare records stay DNS-only. The browser calls
+`https://auri.<base-domain>`. Cloudflare records stay DNS-only. The browser calls
 EDC through its own CloudFront distribution and calls the Platform Repository
 through the Platform public URL. Backend authorization and object operations use
 PrivateLink in `standard` and the shared internal ALB in `budget`.
