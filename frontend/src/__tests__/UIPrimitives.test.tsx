@@ -20,10 +20,10 @@ describe('core UI primitives', () => {
     const save = screen.getByRole('button', { name: 'Save' })
     expect(save).toBeDisabled()
     expect(save).toHaveAttribute('aria-busy', 'true')
-    expect(save).toHaveClass('bg-destructive', 'focus-visible:ring-ring')
+    expect(save).toHaveClass('bg-destructive', 'focus-visible:ring-ring/50')
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveClass('bg-primary')
     expect(screen.getByText('Ready')).toHaveClass('bg-success/15')
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveClass('bg-background', 'focus-visible:ring-ring')
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveClass('bg-transparent', 'focus-visible:ring-ring/50')
   })
 
   it('keeps dialog keyboard accessible and restores focus on close', async () => {
@@ -74,6 +74,6 @@ describe('core UI primitives', () => {
     render(<Button aria-label="Icon action" size="icon">+</Button>)
     const button = screen.getByRole('button', { name: 'Icon action' })
     fireEvent.focus(button)
-    expect(button).toHaveClass('focus-visible:ring-ring')
+    expect(button).toHaveClass('focus-visible:ring-ring/50')
   })
 })
