@@ -12,7 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DataTableShell, FormActions, FormField, PageContainer, PageHeader } from '@/components/patterns'
 import { DraftGate, getApiErrorMessage } from './shared'
 
-function CrfAccessEditor({ versionId, readOnly }: { versionId: string; readOnly: boolean }) {
+interface AccessForm { id: string; name: string; form_code: string; sections?: Array<{ fields?: Array<{ id: string; label: string; variable_name: string }> }> }
+
+function CrfAccessEditor({ studyId, versionId, readOnly }: { studyId: string; versionId: string; readOnly: boolean }) {
   const queryClient = useQueryClient()
   const [role, setRole] = useState('')
   const [canRead, setCanRead] = useState(true)
@@ -24,6 +26,12 @@ function CrfAccessEditor({ versionId, readOnly }: { versionId: string; readOnly:
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const listQuery = useQuery({ queryKey: ['designer-crf-access', versionId], queryFn: async () => (await api.get<CrfAccessDefinitionResponse[]>(`/designer/versions/${versionId}/crf-access`)).data })
+  const formsQuery = useQuery({ queryKey: ['crf-access-form-options', studyId, versionId], queryFn: async () => (await api.get<AccessForm[]>(`/designer/studies/${studyId}/forms`, { params: { study_version_id: versionId } })).data })
+  const selectedForm = (formsQuery.data ?? []).find((form) => form.id === formId)
+  const fieldOptions = (selectedForm?.sections ?? []).flatMap((section) => section.fields ?? [])
+  const allFields = (formsQuery.data ?? []).flatMap((form) => (form.sections ?? []).flatMap((section) => (section.fields ?? []).map((field) => ({ ...field, form }))))
+  const formLabels = new Map((formsQuery.data ?? []).map((form) => [form.id, `${form.form_code} · ${form.name}`]))
+  const fieldLabels = new Map(allFields.map((field) => [field.id, `${field.form.form_code} · ${field.label}`]))
 
   // The backend requires blinded===true when unblind_role is set; mirror the
   // rule in the UI by clearing/disabling unblind_role whenever blinded is off.
@@ -73,11 +81,11 @@ function CrfAccessEditor({ versionId, readOnly }: { versionId: string; readOnly:
                 <label className="flex items-center gap-2 text-sm"><Checkbox checked={canRead} onChange={(event) => setCanRead(event.target.checked)} /> Can read</label>
                 <label className="flex items-center gap-2 text-sm"><Checkbox checked={canWrite} onChange={(event) => setCanWrite(event.target.checked)} /> Can write</label>
               </div>
-              <FormField label="Form definition ID" name="crf-form" description="Optional. Scope the rule to a specific form.">
-                <Input value={formId} onChange={(event) => setFormId(event.target.value)} placeholder="uuid" />
+              <FormField label="Form" name="crf-form" description="Optional. Scope the rule to a specific form.">
+                <select value={formId} onChange={(event) => { setFormId(event.target.value); setFieldId('') }} disabled={formsQuery.isLoading} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">All forms</option>{(formsQuery.data ?? []).map((form) => <option key={form.id} value={form.id}>{form.form_code} · {form.name}</option>)}</select>
               </FormField>
-              <FormField label="Field definition ID" name="crf-field" description="Optional. Scope the rule to a specific field.">
-                <Input value={fieldId} onChange={(event) => setFieldId(event.target.value)} placeholder="uuid" />
+              <FormField label="Field" name="crf-field" description="Optional. Select a form first to scope the rule to one field.">
+                <select value={fieldId} onChange={(event) => setFieldId(event.target.value)} disabled={!formId} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">All fields in scope</option>{fieldOptions.map((field) => <option key={field.id} value={field.id}>{field.label} ({field.variable_name})</option>)}</select>
               </FormField>
               <label className="flex items-center gap-2 text-sm"><Checkbox checked={blinded} onChange={(event) => setBlindedAndSync(event.target.checked)} /> Blinded</label>
               <FormField label="Unblind role" name="crf-unblind-role" description="Optional. Role permitted to unblind; requires Blinded.">
@@ -110,8 +118,8 @@ function CrfAccessEditor({ versionId, readOnly }: { versionId: string; readOnly:
                     <TableCell>{row.can_write ? 'Yes' : 'No'}</TableCell>
                     <TableCell>{row.blinded ? 'Yes' : 'No'}</TableCell>
                     <TableCell>{row.unblind_role ?? '—'}</TableCell>
-                    <TableCell className="max-w-[8rem] truncate" title={row.form_definition_id ?? undefined}>{row.form_definition_id ?? 'All'}</TableCell>
-                    <TableCell className="max-w-[8rem] truncate" title={row.field_definition_id ?? undefined}>{row.field_definition_id ?? 'All'}</TableCell>
+                    <TableCell>{row.form_definition_id ? formLabels.get(row.form_definition_id) ?? 'Unavailable form' : 'All forms'}</TableCell>
+                    <TableCell>{row.field_definition_id ? fieldLabels.get(row.field_definition_id) ?? 'Unavailable field' : 'All fields'}</TableCell>
                   </TableRow>
                 ))}</TableBody>
               </Table>
@@ -127,7 +135,7 @@ export function CrfAccessPage({ studyId }: { studyId: string }) {
   return (
     <PermissionGuard permission={PERMISSIONS.DESIGNER_CRF_ACCESS_CONFIGURE} studyId={studyId}>
       <DraftGate studyId={studyId}>
-        {(versionId, selection) => <CrfAccessEditor versionId={versionId} readOnly={selection.isReadOnly} />}
+        {(versionId, selection) => <CrfAccessEditor studyId={studyId} versionId={versionId} readOnly={selection.isReadOnly} />}
       </DraftGate>
     </PermissionGuard>
   )

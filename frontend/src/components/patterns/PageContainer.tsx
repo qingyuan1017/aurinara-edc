@@ -8,7 +8,7 @@ export interface PageContainerProps extends React.HTMLAttributes<HTMLDivElement>
 
 export const PageContainer = React.forwardRef<HTMLDivElement, PageContainerProps>(
   ({ className, wide = false, ...props }, ref) => (
-    <main ref={ref} className={cn('mx-auto w-full min-w-0 px-4 py-6 sm:px-6 lg:px-8', wide ? 'max-w-[var(--content-max-width)]' : 'max-w-7xl', className)} {...props} />
+    <main ref={ref} data-wide={wide || undefined} className={cn('w-full min-w-0 px-4 py-6', className)} {...props} />
   ),
 )
 PageContainer.displayName = 'PageContainer'

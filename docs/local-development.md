@@ -50,12 +50,11 @@ python -m scripts.seed_builtin_roles
 python -m scripts.seed_dev_user
 ```
 
-`seed_builtin_roles` is idempotent. In standalone mode it seeds the local fallback roles.
-When Platform authorization is enabled, it registers the EDC-owned permission catalog
-and the stable reviewed roles needed for initial administration and automatic
-study-creator access. Other role composition and assignment remain configured in
-Platform. It also synchronizes existing Sites for Platform-managed Studies. In enforced
-mode, missing synchronization
+`seed_builtin_roles` is idempotent and registers the EDC-owned permission catalog; it
+does not publish roles. Platform owns production role composition and assignment. The
+script also synchronizes existing Sites for Platform-managed Studies. `seed_dev_user`
+may create local fallback roles only for standalone development. In enforced mode,
+missing synchronization
 credentials fail startup setup instead of leaving Platform incomplete.
 
 Start FastAPI and leave this terminal running:
@@ -88,8 +87,8 @@ as well:
 docker compose up -d platform-projection-worker
 ```
 
-The worker applies canonical user, study, and membership events. Membership role UUIDs are
-the EDC role UUIDs registered with Platform, so no role mapping is required. The Studies page
+The worker applies canonical user, study, role, and membership events. Membership role UUIDs are
+Platform-owned and are projected directly into EDC, so no role mapping is required. The Studies page
 refreshes its list every 30 seconds while active. Running FastAPI alone does not consume
 the platform SQS subscription.
 

@@ -143,9 +143,13 @@ function renderAppShell() {
 }
 
 describe('AppSidebar', () => {
-  it('renders every grouped EDC destination and allowed CTMS navigation', () => {
+  it('renders every grouped EDC destination and allowed CTMS navigation', async () => {
+    const user = userEvent.setup()
     renderResolvedSidebar(readyState, allPermissions)
 
+    for (const trigger of Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-controls$="-items"]'))) {
+      await user.click(trigger)
+    }
     for (const item of EDC_NAVIGATION_SECTIONS.flatMap((section) => section.items)) {
       expect(screen.getAllByRole('link', { name: item.label }).length).toBeGreaterThan(0)
     }
@@ -155,47 +159,56 @@ describe('AppSidebar', () => {
     expect(screen.getByRole('link', { name: 'Study Health' })).toBeInTheDocument()
   })
 
-  it('does not expose CTMS navigation when the permission affordance denies it', () => {
+  it('does not expose CTMS navigation when the permission affordance denies it', async () => {
+    const user = userEvent.setup()
     renderResolvedSidebar(readyState, [])
 
+    await user.click(screen.getByRole('button', { name: 'Overview' }))
     expect(screen.getByRole('link', { name: 'EDC Dashboard' })).toBeInTheDocument()
     expect(screen.queryByText('CTMS')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('aria-expanded', 'true')
   })
 
-  it('shows only the selected module hierarchy', () => {
+  it('shows only the selected module hierarchy', async () => {
+    const user = userEvent.setup()
     renderResolvedSidebar(readyState, allPermissions, undefined, 'edc')
 
+    await user.click(screen.getByRole('button', { name: 'Overview' }))
     expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('edc')
     expect(screen.getByRole('link', { name: 'EDC Dashboard' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('aria-expanded', 'true')
     expect(screen.queryByLabelText('CTMS navigation')).not.toBeInTheDocument()
   })
 
-  it('shows only CTMS navigation when CTMS is selected', () => {
+  it('shows only CTMS navigation when CTMS is selected', async () => {
+    const user = userEvent.setup()
     renderResolvedSidebar(readyState, allPermissions, undefined, 'ctms')
 
+    await user.click(screen.getByRole('button', { name: 'Overview' }))
     expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('ctms')
     expect(screen.getByRole('link', { name: 'Study Dashboard' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'EDC Dashboard' })).not.toBeInTheDocument()
     expect(screen.getByTestId('workspace-switcher')).toBeInTheDocument()
   })
 
-  it('groups CTMS destinations into collapsible workspace modules', async () => {
+  it('uses collapsible CTMS parent items with grouped destinations', async () => {
     const user = userEvent.setup()
     renderResolvedSidebar(readyState, allPermissions, undefined, 'ctms')
 
     const monitoring = screen.getByRole('button', { name: 'Monitoring' })
+    expect(monitoring).toHaveAttribute('aria-expanded', 'false')
+    await user.click(monitoring)
+    expect(monitoring).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByRole('link', { name: 'Monitoring Visits' })).toHaveAttribute('href', '/studies/study-1/ctms/monitoring/visits')
-    await user.click(monitoring)
-    expect(screen.queryByRole('link', { name: 'Monitoring Visits' })).not.toBeInTheDocument()
-    await user.click(monitoring)
-    expect(screen.getByRole('link', { name: 'Monitoring Visits' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Visit Reports' })).toBeInTheDocument()
   })
 
-  it('shows Designer as a separate module without EDC navigation', () => {
+  it('shows Designer as a separate module without EDC navigation', async () => {
+    const user = userEvent.setup()
     renderResolvedSidebar(readyState, allPermissions, undefined, 'designer')
 
+    await user.click(screen.getByRole('button', { name: 'Design lifecycle' }))
+    await user.click(screen.getByRole('button', { name: 'CRF design' }))
     expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('designer')
     expect(screen.getByLabelText('Designer navigation')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Form Builder' })).toBeInTheDocument()
@@ -232,17 +245,21 @@ describe('AppSidebar', () => {
   it.each([
     ['disabled', disabledState],
     ['unavailable', unavailableState],
-  ] as const)('keeps EDC navigation while CTMS is %s', (_name, state) => {
+  ] as const)('keeps EDC navigation while CTMS is %s', async (_name, state) => {
+    const user = userEvent.setup()
     renderResolvedSidebar(state, [PERMISSIONS.CTMS_OPERATIONAL_DATA_READ])
 
+    await user.click(screen.getByRole('button', { name: 'Overview' }))
     expect(screen.getByRole('link', { name: 'EDC Dashboard' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Database Lock' })).toBeInTheDocument()
     expect(screen.queryByText('CTMS')).not.toBeInTheDocument()
   })
 
-  it('renders PV navigation and a selectable PV option when PV is ready and the user may read safety cases', () => {
+  it('renders PV navigation and a selectable PV option when PV is ready and the user may read safety cases', async () => {
+    const user = userEvent.setup()
     renderResolvedSidebar(readyState, allPermissions, undefined, 'pv', pvReadyState)
 
+    await user.click(screen.getByRole('button', { name: 'Case management' }))
     expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('pv')
     expect(screen.getByLabelText('PV navigation')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
@@ -255,9 +272,11 @@ describe('AppSidebar', () => {
   it.each([
     ['disabled', pvDisabledState],
     ['unavailable', pvUnavailableState],
-  ] as const)('keeps the PV affordance hidden and disabled while PV is %s', (_name, pvState) => {
+  ] as const)('keeps the PV affordance hidden and disabled while PV is %s', async (_name, pvState) => {
+    const user = userEvent.setup()
     renderResolvedSidebar(readyState, allPermissions, undefined, 'edc', pvState)
 
+    await user.click(screen.getByRole('button', { name: 'Overview' }))
     expect(screen.getByRole('link', { name: 'EDC Dashboard' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Select module' })).toHaveValue('edc')
     expect(screen.queryByLabelText('PV navigation')).not.toBeInTheDocument()
@@ -266,7 +285,7 @@ describe('AppSidebar', () => {
     expect(pvOption.disabled).toBe(true)
   })
 
-  it('uses compact collapse semantics and labels collapsed links with tooltips', async () => {
+  it('uses compact collapse semantics and exposes grouped links in a flyout', async () => {
     const onCollapsedChange = vi.fn()
     const model = resolveNavigationModel(readyState, pvDisabledState, allPermissions, { studyId: 'study-1', siteId: 'site-1' })
     render(
@@ -283,10 +302,14 @@ describe('AppSidebar', () => {
       />,
     )
 
-    const dashboard = screen.getByRole('link', { name: 'Overview' })
+    const overview = screen.getAllByRole('button', { name: 'Overview' })[0]
+    expect(overview).toHaveAttribute('aria-haspopup', 'menu')
+    await userEvent.setup().click(overview)
+    const dashboard = screen.getByRole('link', { name: 'EDC Dashboard' })
     expect(dashboard.querySelector('svg')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-expanded', 'false')
-    expect(dashboard.querySelector('span')).toHaveClass('sr-only')
+    expect(screen.getByRole('link', { name: 'Data Collection Progress' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Toggle Sidebar' })).toHaveAttribute('aria-expanded', 'false')
+    expect(dashboard.querySelector('span')).not.toHaveClass('sr-only')
   })
 })
 
@@ -333,7 +356,7 @@ describe('AppShell sidebar integration', () => {
 
     expect(screen.getAllByTestId('app-sidebar')).toHaveLength(1)
     expect(screen.getByTestId('outlet')).toHaveTextContent('Existing route outlet')
-    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Toggle Sidebar' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Open navigation' })).toHaveAttribute('aria-controls', 'mobile-navigation')
     expect(screen.getByRole('combobox', { name: 'Select study' })).toBeInTheDocument()
     expect(screen.getByTestId('app-shell')).toHaveClass('min-w-0', 'max-w-full', 'overflow-x-hidden')
@@ -362,7 +385,7 @@ describe('AppShell sidebar integration', () => {
     renderAppShell()
 
     expect(screen.getByTestId('app-sidebar')).toHaveClass('hidden', 'md:flex')
-    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Toggle Sidebar' })).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 

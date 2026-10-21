@@ -127,6 +127,7 @@ class Settings(BaseSettings):
     platform_control_plane_url: str | None = None
     platform_authorization_mode: str = "disabled"
     platform_identity_issuer: str | None = None
+    # The service client must be issued by the pool trusted by Platform.
     platform_service_token_url: str | None = None
     platform_service_client_id: str | None = None
     platform_service_client_secret: SecretStr | None = None

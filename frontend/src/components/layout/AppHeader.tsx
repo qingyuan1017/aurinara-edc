@@ -1,21 +1,18 @@
 import { ArrowLeft, Bell, Menu } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import { Breadcrumbs } from './Breadcrumbs'
 import { GlobalSearch } from './GlobalSearch'
 import { SiteSelector } from './SiteSelector'
 import { StudySelector } from './StudySelector'
 import { ThemeToggle } from './ThemeToggle'
-import { UserMenu } from './UserMenu'
 import type { AppModule } from '@/lib/module-context'
-import { useWorkspaceStudies } from '@/features/ctms/workspace-studies'
-import { StatusBadge } from '@/components/patterns'
 
 export interface AppHeaderProps {
-  displayName: string
-  onSignOut: () => void | Promise<void>
   /** Opens the controlled mobile navigation Sheet without navigating. */
   onMobileMenuOpen?: () => void
+  onDesktopSidebarToggle?: () => void
   activeModule?: AppModule
   ctmsStudyId?: string
 }
@@ -24,46 +21,59 @@ export interface AppHeaderProps {
  * Authenticated header. Context selectors and account controls remain wired to
  * their existing stores/actions while presentation-only controls stay local.
  */
-export function AppHeader({ displayName, onSignOut, onMobileMenuOpen, activeModule, ctmsStudyId }: AppHeaderProps) {
-  const { data: studies } = useWorkspaceStudies()
-  const study = ctmsStudyId ? studies?.items.find((item) => item.id === ctmsStudyId) : undefined
+export function AppHeader({ onMobileMenuOpen, onDesktopSidebarToggle, activeModule, ctmsStudyId }: AppHeaderProps) {
   const isCTMS = activeModule === 'ctms'
+  const workspaceLabel = activeModule === 'ctms'
+    ? 'Clinical operations'
+    : activeModule === 'designer'
+      ? 'Clinical designer'
+      : activeModule === 'pv'
+        ? 'Pharmacovigilance'
+        : 'Electronic data capture'
   return (
     <header
-      className="flex min-h-[var(--header-height)] min-w-0 max-w-full items-center gap-2 overflow-x-hidden border-b bg-background px-3 py-2 sm:px-4"
+      className="sticky top-0 z-50 flex h-16 min-w-0 max-w-full shrink-0 items-center gap-3 border-b bg-background/85 p-4 backdrop-blur-xl sm:gap-4"
       data-testid="app-header"
     >
       <Button
         type="button"
-        variant="ghost"
+        variant="outline"
         size="icon"
-        className="shrink-0 md:hidden"
+        className="shrink-0 scale-125 md:hidden"
         onClick={onMobileMenuOpen}
         aria-label="Open navigation"
         aria-controls="mobile-navigation"
       >
         <Menu className="size-4" aria-hidden="true" />
       </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="hidden shrink-0 md:inline-flex"
+        onClick={onDesktopSidebarToggle}
+        aria-label="Toggle navigation"
+        aria-controls="authenticated-navigation"
+      >
+        <Menu className="size-4" aria-hidden="true" />
+      </Button>
+      <Separator orientation="vertical" className="h-6" />
 
-      <div className="min-w-0 flex-1 overflow-hidden">
-        {isCTMS ? <div className="mb-0.5 flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-semibold text-foreground">{ctmsStudyId ? `${study?.study_code ?? 'Study'} · ${study?.title ?? 'Study Workspace'}` : 'Portfolio Operations'}</span>
-          {study?.status ? <StatusBadge status={study.status} label="Study status" className="hidden sm:inline-flex" /> : <span className="hidden rounded-full bg-primary/10 px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-primary sm:inline">Global Workspace</span>}
-        </div> : null}
+      <div className="min-w-0 flex-1 overflow-hidden leading-tight">
+        <span className="block truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{workspaceLabel}</span>
         <Breadcrumbs />
       </div>
 
-      <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5 sm:gap-2">
-        {!isCTMS ? <><div className="min-w-0 max-w-[8rem] sm:max-w-[12rem] [&>select]:max-w-full"><StudySelector /></div><div className="min-w-0 max-w-[8rem] sm:max-w-[12rem] [&>select]:max-w-full"><SiteSelector /></div></> : null}
+      <div className="flex shrink-0 items-center justify-end gap-2">
+        {!isCTMS ? <><div className="hidden max-w-48 xl:block [&>select]:max-w-full"><StudySelector /></div><div className="hidden max-w-48 xl:block [&>select]:max-w-full"><SiteSelector /></div></> : null}
         {isCTMS && ctmsStudyId ? <Button asChild variant="ghost" size="sm" className="hidden lg:inline-flex"><Link to="/ctms"><ArrowLeft className="size-3.5" aria-hidden="true" />Portfolio</Link></Button> : null}
-        <GlobalSearch />
+        <div className="hidden 2xl:block"><GlobalSearch /></div>
         <Button asChild variant="ghost" size="icon" aria-label="Notifications" title="Notifications">
           <Link to="/notifications" search={(previous) => previous}>
             <Bell className="size-4" aria-hidden="true" />
           </Link>
         </Button>
         <ThemeToggle />
-        <UserMenu displayName={displayName} onSignOut={onSignOut} />
       </div>
     </header>
   )

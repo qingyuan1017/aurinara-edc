@@ -1,4 +1,4 @@
-import { useAuthStore } from './auth'
+import { useAuthStore, type UserRoleAssignment } from './auth'
 
 /**
  * Permission codes used by the Clinical EDC system.
@@ -84,6 +84,8 @@ export const PERMISSIONS = {
   DESIGNER_RAW_DATA_VARIABLE_CONFIGURE: 'designer.raw_data_variable.configure',
   DESIGNER_CODING_SETTING_CONFIGURE: 'designer.coding_setting.configure',
   DESIGNER_SDR_CONFIGURE: 'designer.sdr.configure',
+  DESIGNER_ODM_IMPORT: 'designer.odm.import',
+  DESIGNER_ODM_EXPORT: 'designer.odm.export',
 
   // SDV & Review
   SDV_MANAGE: 'sdv.manage',
@@ -153,11 +155,21 @@ export function hasPermission(
 ): boolean {
   const user = useAuthStore.getState().user
   if (!user) return false
+  if (!studyId && !siteId && (user.permissions ?? []).includes(permission)) return true
+  return user.roles.some((role) => roleAllows(role, permission, studyId, siteId))
+}
 
-  // Frontend checks are convenience only; the server handles study/site scoping.
-  void studyId
-  void siteId
-  return (user.permissions ?? []).includes(permission)
+function roleAllows(
+  role: UserRoleAssignment,
+  permission: PermissionCode,
+  studyId?: string,
+  siteId?: string,
+): boolean {
+  if (!(role.permissions ?? []).includes(permission)) return false
+  if (!role.study_id && !role.site_id) return true
+  if (!studyId || role.study_id !== studyId) return false
+  if (!role.site_id) return true
+  return !!siteId && role.site_id === siteId
 }
 
 /**
@@ -170,10 +182,8 @@ export function usePermission(
 ): boolean {
   const user = useAuthStore((state) => state.user)
   if (!user) return false
-  // Flat check — scoping delegated to server
-  void studyId
-  void siteId
-  return (user.permissions ?? []).includes(permission)
+  if (!studyId && !siteId && (user.permissions ?? []).includes(permission)) return true
+  return user.roles.some((role) => roleAllows(role, permission, studyId, siteId))
 }
 
 /**

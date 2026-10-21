@@ -24,12 +24,14 @@ export interface UserRoleAssignment {
   site_id?: string
 }
 
-/** Adapt the API's role-scoped permissions to the flat shape used by the UI. */
+/** Preserve role scope; the flat list contains system-wide permissions only. */
 function normalizeCurrentUser(user: Omit<CurrentUser, 'permissions'> & { permissions?: string[] }): CurrentUser {
-  const permissions = user.roles.flatMap((role) => role.permissions ?? [])
+  const permissions = user.roles
+    .filter((role) => !role.study_id && !role.site_id)
+    .flatMap((role) => role.permissions ?? [])
   return {
     ...user,
-    permissions: [...new Set(user.permissions ?? permissions)],
+    permissions: [...new Set(user.roles.length ? permissions : (user.permissions ?? []))],
   }
 }
 

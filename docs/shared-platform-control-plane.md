@@ -25,13 +25,11 @@ Authorization decision IDs and policy versions are copied into immutable EDC aud
 events. Attachments carrying `platform_object_id` are downloaded through the gateway;
 storage keys and credentials never reach the frontend.
 
-The deployment permission sync also registers stable reviewed EDC roles used for
-automatic study ownership. A confirmed user receives only the Platform study-create
-capability. When that user creates a canonical study, Platform atomically assigns the
-study-scoped `Study Administrator`, `Designer_Role`, `Operational_Role`,
-`CTMS_Operations_User`, and `Safety_Manager` bundle. These grants authorize only the
-created study; they do not grant EDC System Administrator or visibility into another
-study.
+The deployment sync registers only the EDC, CTMS, and PV permission catalog. Platform
+owns every production role. A confirmed user receives only the Platform study-create
+capability. When that user creates a canonical study, Platform atomically assigns its
+single cross-product Study Administrator role. The grant authorizes only the created
+study and does not expose another study.
 
 ## Migration sequence
 
@@ -47,10 +45,9 @@ study.
      --output ..\migration\edc-platform-snapshot.json
    ```
 
-4. Import the snapshot into `aurinara-platform`, then register the EDC permission catalog
-   and synchronize the reviewed built-in roles into Platform. Platform role events
-   project the exact role IDs and permission composition back to EDC; unknown permissions
-   fail safely instead of granting guessed access.
+4. Import the snapshot into `aurinara-platform`, then register the EDC permission
+   catalog. Platform installs and manages its built-in roles from those registered
+   permissions; product deployment cannot change role composition.
 5. Subscribe the projection worker to the platform event stream and run authorization in
    shadow mode.
 
@@ -68,6 +65,6 @@ endpoints. Keep it enabled during shadow rollout so existing authorization behav
 unchanged.
 
 The service account needs `platform.authorization.decide`, `edc.permission.sync`,
-`edc.site.sync`, and the applicable `aurinara-edc.object.*` permissions. End-user tokens
+`edc.site.sync`, and `edc.file.upload`. End-user tokens
 are validated locally against JWKS; no per-request authentication callback is made to the
 identity provider.

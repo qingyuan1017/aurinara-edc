@@ -17,7 +17,7 @@ import { AppSidebar } from './AppSidebar'
 
 /**
  * AppShell — main authenticated layout with sidebar navigation,
- * top bar (user info, study/site selectors, logout), and content area.
+ * top bar, study/site selectors, and content area.
  *
  * Authentication, capability, permission, study/site, navigation, and route
  * behavior remain owned by their existing stores and adapters. This component
@@ -27,12 +27,11 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
   const ctmsState = useCTMSCapabilityState()
   const canReadCTMS = usePermission(PERMISSIONS.CTMS_OPERATIONAL_DATA_READ)
   const pvState = usePVCapabilityState()
   const canReadPV = usePermission(PERMISSIONS.PV_SAFETY_CASE_READ)
-  const { selectedStudyId, selectedSiteId, clear: clearStudyContext } = useStudyContext()
+  const { selectedStudyId, selectedSiteId } = useStudyContext()
   const setModule = useModuleStore((s) => s.setModule)
   const pathname = useLocation().pathname
   const navigate = useNavigate()
@@ -59,12 +58,6 @@ export function AppShell() {
   const designerLandingPath = getDesignerLandingPath(user?.permissions ?? [])
   const showDesigner = designerLandingPath !== null
 
-  const handleLogout = async () => {
-    await logout()
-    clearStudyContext()
-    navigate({ to: '/login' })
-  }
-
   const handleModuleChange = (module: AppModule) => {
     setModule(module)
     navigate({
@@ -77,10 +70,6 @@ export function AppShell() {
             : getEDCLandingPath(selectedStudyId),
     })
   }
-
-  const displayName = user
-    ? `${user.first_name} ${user.last_name}`
-    : 'User'
 
   return (
     <div
@@ -105,9 +94,8 @@ export function AppShell() {
 
       <div className="flex min-w-0 max-w-full flex-1 flex-col overflow-hidden">
         <AppHeader
-          displayName={displayName}
-          onSignOut={handleLogout}
           onMobileMenuOpen={() => setMobileSidebarOpen(true)}
+          onDesktopSidebarToggle={() => setSidebarOpen((open) => !open)}
           activeModule={activeModule}
           ctmsStudyId={ctmsWorkspace?.studyId}
         />
@@ -115,7 +103,7 @@ export function AppShell() {
         <PageContainer
           wide
           data-testid="app-shell-content"
-          className="min-h-0 flex-1 max-w-full overflow-x-auto overflow-y-auto py-4 sm:py-6"
+          className="min-h-0 flex-1 max-w-full overflow-x-auto overflow-y-auto"
         >
           <Outlet />
         </PageContainer>

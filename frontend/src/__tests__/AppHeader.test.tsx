@@ -66,7 +66,7 @@ describe('AppHeader controls', () => {
   it('renders selectors, breadcrumbs, notifications, search affordance, theme, and account controls', () => {
     renderWithQuery(
       <ThemeProvider storage={createMemoryThemeStorage()} documentRef={document} windowRef={{ matchMedia: () => ({ matches: false }) }}>
-        <AppHeader displayName="Test User" onSignOut={vi.fn()} />
+        <AppHeader />
       </ThemeProvider>,
     )
 
@@ -78,7 +78,7 @@ describe('AppHeader controls', () => {
     expect(screen.getByRole('link', { name: 'Notifications' })).toHaveAttribute('href', '/notifications?filter=active&page=2')
     expect(screen.getByRole('button', { name: 'Global search unavailable' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Theme: system' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Open user menu for Test User' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Open user menu for Test User' })).not.toBeInTheDocument()
   })
 
   it('renders a keyboard-operable mobile navigation trigger without changing route state', async () => {
@@ -88,7 +88,7 @@ describe('AppHeader controls', () => {
 
     renderWithQuery(
       <ThemeProvider storage={createMemoryThemeStorage()} documentRef={document} windowRef={{ matchMedia: () => ({ matches: false }) }}>
-        <AppHeader displayName="Test User" onSignOut={vi.fn()} onMobileMenuOpen={onMobileMenuOpen} />
+        <AppHeader onMobileMenuOpen={onMobileMenuOpen} />
       </ThemeProvider>,
     )
 
@@ -149,6 +149,8 @@ describe('AppHeader controls', () => {
 
     const trigger = screen.getByRole('button', { name: 'Open user menu for Test User' })
     await user.click(trigger)
+    expect(screen.getByRole('menu')).toHaveClass('absolute')
+    expect(screen.getByRole('menu')).not.toHaveClass('relative')
     await user.click(screen.getByRole('menuitem', { name: /Sign out/i }))
 
     expect(onSignOut).toHaveBeenCalledTimes(1)

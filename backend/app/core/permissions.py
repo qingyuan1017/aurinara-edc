@@ -8,8 +8,6 @@ Satisfies Requirements:
 
 from __future__ import annotations
 
-from uuid import NAMESPACE_URL, UUID, uuid5
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -141,11 +139,29 @@ PERMISSION_CODES: set[str] = {
 }
 
 
+_CTMS_PLATFORM_CODES = {
+    "ctms.operational_data_read": "ctms.operational_data.read",
+    "ctms.operational_study_management": "ctms.operational_study.manage",
+    "ctms.operational_site_management": "ctms.operational_site.manage",
+    "ctms.monitoring_activity_management": "ctms.monitoring_activity.manage",
+    "ctms.enrollment_management": "ctms.enrollment.manage",
+    "ctms.conflict_management": "ctms.conflict.manage",
+    "ctms.coordination_replay": "ctms.coordination.replay",
+    "ctms.template_rule_management": "ctms.template_rule.manage",
+    "ctms.capa_management": "ctms.capa.manage",
+    "ctms.capacity_override": "ctms.capacity.override",
+}
+
+
 def platform_permission_code(permission: str) -> str:
     """Return the canonical shared-control-plane permission code."""
 
-    if permission.startswith(("edc.", "ctms.", "pv.", "platform.", "artifact.")):
+    if permission in _CTMS_PLATFORM_CODES:
+        return _CTMS_PLATFORM_CODES[permission]
+    if permission.startswith(("edc.", "pv.", "platform.")):
         return permission
+    if permission.startswith("safety_"):
+        return f"pv.{permission}"
     return f"edc.{permission}"
 
 # ---------------------------------------------------------------------------
@@ -523,22 +539,6 @@ ROLE_DEFINITIONS: dict[str, dict[str, str | list[str]]] = {
 }
 
 
-PLATFORM_STUDY_CREATOR_ROLE_NAMES = (
-    "Study Administrator",
-    "Designer_Role",
-    "Operational_Role",
-    "CTMS_Operations_User",
-    "Safety_Manager",
-)
-PLATFORM_MANAGED_ROLE_IDS: dict[str, UUID] = {
-    "System Administrator": UUID("e208baf5-110f-5708-a483-d643f9719bfb"),
-    **{
-        name: uuid5(NAMESPACE_URL, f"aurinara-edc:role:{name}")
-        for name in PLATFORM_STUDY_CREATOR_ROLE_NAMES
-    },
-}
-
-
 # ---------------------------------------------------------------------------
 # Seeding routine
 # ---------------------------------------------------------------------------
@@ -638,27 +638,6 @@ def permission_catalog() -> list[dict[str, object]]:
             }
         )
     return catalog
-
-
-def platform_role_catalog() -> list[dict[str, object]]:
-    """Return stable reviewed roles synchronized into the shared Platform."""
-
-    definitions: list[dict[str, object]] = []
-    for name, role_id in PLATFORM_MANAGED_ROLE_IDS.items():
-        definition = ROLE_DEFINITIONS[name]
-        definitions.append(
-            {
-                "source_role_id": str(role_id),
-                "name": name,
-                "description": f"Built-in {name} role",
-                "scope_level": str(definition["scope"]),
-                "permissions": [
-                    platform_permission_code(str(code))
-                    for code in definition["permissions"]  # type: ignore[union-attr]
-                ],
-            }
-        )
-    return definitions
 
 
 async def seed_permission_catalog(session: AsyncSession) -> None:

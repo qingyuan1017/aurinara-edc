@@ -169,6 +169,9 @@ export function ExportCenterPage({ studyId }: { studyId: string }) {
     queryFn: async () => (await api.get<VisitOption[]>(`/subjects/${subjectFilter}/visits`)).data,
     enabled: canExport && showModal && Boolean(subjectFilter),
   })
+  const formOptions = Array.from(new Map((datasetsQuery.data ?? []).flatMap((dataset) =>
+    dataset.form_definition_ids.map((id, index) => [id, `${dataset.label} · Form ${index + 1}`] as const),
+  )).entries())
 
   const handleDownload = async (job: Export) => {
     try {
@@ -476,8 +479,8 @@ export function ExportCenterPage({ studyId }: { studyId: string }) {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="export-form">Form ID (optional)</Label>
-              <Input id="export-form" value={formFilter} onChange={(event) => setFormFilter(event.target.value)} />
+              <Label htmlFor="export-form">Form (optional)</Label>
+              <select id="export-form" value={formFilter} onChange={(event) => setFormFilter(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3"><option value="">All forms</option>{formOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
             </div>
             <div className="space-y-1.5"><Label htmlFor="export-changed">Changed since (optional)</Label><Input id="export-changed" type="datetime-local" value={changedSince} onChange={(event) => setChangedSince(event.target.value)} /></div>
             <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="export-date-from">Date from</Label><Input id="export-date-from" type="datetime-local" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="export-date-to">Date to</Label><Input id="export-date-to" type="datetime-local" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></div></div>

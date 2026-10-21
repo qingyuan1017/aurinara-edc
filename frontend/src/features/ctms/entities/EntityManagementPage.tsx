@@ -397,7 +397,7 @@ export function EntityManagementPage({ view = 'study', entityType: requestedEnti
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
         <SheetHeader className="pr-8">
           <SheetTitle>{`${editingEntity ? 'Edit' : !portfolioView && entityType === 'site' ? 'Add' : 'Create'} ${selectedEntityLabel}`}</SheetTitle>
-          <SheetDescription>{editingEntity ? `Update this ${selectedEntityLabel.toLowerCase()} without changing its stable identity.` : view === 'site-directory' ? 'Create a reusable Site that study teams can add to their Site lists.' : portfolioView ? `Create a ${selectedEntityLabel.toLowerCase()} in the CTMS entity catalog.` : entityType === 'site' ? 'Select an available Site and give it the Site ID used in this study.' : `Create a ${selectedEntityLabel.toLowerCase()} and add it to the selected study.`}</SheetDescription>
+          <SheetDescription>{editingEntity ? `Update this ${selectedEntityLabel.toLowerCase()} without changing its stable identity.` : view === 'site-directory' ? 'Create a reusable Site that study teams can add to their Site lists.' : portfolioView ? `Create a ${selectedEntityLabel.toLowerCase()} in the CTMS entity catalog.` : entityType === 'site' ? 'Select an available Site and enter the site number used in this study.' : `Create a ${selectedEntityLabel.toLowerCase()} and add it to the selected study.`}</SheetDescription>
         </SheetHeader>
         <div className="mt-2 pt-4">
           <EntityForm

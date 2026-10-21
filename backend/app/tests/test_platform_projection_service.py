@@ -28,7 +28,7 @@ async def test_platform_role_configuration_is_projected_read_only() -> None:
                 sequence=7,
                 data={
                     "role_id": str(role_id),
-                    "product": "aurinara-edc",
+                    "product": "platform",
                     "name": "ODM Designer",
                     "description": "Manage ODM metadata",
                     "scope_level": "study",
@@ -52,6 +52,66 @@ async def test_platform_role_configuration_is_projected_read_only() -> None:
         )
         assert permission is not None
         assert await session.get(RolePermission, (role_id, permission.id)) is not None
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_cross_product_platform_role_projects_only_edc_owned_permissions() -> None:
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    role_id = uuid4()
+
+    async with factory() as session:
+        applied = await apply_platform_event(
+            session,
+            PlatformEvent(
+                id=uuid4(),
+                type="platform.role.changed.v1",
+                aggregate_id=role_id,
+                sequence=9,
+                data={
+                    "role_id": str(role_id),
+                    "product": "platform",
+                    "name": "Study Administrator",
+                    "description": "Cross-product study administration",
+                    "scope_level": "study",
+                    "assignable": True,
+                    "status": "active",
+                    "revision": 1,
+                    "permission_codes": [
+                        "platform.study.read",
+                        "aurinara.sdtm.write",
+                        "edc.form.enter",
+                        "ctms.operational_data.read",
+                        "pv.safety_case.read",
+                        "edc.permission.sync",
+                    ],
+                },
+            ),
+        )
+        await session.commit()
+
+        assert applied is True
+        role = await session.get(Role, role_id)
+        assert role is not None
+        permissions = {
+            item.code
+            for item in (
+                await session.scalars(
+                    select(Permission)
+                    .join(RolePermission, RolePermission.permission_id == Permission.id)
+                    .where(RolePermission.role_id == role_id)
+                )
+            ).all()
+        }
+        assert permissions == {
+            "form.enter",
+            "ctms.operational_data_read",
+            "safety_case.read",
+        }
 
     await engine.dispose()
 
@@ -173,7 +233,7 @@ async def test_projection_preserves_issuer_and_uses_edc_role_id() -> None:
                 data={
                     "study_id": str(study_id),
                     "user_id": str(user_id),
-                    "product": "aurinara-edc",
+                    "product": "platform",
                     "site_id": None,
                     "role_ids": [str(platform_role_id)],
                     "assigned_by": str(user_id),

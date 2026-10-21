@@ -28,8 +28,7 @@ const columns = [
   columnHelper.accessor('timestamp', { header: 'Timestamp', cell: (info) => new Date(info.getValue()).toLocaleString() }),
   columnHelper.accessor('actor_email', { header: 'Actor' }),
   columnHelper.accessor('action', { header: 'Action', cell: (info) => <StatusBadge status={info.getValue()} label="Audit action" /> }),
-  columnHelper.accessor('entity_type', { header: 'Entity Type' }),
-  columnHelper.accessor('entity_id', { header: 'Entity ID', cell: (info) => <span className="font-mono text-xs">{info.getValue().slice(0, 8)}…</span> }),
+  columnHelper.accessor('entity_type', { header: 'Record', cell: (info) => info.getValue().replaceAll('_', ' ') }),
   columnHelper.accessor('field', { header: 'Field', cell: (info) => info.getValue() ?? '—' }),
   columnHelper.accessor('old_value', { header: 'Old', cell: (info) => { const value = info.getValue(); return value ? <span className="text-xs text-destructive">{value}</span> : '—' } }),
   columnHelper.accessor('new_value', { header: 'New', cell: (info) => { const value = info.getValue(); return value ? <span className="text-xs text-success">{value}</span> : '—' } }),
@@ -72,7 +71,7 @@ export function AuditViewerPage() {
       <PageToolbar label="Audit filters" actions={<Button type="button" variant="outline" size="sm" onClick={clearFilters}>Clear filters</Button>}>
         <div className="min-w-[200px] flex-1 space-y-1">
           <Label htmlFor="audit-search">Search</Label>
-          <Input id="audit-search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} placeholder="Actor email, entity ID…" />
+          <Input id="audit-search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} placeholder="Actor email, action, or record type…" />
         </div>
         <div className="min-w-[150px] space-y-1">
           <Label htmlFor="audit-entity-type">Entity type</Label>

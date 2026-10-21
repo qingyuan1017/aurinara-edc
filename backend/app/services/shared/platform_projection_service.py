@@ -7,7 +7,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError
-from app.core.permissions import PERMISSION_CODES
+from app.core.permissions import PERMISSION_CODES, platform_permission_code
 from app.models.edc.study import Study, StudyStatus
 from app.models.shared.identity import (
     Permission,
@@ -57,7 +57,7 @@ async def apply_platform_event(session: AsyncSession, event: PlatformEvent) -> b
     if event.type == "platform.membership.changed.v1":
         return await _apply_membership_event(session, event)
     if event.type == "platform.assignment.changed.v1":
-        if event.data.get("product") != "aurinara-edc":
+        if event.data.get("product") not in {"platform", "aurinara-edc"}:
             return False
         return await _apply_system_assignment_event(session, event)
     if event.type not in {"platform.study.created.v1", "platform.study.updated.v1"}:
@@ -110,21 +110,28 @@ async def apply_platform_event(session: AsyncSession, event: PlatformEvent) -> b
     return True
 
 
-def _local_permission_code(code: str) -> str:
-    return code.removeprefix("edc.")
+_PLATFORM_TO_LOCAL_PERMISSION = {
+    platform_permission_code(local_code): local_code for local_code in PERMISSION_CODES
+}
+
+
+def _local_permission_code(code: str) -> str | None:
+    return _PLATFORM_TO_LOCAL_PERMISSION.get(code)
 
 
 async def _apply_role_event(session: AsyncSession, event: PlatformEvent) -> bool:
     """Project Platform-owned role composition for local scoped filtering."""
 
-    if event.data.get("product") != "aurinara-edc":
+    if event.data.get("product") not in {"aurinara-edc", "platform"}:
         return False
     role_id = UUID(
         str(event.data.get("source_role_id") or event.data.get("role_id") or event.aggregate_id)
     )
     name = str(event.data["name"])
     local_codes = {
-        _local_permission_code(str(code)) for code in event.data.get("permission_codes", [])
+        local_code
+        for code in event.data.get("permission_codes", [])
+        if (local_code := _local_permission_code(str(code))) is not None
     }
     unsupported = local_codes - PERMISSION_CODES
     if unsupported:
@@ -274,7 +281,7 @@ def _user_status(value: str) -> UserStatus:
 
 
 async def _apply_membership_event(session: AsyncSession, event: PlatformEvent) -> bool:
-    if event.data.get("product") not in {None, "aurinara-edc"}:
+    if event.data.get("product") not in {None, "platform", "aurinara-edc"}:
         return False
     study_id = UUID(str(event.data["study_id"]))
     user_id = UUID(str(event.data["user_id"]))
