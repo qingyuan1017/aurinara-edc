@@ -64,6 +64,8 @@ jobs:
       - name: Load platform identity outputs
         run: |
           output() { aws cloudformation describe-stacks --stack-name aurinara-platform-staging --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
+          application_url=$(aws cloudformation describe-stacks --stack-name aurinara-edc-staging --query "Stacks[0].Outputs[?OutputKey=='ApplicationUrl'].OutputValue" --output text)
+          echo "APPLICATION_URL=${application_url}" >> "$GITHUB_ENV"
           echo "USER_POOL_ID=$(output UserPoolId)" >> "$GITHUB_ENV"
           echo "SPA_CLIENT_ID=$(output EdcSpaClientId)" >> "$GITHUB_ENV"
           echo "COGNITO_DOMAIN=$(output CognitoDomain)" >> "$GITHUB_ENV"
@@ -77,7 +79,7 @@ jobs:
           VITE_COGNITO_USER_POOL_ID: ${{ env.USER_POOL_ID }}
           VITE_COGNITO_CLIENT_ID: ${{ env.SPA_CLIENT_ID }}
           VITE_COGNITO_DOMAIN: ${{ env.COGNITO_DOMAIN }}
-          VITE_COGNITO_REDIRECT_URI: https://edc-staging.${{ vars.BASE_DOMAIN || 'aurinara.com' }}/auth/cognito/callback
+          VITE_COGNITO_REDIRECT_URI: ${{ env.APPLICATION_URL }}/auth/cognito/callback
           VITE_COGNITO_SCOPES: openid email profile
           VITE_MANAGED_LOGIN_ONLY: 'true'
         run: npm ci && npm run api:gen && npm run build
@@ -87,7 +89,7 @@ jobs:
           distribution=$(aws cloudformation describe-stacks --stack-name aurinara-edc-staging --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" --output text)
           aws s3 sync frontend/dist "s3://${bucket}" --delete
           aws cloudfront create-invalidation --distribution-id "$distribution" --paths '/*'
-          curl --fail --retry 12 --retry-delay 10 "https://edc-staging.${{ vars.BASE_DOMAIN || 'aurinara.com' }}/api/v1/health/ready"
+          curl --fail --retry 12 --retry-delay 10 "${APPLICATION_URL}/api/v1/health/ready"
   production:
     needs: [build, staging]
     if: ${{ always() && needs.build.result == 'success' && (needs.staging.result == 'success' || needs.staging.result == 'skipped') }}
@@ -136,6 +138,8 @@ jobs:
       - name: Load platform identity outputs
         run: |
           output() { aws cloudformation describe-stacks --stack-name aurinara-platform-production --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
+          application_url=$(aws cloudformation describe-stacks --stack-name aurinara-edc-production --query "Stacks[0].Outputs[?OutputKey=='ApplicationUrl'].OutputValue" --output text)
+          echo "APPLICATION_URL=${application_url}" >> "$GITHUB_ENV"
           echo "USER_POOL_ID=$(output UserPoolId)" >> "$GITHUB_ENV"
           echo "SPA_CLIENT_ID=$(output EdcSpaClientId)" >> "$GITHUB_ENV"
           echo "COGNITO_DOMAIN=$(output CognitoDomain)" >> "$GITHUB_ENV"
@@ -149,7 +153,7 @@ jobs:
           VITE_COGNITO_USER_POOL_ID: ${{ env.USER_POOL_ID }}
           VITE_COGNITO_CLIENT_ID: ${{ env.SPA_CLIENT_ID }}
           VITE_COGNITO_DOMAIN: ${{ env.COGNITO_DOMAIN }}
-          VITE_COGNITO_REDIRECT_URI: https://edc.${{ vars.BASE_DOMAIN || 'aurinara.com' }}/auth/cognito/callback
+          VITE_COGNITO_REDIRECT_URI: ${{ env.APPLICATION_URL }}/auth/cognito/callback
           VITE_COGNITO_SCOPES: openid email profile
           VITE_MANAGED_LOGIN_ONLY: 'true'
         run: npm ci && npm run api:gen && npm run build
@@ -158,6 +162,6 @@ jobs:
           distribution=$(aws cloudformation describe-stacks --stack-name aurinara-edc-production --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" --output text)
           aws s3 sync frontend/dist "s3://${bucket}" --delete
           aws cloudfront create-invalidation --distribution-id "$distribution" --paths '/*'
-          curl --fail --retry 12 --retry-delay 10 "https://edc.${{ vars.BASE_DOMAIN || 'aurinara.com' }}/api/v1/health/ready"
+          curl --fail --retry 12 --retry-delay 10 "${APPLICATION_URL}/api/v1/health/ready"
 
 

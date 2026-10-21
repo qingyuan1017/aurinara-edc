@@ -103,7 +103,7 @@ Resources:
         CognitoDomain: !Ref CognitoDomain
         ApplicationUrl: !Sub
           - 'https://${Host}.${BaseDomain}'
-          - Host: !If [IsProduction, edc, edc-staging]
+          - Host: !If [IsProduction, auri, edc-staging]
         PlatformPrivateUrl: !Ref PlatformPrivateUrl
         ServiceTokenUrl: !Ref ServiceTokenUrl
         ServiceClientId: !Ref ServiceClientId
@@ -120,7 +120,7 @@ Resources:
         Environment: !Ref Environment
         ApplicationDomain: !Sub
           - '${Host}.${BaseDomain}'
-          - Host: !If [IsProduction, edc, edc-staging]
+          - Host: !If [IsProduction, auri, edc-staging]
         DnsProvider: !Ref DnsProvider
         HostedZoneId: !Ref HostedZoneId
         CertificateArn: !Ref CertificateArn
@@ -154,7 +154,7 @@ Outputs:
   ApplicationUrl:
     Value: !Sub
       - 'https://${Host}.${BaseDomain}'
-      - Host: !If [IsProduction, edc, edc-staging]
+      - Host: !If [IsProduction, auri, edc-staging]
   FrontendBucketName: {Value: !GetAtt Data.Outputs.FrontendBucketName}
   CloudFrontDistributionId: {Value: !GetAtt Edge.Outputs.DistributionId}
   CloudFrontDistributionDomainName: {Value: !GetAtt Edge.Outputs.DistributionDomainName}
