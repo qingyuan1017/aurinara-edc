@@ -155,7 +155,8 @@ export function hasPermission(
 ): boolean {
   const user = useAuthStore.getState().user
   if (!user) return false
-  if (!studyId && !siteId && (user.permissions ?? []).includes(permission)) return true
+  // Flat permissions are system-wide grants, so they apply at every scope.
+  if ((user.permissions ?? []).includes(permission)) return true
   return user.roles.some((role) => roleAllows(role, permission, studyId, siteId))
 }
 
@@ -182,7 +183,8 @@ export function usePermission(
 ): boolean {
   const user = useAuthStore((state) => state.user)
   if (!user) return false
-  if (!studyId && !siteId && (user.permissions ?? []).includes(permission)) return true
+  // Flat permissions are system-wide grants, so they apply at every scope.
+  if ((user.permissions ?? []).includes(permission)) return true
   return user.roles.some((role) => roleAllows(role, permission, studyId, siteId))
 }
 
