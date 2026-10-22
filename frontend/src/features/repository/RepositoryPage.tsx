@@ -17,6 +17,7 @@ import {
   Search,
   Share2,
   Upload,
+  X,
 } from "lucide-react";
 import { RepositoryPreview } from "@/components/repository-preview";
 import { api } from "@/lib/api";
@@ -49,6 +50,20 @@ export function RepositoryPage({ studyId }: { studyId: string }) {
   const abort = useRef<AbortController | undefined>(undefined);
   const deepNodeId = useRef<string | null>(null);
   const currentFolder = path.at(-1) ?? null;
+
+  useEffect(() => {
+    if (!preview) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreview(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [preview]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -440,10 +455,10 @@ export function RepositoryPage({ studyId }: { studyId: string }) {
                 {selected.capabilities.can_preview && (
                   <button
                     className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm"
-                    onClick={() => setPreview((value) => !value)}
+                    onClick={() => setPreview(true)}
                   >
                     <Eye className="size-4" />
-                    Preview
+                    Open preview
                   </button>
                 )}
                 {selected.kind === "file" && (
@@ -501,13 +516,6 @@ export function RepositoryPage({ studyId }: { studyId: string }) {
                   Convert to {target.toUpperCase()}
                 </button>
               ))}
-              {preview && selected.kind === "file" && versions[0] && (
-                <RepositoryPreview
-                  node={selected}
-                  version={versions[0]}
-                  changed={() => void load()}
-                />
-              )}
               <div className="space-y-2">
                 {versions.map((version) => (
                   <button
@@ -528,6 +536,56 @@ export function RepositoryPage({ studyId }: { studyId: string }) {
           )}
         </aside>
       </div>
+      {preview && selected?.kind === "file" && versions[0] && (
+        <div
+          className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/75 p-3 backdrop-blur-sm md:p-8"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPreview(false);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Preview ${selected.display_name}`}
+            className="grid h-full w-full max-w-[1600px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border bg-background shadow-2xl"
+          >
+            <header className="flex items-center justify-between gap-4 border-b bg-card px-4 py-3 md:px-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <File className="size-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                    {versions[0].profile?.file_kind || "file"} · Version {versions[0].version_number}
+                  </p>
+                  <h2 className="truncate text-base font-semibold md:text-lg">
+                    {selected.display_name}
+                  </h2>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="hidden rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 sm:inline">
+                  {versions[0].profile?.processing_status || "pending"}
+                </span>
+                <button className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm" onClick={() => void download(versions[0])}>
+                  <Download className="size-4" />
+                  <span className="hidden sm:inline">Download</span>
+                </button>
+                <button className="grid size-9 place-items-center rounded-md border" aria-label="Close preview" onClick={() => setPreview(false)}>
+                  <X className="size-4" />
+                </button>
+              </div>
+            </header>
+            <div className="min-h-0 overflow-auto bg-muted/30 p-3 md:p-5">
+              <RepositoryPreview
+                node={selected}
+                version={versions[0]}
+                changed={() => void load()}
+              />
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
