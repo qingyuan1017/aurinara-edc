@@ -8,14 +8,19 @@ import {
 } from "react";
 import {
   Archive,
+  Database,
   Download,
   Eye,
   File,
+  FileSpreadsheet,
+  FileText,
   Folder,
   FolderPlus,
+  Presentation,
   RefreshCw,
   Search,
   Share2,
+  Table2,
   Upload,
   X,
 } from "lucide-react";
@@ -29,6 +34,30 @@ import {
   type RepositoryVersion,
   type UploadProgress,
 } from "@/lib/repository-client";
+
+const extensionKinds: Record<string, string> = {
+  pdf: "pdf", docx: "docx", xlsx: "xlsx", pptx: "pptx", csv: "csv", parquet: "parquet",
+};
+
+function repositoryFileKind(node: RepositoryNode): string {
+  if (node.kind === "folder") return "folder";
+  const detected = node.current_version?.profile?.file_kind;
+  if (detected && detected !== "unknown") return detected;
+  return extensionKinds[node.display_name.split(".").pop()?.toLowerCase() || ""] || "file";
+}
+
+function RepositoryEntryIcon({ node, className = "size-4" }: { node: RepositoryNode; className?: string }) {
+  const kind = repositoryFileKind(node);
+  const colors: Record<string, string> = { folder: "text-amber-500", pdf: "text-red-500", docx: "text-blue-500", xlsx: "text-emerald-500", pptx: "text-orange-500", csv: "text-teal-500", parquet: "text-violet-500", file: "text-muted-foreground" };
+  const props = { className: `${className} shrink-0 ${colors[kind] || colors.file}`, "aria-label": kind === "folder" ? "Folder" : `${kind.toUpperCase()} file` };
+  if (kind === "folder") return <Folder {...props} />;
+  if (kind === "pdf" || kind === "docx") return <FileText {...props} />;
+  if (kind === "xlsx") return <FileSpreadsheet {...props} />;
+  if (kind === "pptx") return <Presentation {...props} />;
+  if (kind === "csv") return <Table2 {...props} />;
+  if (kind === "parquet") return <Database {...props} />;
+  return <File {...props} />;
+}
 
 export function RepositoryPage({ studyId }: { studyId: string }) {
   const [query, setQuery] = useState("");
@@ -398,11 +427,7 @@ export function RepositoryPage({ studyId }: { studyId: string }) {
               }
             >
               <span className="flex min-w-0 items-center gap-2">
-                {item.kind === "folder" ? (
-                  <Folder className="size-4 text-amber-500" />
-                ) : (
-                  <File className="size-4 text-primary" />
-                )}
+                <RepositoryEntryIcon node={item} />
                 <span className="truncate">{item.display_name}</span>
               </span>
               <span className="truncate text-xs text-muted-foreground">
@@ -423,7 +448,8 @@ export function RepositoryPage({ studyId }: { studyId: string }) {
         </section>
         <aside className="space-y-4 rounded-xl border bg-card p-5">
           <div>
-            <h2 className="font-semibold">
+            <h2 className="flex items-center gap-2 font-semibold">
+              {selected && <RepositoryEntryIcon node={selected} />}
               {selected?.display_name ?? "File details"}
             </h2>
             <p className="text-xs text-muted-foreground">
@@ -552,7 +578,7 @@ export function RepositoryPage({ studyId }: { studyId: string }) {
             <header className="flex items-center justify-between gap-4 border-b bg-card px-4 py-3 md:px-6">
               <div className="flex min-w-0 items-center gap-3">
                 <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <File className="size-5" />
+                  <RepositoryEntryIcon node={selected} className="size-5" />
                 </span>
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
