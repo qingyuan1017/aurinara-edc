@@ -52,7 +52,6 @@ from app.services.pv.pv_export_service import PVExportService
 from app.services.pv.reconciliation_service import ReconciliationService
 from app.services.pv.regulatory_reporting_service import RegulatoryReportingService
 from app.services.pv.safety_case_service import SafetyCaseService
-from app.services.shared.ai_assistant_service import AIAssistantService
 from app.services.shared.auth_service import AuthService
 from app.workers import pv_export_worker
 
@@ -97,7 +96,7 @@ PHASE_CAPABILITIES: dict[int, frozenset[str]] = {
             "regulatory reporting and expedited timelines",
             "ICSR/E2B",
             "advanced safety exports",
-            "optional AI assistant",
+            "Platform Playground boundary",
         }
     ),
 }
@@ -116,13 +115,6 @@ class _MemoryStorage:
 
     async def delete(self, key: str) -> None:
         self.objects.pop(key, None)
-
-
-class _AIProvider:
-    async def stream(self, operation: str, payload: dict):
-        assert operation == "pv-chat"
-        assert payload["operation"] == "pv-chat"
-        yield "PV response"
 
 
 @pytest.fixture
@@ -413,11 +405,10 @@ async def test_phase2_oq_qualification_and_read_only_reconciliation(db_session: 
 
 
 @pytest.mark.asyncio
-async def test_phase3_oq_qualification_and_optional_ai(db_session: AsyncSession, monkeypatch) -> None:
-    """Phase 3 proves expedited reporting, ICSR, advanced exports, and AI controls."""
+async def test_phase3_oq_qualification_and_playground_boundary(db_session: AsyncSession, monkeypatch) -> None:
+    """Phase 3 proves reporting, exports, and the Platform Playground boundary."""
 
     data = await _seed(db_session)
-    actor_user: User = data["actor"]  # type: ignore[assignment]
     actor, case, _event = await _make_case(db_session, data, label="phase3")
     evidence: list[QualificationResult] = []
     regulatory = RegulatoryReportingService()
@@ -456,22 +447,12 @@ async def test_phase3_oq_qualification_and_optional_ai(db_session: AsyncSession,
     assert json.loads(storage.objects[advanced_paths[1]])[0]["case_identifier"] == case.case_identifier
     evidence.append(QualificationResult(3, "advanced safety exports"))
 
-    from app.core.config import Settings
+    from app.main import create_app
 
-    settings = Settings(ai_assistant_enabled=True, pv_ai_enabled=True)
-    monkeypatch.setattr("app.services.shared.ai_assistant_service.get_settings", lambda: settings)
-    monkeypatch.setattr("app.services.shared.ai_platform_service.get_settings", lambda: settings)
-    ai_user = _scope_user(actor_user, data["study"].id, permissions=("safety_case.enter",))  # type: ignore[arg-type]
-    service = AIAssistantService(provider=_AIProvider(), module=Module.PV)
-    context = service.build_context(
-        ai_user,
-        {"study_id": str(data["study"].id), "message": "Summarize this safety case", "clinical_data": "drop"},  # type: ignore[union-attr]
-    )
-    assert context["message"] == "Summarize this safety case"
-    assert "clinical_data" not in context
-    stream = "".join([chunk async for chunk in service.stream("pv-chat", context, user_id=actor.user_id, user=ai_user)])
-    assert '"type": "done"' in stream
-    evidence.append(QualificationResult(3, "optional AI assistant"))
+    local_paths = {path for route in create_app().routes if (path := getattr(route, "path", ""))}
+    assert not any(path == "/api/v1/ai" or path.startswith("/api/v1/ai/") for path in local_paths)
+    assert not any(path == "/api/v1/pv/ai" or path.startswith("/api/v1/pv/ai/") for path in local_paths)
+    evidence.append(QualificationResult(3, "Platform Playground boundary"))
 
     _assert_phase_qualified(3, evidence)
 

@@ -83,6 +83,5 @@ async def pv_metrics(current_user: PVHealthGuard) -> dict[str, object]:
         "enabled": settings.pv_enabled and settings.pv_phase != 0,
         "phase": settings.pv_phase,
         "worker_enabled": settings.pv_worker_enabled,
-        "ai_enabled": settings.ai_assistant_enabled and settings.pv_ai_enabled,
         **pv_observability_service.metrics_snapshot(),
     }

@@ -51,7 +51,7 @@ Two PV-specific findings inform the design. First, the E2B(R3) requirement is a 
 
 ### Platform and module topology
 
-The EDC_System, CTMS_Module, and PV_Safety_Module are feature modules in the same authenticated deployment. They share request context, authorization, audit, storage, export-job, notification, observability, environment, optional AI controls, and `Coordination_Service`. PV routes are exposed under `/api/v1/pv`. PV does not call EDC or CTMS over their public HTTP APIs for first-party coordination; approved internal service contracts and the shared transaction/session boundary are used, and approved projections flow only through the coordination outbox.
+The EDC_System, CTMS_Module, and PV_Safety_Module are feature modules in the same authenticated deployment. They share request context, authorization, audit, storage, export-job, notification, observability, environment, Platform Playground controls, and `Coordination_Service`. PV routes are exposed under `/api/v1/pv`. PV does not call EDC or CTMS over their public HTTP APIs for first-party coordination; approved internal service contracts and the shared transaction/session boundary are used, and approved projections flow only through the coordination outbox.
 
 ```mermaid
 graph TD
@@ -207,7 +207,7 @@ Any PV command that contains an EDC-owned or CTMS-owned field, or targets anothe
 | `Notification_Service` | Shared Platform, module-owned triggers | Notification persistence, delivery state, Unread/Read/Archived lifecycle | Triggers for serious-case creation, clock warnings, and export outcomes | EDC clinical triggers; CTMS operational triggers |
 | Health, metrics, logs, tracing | Shared Platform | Health/readiness, metrics, structured logs, tracing, sanitized observability | PV latency, error rate, worker/export failures, overdue-report metrics | EDC/CTMS observability |
 | Environment management | Shared Platform | Isolated database, storage, secrets, auth config, logging, retention, backup/restore per Environment | PV feature flags and safety settings | EDC/CTMS settings and migration gates |
-| Optional `AI_Assistant_Service` | Shared controls, module-scoped authorization | AI transport, context minimization, confirmation, audit hooks | PV-scoped chat, narrative drafting, case summarization | EDC/CTMS-scoped assistant capabilities |
+| Platform Playground | Aurinara Platform | Agent catalog, AgentCore streaming, approval records | Authenticated access to PV-owned MCP tools only | Product-local AI routes are not exposed |
 
 ### Backend package structure
 
@@ -622,7 +622,7 @@ Vitest/Testing Library tests cover PV route registration under the authenticated
 
 ### Qualification gates by phase
 
-Qualification evidence provides at least one passing OQ or PQ test for each listed PV capability. Phase 1 proves shared authentication, PV scope enforcement, safety case intake bound to canonical identity, the case lifecycle state machine, seriousness assessment, immutable PV safety audit, EDC non-modification boundaries, and safety CSV export. Phase 2 proves MedDRA/WHODrug coding, causality/expectedness/severity assessments, Case_Narratives, and EDC adverse-event reconciliation. Phase 3 proves regulatory reporting with expedited timelines, ICSR/E2B handling, advanced safety exports, and the optional AI assistant. No phase is declared complete while any required test is failing, and EDC/CTMS capabilities are not counted as PV phase deliverables.
+Qualification evidence provides at least one passing OQ or PQ test for each listed PV capability. Phase 1 proves shared authentication, PV scope enforcement, safety case intake bound to canonical identity, the case lifecycle state machine, seriousness assessment, immutable PV safety audit, EDC non-modification boundaries, and safety CSV export. Phase 2 proves MedDRA/WHODrug coding, causality/expectedness/severity assessments, Case_Narratives, and EDC adverse-event reconciliation. Phase 3 proves regulatory reporting with expedited timelines, ICSR/E2B handling, advanced safety exports, and the Platform Playground boundary. No phase is declared complete while any required test is failing, and EDC/CTMS capabilities are not counted as PV phase deliverables.
 
 ## Phased Delivery
 
@@ -634,9 +634,9 @@ Deliver shared authentication reuse, PV authorization scope enforcement, `Safety
 
 Deliver `Coding_Service` (MedDRA and WHODrug with immutable dictionary-version retention and recoding traceability), `Assessment_Service` causality/expectedness/severity, `Narrative_Service` versioned Case_Narratives, `Reconciliation_Service` over the read-only `Safety_Operational_Projection` consumed through the coordination outbox, the `pv_projection_worker`, and reconciliation reporting. Phase 2 must prove one-way read-only reconciliation, projection minimization, and PV operation while the EDC projection is unavailable.
 
-### Phase 3: Regulatory reporting, ICSR/E2B, advanced exports, and optional AI
+### Phase 3: Regulatory reporting, ICSR/E2B, advanced exports, and Platform Playground
 
-Deliver `Regulatory_Reporting_Service` reportability rules, Regulatory_Clock computation and expedited timelines, the report state machine, ICSR/E2B(R3) produce/parse with the round-trip property, advanced safety exports (Excel/JSON/E2B XML), safety dashboards/reports and compliance metrics, safety notifications, and the optional PV-scoped AI assistant with scope checks, human confirmation, and AI-assisted audit origin. Phase 3 must prove clock correctness, ICSR round-trip fidelity, sanitized failures, and no data change without explicit confirmation.
+Deliver `Regulatory_Reporting_Service` reportability rules, Regulatory_Clock computation and expedited timelines, the report state machine, ICSR/E2B(R3) produce/parse with the round-trip property, advanced safety exports (Excel/JSON/E2B XML), safety dashboards/reports and compliance metrics, safety notifications, and the Platform Playground boundary with authenticated PV MCP tools and explicit per-mutation confirmation. Phase 3 must prove clock correctness, ICSR round-trip fidelity, sanitized failures, and no data change without explicit confirmation.
 
 Feature flags are evaluated server-side and returned as capability metadata. Disabling PV hides PV actions but does not delete PV records or alter EDC/CTMS routes. Each phase has an Alembic revision set, an API/OpenAPI contract snapshot, backend/frontend/security/permission/audit/ownership-boundary evidence, and a rollback procedure.
 
@@ -665,7 +665,7 @@ Feature flags are evaluated server-side and returned as capability metadata. Dis
 | 19. Frontend safety application | Permission-aware PV routes; consistent labels; Zod; disabled Closed controls; history dialogs | Property 5; Vitest/Playwright tests |
 | 20. Compliance, validation, environment | Environment isolation; UTC clock agreement; retention/backup; traceability matrix; state distinctness | Property 4; environment/compliance integration and smoke tests |
 | 21. PV phased delivery and testing | Phase gates; automated suites; EDC/CTMS excluded from PV deliverables | All properties; phase qualification and CI evidence |
-| 22. Optional AI assistant | PV-scoped `AI_Assistant_Service`; scope check; human confirmation; AI-assisted audit origin | Properties 4, 5; AI streaming/scope/confirmation integration tests |
+| 22. Platform Playground boundary | Platform-owned invocation; PV-owned MCP authorization and audit; per-mutation confirmation | Route-boundary and Platform Playground qualification tests |
 | 23. Unified platform safety ownership and coordination | Ownership uniqueness; canonical identity; minimized read-only projections; independent resilience | Properties 1, 5, 6; ownership-boundary and resilience tests |
 | 24. Performance | Bounded pagination; async job handoff; concurrency target | Property 5 (pagination); load/benchmark tests |
 | 25. Reliability and observability | Liveness/readiness; structured logs; metrics endpoint | Integration/smoke tests for health/metrics/logs |

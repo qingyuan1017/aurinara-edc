@@ -2,7 +2,7 @@
 
 ## Overview
 
-This plan converts the current design into incremental coding and testing tasks, preserving the completed EDC clinical delivery phases while adding the revised unified-platform boundary work from Requirement 32. Phase 1 ships the auditable EDC MVP (auth, authorization, canonical clinical Study/Site/Subject setup, eCRF metadata + data capture, immutable audit, manual queries, CSV export) with authorization scope, audit immutability, and clinical ownership independently verified. Phase 2 adds the EDC edit-check engine, repeating records, SDV, review, freeze/lock, Clinical_Attachments, and clinical notifications. Phase 3 adds EDC electronic signatures, published-version amendments, advanced clinical exports, and the optional AI assistant. A cross-cutting boundary phase adds EDC-side canonical identity guards, ownership enforcement, minimized read-only CTMS projections, explicit coordination validation, shared module-owner discrimination, request/correlation propagation, boundary tests, and EDC resilience when CTMS is disabled or unavailable.
+This plan converts the current design into incremental coding and testing tasks, preserving the completed EDC clinical delivery phases while adding the revised unified-platform boundary work from Requirement 32. Phase 1 ships the auditable EDC MVP (auth, authorization, canonical clinical Study/Site/Subject setup, eCRF metadata + data capture, immutable audit, manual queries, CSV export) with authorization scope, audit immutability, and clinical ownership independently verified. Phase 2 adds the EDC edit-check engine, repeating records, SDV, review, freeze/lock, Clinical_Attachments, and clinical notifications. Phase 3 adds EDC electronic signatures, published-version amendments, advanced clinical exports, and the Platform Playground boundary. A cross-cutting boundary phase adds EDC-side canonical identity guards, ownership enforcement, minimized read-only CTMS projections, explicit coordination validation, shared module-owner discrimination, request/correlation propagation, boundary tests, and EDC resilience when CTMS is disabled or unavailable.
 
 Implementation follows the design's layering throughout: thin routes → services (transaction boundary) → repositories; the EDC Audit_Service writes an append-only, module-owned Audit_Event in the **same transaction** as every EDC clinical/config mutation; the Permission_Service enforces route- and object-level access on every protected endpoint; canonical identity and authoritative-module guards reject cross-module writes; deletions are soft only; edit checks use the safe declarative DSL by default, while optional custom Python runs only through the separately deployed governed sandbox; all DB timestamps are UTC; the API is versioned under `/api/v1` with generated OpenAPI. Shared audit, notification, file, and export primitives carry explicit module-owner discriminators, while EDC consumes only approved minimized read-only CTMS projections and never owns CTMS operational records.
 
@@ -464,19 +464,16 @@ Property-based tests (Hypothesis) cover all 44 correctness properties, each as a
     - JSON/ODM round-trip and Excel/XPT generation, extending Property 34 coverage
     - _Requirements: 19.5_
 
-- [x] 31. Optional AI assistant (AI_Assistant_Service)
-  - [x] 31.1 Implement AI endpoints with streaming
-    - Chat, edit-check drafting, and query summarization backed by Bedrock AgentCore; stream via SSE or WebSocket
+- [x] 31. Platform Playground
+  - [x] 31.1 Replace the product-local AI routes with the Platform Playground boundary
+    - Remove EDC/PV chat, drafting, summarization, and suggestion-application endpoints and product-local AgentCore configuration
     - _Requirements: 31.1, 31.2_
-  - [x] 31.2 Implement scoped context and human-confirmation gating
-    - `build_context` restricts context to the requesting User's Authorization_Scope; `apply_suggestion` requires explicit human confirmation before any data change; audit AI-assisted regulated changes
-    - _Requirements: 31.3, 31.4, 31.5_
-  - [x] 31.3 Implement AI routes and UI
-    - `POST /ai/chat`, `POST /ai/edit-check-draft`, `POST /ai/query-summary` (SSE/WS); assistant UI
-    - _Requirements: 31.1, 31.2, 21.1_
-  - [x] 31.4 Write property test for AI confirmation
-    - **Property 37: AI data changes require human confirmation**
-    - **Validates: Requirements 31.4**
+  - [x] 31.2 Add the simple catalog-driven Playground UI
+    - Add agent selection, resumable AgentCore-backed conversation history, streamed chat, stop/new-conversation controls, tool status, and per-write approve-once/deny controls at `/playground`
+    - _Requirements: 31.1, 31.3, 31.4, 31.6_
+  - [x] 31.3 Preserve regulated ownership and audit boundaries
+    - Agents mutate only through authenticated owning MCP services; approval never replaces EDC authorization, validation, transaction, or audit controls
+    - _Requirements: 31.4, 31.5_
 
 - [x] 32. Checkpoint — Phase 3
   - Ensure all tests pass, ask the user if questions arise.

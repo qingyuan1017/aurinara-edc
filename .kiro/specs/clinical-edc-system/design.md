@@ -4,7 +4,7 @@
 
 The Clinical Electronic Data Capture (`EDC_System`) is the clinical first-party module inside the `Unified_Clinical_Platform`. Together with the co-equal `CTMS_Module`, it operates within one authenticated application boundary and one canonical Study/Site identity model. EDC manages the regulated clinical trial data lifecycle (21 CFR Part 11, GxP, ALCOA+, HIPAA-aware): clinical configuration and Study_Version lifecycle, the Clinical_Subject_Registry, protocol visits and casebooks, eCRF metadata and clinical data capture, clinical quality workflows, immutable clinical audit, clinical attachments, clinical exports, and clinical dashboards/reports.
 
-CTMS is not an external integration and is not a second clinical system of record. CTMS owns operational study and site profiles, readiness and activation, operational contacts, enrollment targets and milestones, Monitoring_Plans and Monitoring_Activities, operational tasks and follow-ups, operational attachments, and operational dashboards/reports/exports. Shared platform services provide authentication, authorization, audit primitives, notifications, file storage, export jobs, observability, environment controls, optional AI controls, API conventions, and `Coordination_Service`; shared primitives do not transfer ownership of module data. CTMS records may reference EDC Subject and Visit_Instance identifiers and may consume approved minimized projections, but CTMS routes and services cannot create or mutate EDC-owned clinical records.
+CTMS is not an external integration and is not a second clinical system of record. CTMS owns operational study and site profiles, readiness and activation, operational contacts, enrollment targets and milestones, Monitoring_Plans and Monitoring_Activities, operational tasks and follow-ups, operational attachments, and operational dashboards/reports/exports. Shared platform services provide authentication, authorization, audit primitives, notifications, file storage, export jobs, observability, environment controls, Platform Playground controls, API conventions, and `Coordination_Service`; shared primitives do not transfer ownership of module data. CTMS records may reference EDC Subject and Visit_Instance identifiers and may consume approved minimized projections, but CTMS routes and services cannot create or mutate EDC-owned clinical records.
 
 This design satisfies the current 32 EDC requirements in `requirements.md` and the approved first-party boundary, and is organized around six design goals:
 
@@ -192,7 +192,7 @@ sequenceDiagram
 |---|---|---|---|
 | **Phase 1 (MVP)** | 1, 2, 3, 4, 6, 7, 8, 9, 10, 13 (manual), 18, 19 (CSV), 21, 22, 23, 24, 25, 26, 30, 32 (boundary) | Auth_Service, Permission_Service, User/Role/Invitation, canonical Study/Site clinical references, Study_Service, Site_Service, Subject_Service, Protocol_Visit_Service, Form_Metadata_Service, Data_Capture_Service, Query_Service (manual), Audit_Service, Export_Service (CSV), Dashboard_Service (clinical), API/DB/Frontend foundations | Verify CTMS cannot mutate EDC clinical records; verify shared scope, canonical identity, audit immutability, and protocol-visit ownership before Phase 1 completion. |
 | **Phase 2** | 11, 12, 14, 15, 16, 20, 27, 28, selected 26/32 gates | Edit_Check_Engine, Repeating_Record_Service, SDV_Service, Review_Service, Lock_Service, clinical Dashboard_Service, Clinical_Attachment support, Notification_Service | CTMS monitoring/work/projection delivery remains additive and cannot change clinical state; verify frozen/locked visit separation and projection minimization. |
-| **Phase 3** | 5 (amendments), 17, 19 (advanced formats), 31, selected 26/32 gates | Signature_Service, Study_Version_Service (amendments), Export_Service (Excel/JSON/XPT/ODM), AI_Assistant_Service | Verify coordinated transitions, advanced export separation, AI confirmation, and EDC resilience when CTMS is disabled or unavailable. |
+| **Phase 3** | 5 (amendments), 17, 19 (advanced formats), 31, selected 26/32 gates | Signature_Service, Study_Version_Service (amendments), Export_Service (Excel/JSON/XPT/ODM), Platform Playground boundary | Verify coordinated transitions, advanced export separation, per-mutation confirmation, and EDC resilience when CTMS is disabled or unavailable. |
 | **Cross-cutting** | 2, 18, 21, 23, 25, 30, 32 | Shared Auth_Service, Permission_Service, Audit_Service, Request_Context, Coordination_Service, storage/export primitives, observability, environment controls | Shared primitives do not transfer EDC clinical authority to CTMS. CTMS operational audit, exports, attachments, dashboards, and notifications remain CTMS-owned. |
 
 ### Backend Package Structure
@@ -215,7 +215,7 @@ backend/
         auth.py users.py studies.py study_versions.py sites.py subjects.py
         visits.py forms.py form_data.py records.py queries.py edit_checks.py
         sdv.py reviews.py locks.py signatures.py exports.py audit.py
-        dashboards.py notifications.py files.py ai_assistant.py health.py
+        dashboards.py notifications.py files.py health.py
         ctms/                  # operational routes under /api/v1/ctms
           studies.py sites.py enrollment.py milestones.py monitoring.py
           tasks.py contacts.py projections.py coordination.py
@@ -543,12 +543,11 @@ The `Notification_Service` is shared persistence and delivery infrastructure; ED
 - `soft_delete(attachment, reason)` — logical deletion retains metadata, actor, timestamp, and reason and prevents normal download (27.3).
 - Upload, download, and deletion write EDC clinical Audit_Events (27.4, 18.4). The service rejects CTMS operational attachment targets; CTMS uses its own module-owned attachment semantics under `/api/v1/ctms` (27.6, 32).
 
-### AI_Assistant_Service (Requirement 31, optional)
+### Platform Playground boundary (Requirement 31)
 
-- Endpoints for chat, edit-check drafting, and query summarization backed by AWS Bedrock AgentCore (31.1).
-- Responses streamed via Server-Sent Events or WebSocket (31.2).
-- `build_context(user, request)` — verifies the requesting User's Authorization_Scope and restricts context strictly to in-scope data before sending it to the model (31.3).
-- `apply_suggestion(suggestion)` — if a suggestion would change study data, requires explicit human confirmation before applying (31.4); AI-assisted regulated-data changes write Audit_Events (31.5).
+- The EDC shell exposes `/playground` and consumes the product-filtered catalog and normalized SSE stream from Aurinara Platform (31.1, 31.3).
+- EDC exposes no local AI endpoints or AgentCore configuration; Platform owns durable conversation metadata and invocation, while AgentCore Memory owns message history and recall under stable user/session keys (31.2, 31.6).
+- Agents reach regulated data only through authenticated, module-owned MCP tools. Every mutating tool call requires explicit approve-once confirmation, and the owning service still enforces scope, validation, transaction, and audit controls (31.4, 31.5).
 
 ### API Surface (Current EDC Requirement 21; CTMS boundary in Requirement 32)
 
@@ -579,7 +578,6 @@ Representative EDC mapping:
 | Dashboards | `GET /studies/{id}/dashboard`, `GET /sites/{id}/dashboard`, `GET /studies/{id}/query-metrics` |
 | Notifications | `GET /notifications`, `POST /notifications/{id}/read|archive` |
 | Files | `POST /objects/{type}/{id}/files`, `GET /files/{id}/download`, `DELETE /files/{id}` |
-| AI | `POST /ai/chat`, `POST /ai/edit-check-draft`, `POST /ai/query-summary` (SSE/WS) |
 | Health | `GET /health/live`, `GET /health/ready`, `GET /metrics` |
 
 CTMS operational routes are separate and ownership-visible:
@@ -1190,7 +1188,7 @@ The system uses a dual testing approach: example/integration/component tests for
 | 19–20 Clinical exports and dashboards/reports | EDC-owned content and filters on shared job/aggregation primitives; approved CTMS projections are read-only and labeled | Properties 3, 34, 44; export/report scope and separation tests |
 | 21–25 API, persistence, layering, frontend, compliance/environment | `/api/v1` EDC routes, repositories, hybrid storage, frontend clinical area, UTC/audit controls | Properties 19, 31–33; API, schema, migration, frontend, compliance tests |
 | 26 EDC phased delivery and testing | Phase gates, qualification evidence, CTMS non-modification prerequisite | Phase alignment and qualification suites |
-| 27–31 Clinical attachments, notifications, performance, observability, optional AI | EDC-owned clinical content using shared primitives; scoped AI and resilience controls | Properties 35–37, 43–44; attachment, notification, performance, health, AI tests |
+| 27–31 Clinical attachments, notifications, performance, observability, Platform Playground | EDC-owned clinical content using shared primitives; Platform invocation and EDC authorization boundaries | Properties 35–37, 43–44; attachment, notification, performance, health, and Playground-boundary tests |
 | 32 Unified-platform clinical ownership and coordination | Co-equal EDC/CTMS modules, canonical Study/Site identity, ownership rules, minimized projections, explicit coordinated transitions, and internal typed coordination | Properties 38–44; ownership-boundary, coordination, projection, resilience, and route tests |
 
 The CTMS requirements/design remain authoritative for CTMS operational study/site management, enrollment targets/milestones, Monitoring_Plans/Activities, operational work, operational dashboards/reports/exports/attachments, coordination recovery, and CTMS qualification. This EDC design preserves the clinical authority defined by the current EDC requirements and specifies only the shared boundary needed for EDC to coexist safely with the first-party CTMS_Module.

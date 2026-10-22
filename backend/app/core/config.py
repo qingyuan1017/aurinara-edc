@@ -219,7 +219,6 @@ class Settings(BaseSettings):
     pv_enabled: bool = True
     pv_phase: int = 1
     pv_worker_enabled: bool = True
-    pv_ai_enabled: bool = False
 
     @field_validator("pv_phase")
     @classmethod
@@ -238,12 +237,6 @@ class Settings(BaseSettings):
     ctms_coordination_backoff_base_seconds: int = 1
     ctms_coordination_backoff_max_seconds: int = 60
     ctms_projection_lag_warning_seconds: int = 300
-
-    # --- Optional: AWS Bedrock AgentCore AI assistant ---
-    ai_assistant_enabled: bool = False
-    ctms_ai_enabled: bool = False
-    bedrock_agentcore_runtime_arn: str | None = None
-    bedrock_agentcore_region: str | None = None
 
     # --- Logging ---
     log_level: str = "INFO"
@@ -294,7 +287,6 @@ class Settings(BaseSettings):
             "pv_enabled": self.pv_enabled,
             "pv_phase": self.pv_phase,
             "pv_worker_enabled": self.pv_worker_enabled,
-            "pv_ai_enabled": self.pv_ai_enabled,
             "pv_retention_days": self.pv_retention_floor_days,
             "pv_backup_enabled": self.pv_backup_enabled,
             "pv_backup_interval_hours": self.pv_backup_interval_hours,

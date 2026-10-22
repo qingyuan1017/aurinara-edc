@@ -210,7 +210,7 @@ server-side default-deny authorization via the shared `permission_service`.
   - [x] 9.2 Aggregate designer_router and mount under /designer in main.py
     - Build `app/api/routes/designer/__init__.py` aggregate and
       `app.include_router(designer_router, prefix=f"{api_v1_prefix}/designer")`,
-      mounted after pv/pv_ai and before edc; preserve CTMS/PV mounting unchanged
+      mounted after PV and before EDC; preserve CTMS/PV mounting unchanged
     - _Requirements: 1.1, 2.1_
 
 - [~] 10. Checkpoint — designer package live, edc still intact

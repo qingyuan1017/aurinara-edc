@@ -17,7 +17,7 @@ app/
   api/routes/{edc,ctms,pv,shared}
 ```
 
-`app/main.py` mounts one aggregated `APIRouter` per domain under `/api/v1`: `shared_router`, `ctms_router`, `pv_router`, an optional `pv_ai_router`, and `edc_router`. The EDC and shared aggregates add **no prefix of their own**, so each resource router keeps the exact path it declares (`/studies`, `/sites`, `/visits`, …); the CTMS and PV aggregates carry their `/ctms` and `/pv` prefixes. Domain separation is deliberate: disabling CTMS or PV never changes EDC behavior.
+`app/main.py` mounts one aggregated `APIRouter` per domain under `/api/v1`: `shared_router`, `ctms_router`, `pv_router`, `designer_router`, and `edc_router`. The EDC and shared aggregates add **no prefix of their own**, so each resource router keeps the exact path it declares (`/studies`, `/sites`, `/visits`, …); the CTMS and PV aggregates carry their `/ctms` and `/pv` prefixes. Domain separation is deliberate: disabling CTMS or PV never changes EDC behavior.
 
 Two facts in the current EDC domain make this refactor low-risk:
 
@@ -38,7 +38,7 @@ A new `designer_router` aggregate is mounted in `app/main.py` alongside the exis
 
 Rationale for a sibling domain (rather than a sub-package of `edc`): the whole point of the refactor is independent ownership (R1). A sibling `designer` domain mirrors how CTMS and PV already achieve isolation, keeps the dependency arrow explicit (EDC depends on a Designer read port, never the reverse), and lets access-control scope cleanly to a module (R10).
 
-Mounting order in `main.py` becomes: `shared_router`, `ctms_router`, `pv_router`, optional `pv_ai_router`, **`designer_router`**, `edc_router`.
+Mounting order in `main.py` becomes: `shared_router`, `ctms_router`, `pv_router`, **`designer_router`**, `edc_router`.
 
 **Requirements covered:** R1, R2, R11, and the module-separation framing underlying all requirements.
 

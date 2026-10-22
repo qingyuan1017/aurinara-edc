@@ -6,7 +6,7 @@ This document specifies the requirements for the EDC_System clinical module insi
 
 The Unified_Clinical_Platform contains the co-equal first-party EDC_System and CTMS_Module. The modules share one authenticated application boundary, canonical Study and Site identity, and shared platform capabilities, but they own different records and workflows. CTMS owns operational study and site profiles/readiness/activation/contacts, operational enrollment targets and milestones, monitoring plans and activities, operational work management and follow-ups, and operational dashboards, reports, exports, and attachments. EDC remains authoritative for the clinical capabilities listed above. CTMS is not an external integration and shall not create duplicate clinical subjects or protocol visits, modify EDC clinical records, own EDC query lifecycle or unrestricted query messages, or become a second clinical system of record.
 
-The system is built on a defined technology baseline. The backend uses FastAPI on Python 3.11+, Pydantic v2 for schema validation, SQLAlchemy 2.x with Alembic migrations over a PostgreSQL database, served by Uvicorn/Gunicorn. The frontend is a single-page application built with React, TypeScript, Vite, shadcn/ui, Tailwind CSS, TanStack Query for server state, React Hook Form with Zod for form validation, and TanStack Router/Table for navigation and high-density listings. Optional AWS services may be configured per environment, including Cognito (authentication), S3 (file and export storage), RDS (PostgreSQL), ECS/Fargate (deployment), CloudWatch (logs and metrics), and Bedrock AgentCore (the optional AI assistant).
+The system is built on a defined technology baseline. The backend uses FastAPI on Python 3.11+, Pydantic v2 for schema validation, SQLAlchemy 2.x with Alembic migrations over a PostgreSQL database, served by Uvicorn/Gunicorn. The frontend is a single-page application built with React, TypeScript, Vite, shadcn/ui, Tailwind CSS, TanStack Query for server state, React Hook Form with Zod for form validation, and TanStack Router/Table for navigation and high-density listings. Optional AWS services may be configured per environment, including Cognito (authentication), S3 (file and export storage), RDS (PostgreSQL), ECS/Fargate (deployment), and CloudWatch (logs and metrics). Bedrock AgentCore integration is owned by Aurinara Platform's Playground.
 
 The system is intended for regulated clinical environments and is delivered in phases. Phase 1 delivers the EDC MVP: authentication, shared authorization scope enforcement, canonical clinical study/site/subject setup, eCRF metadata and data capture, the immutable clinical audit trail, manual clinical queries, and clinical CSV export. Phase 2 adds the clinical edit-check engine, repeating records, SDV, review, and freeze/lock. Phase 3 adds electronic signatures, published-version amendments, and advanced clinical exports. CTMS delivery phases are defined in the CTMS requirements document. Three cross-cutting concerns drive every EDC requirement: authorization scope enforcement, immutable auditability, and clinical data integrity under lifecycle controls. Terminology in this document is aligned with the approved CTMS requirements and design so requirements remain consistent across the unified platform.
 
@@ -49,7 +49,7 @@ The system is intended for regulated clinical environments and is delivered in p
 - **Monitoring_Activity**: A CTMS-owned operational monitoring record that may reference an EDC Visit_Instance without becoming or changing a Protocol_Visit_Service record.
 - **Operational_Attachment**: A CTMS-owned file metadata record and file content associated with operational work.
 - **Clinical_Attachment**: An EDC-owned file metadata record and file content associated with a clinical object or source record.
-- **AI_Assistant_Service**: The optional shared platform AI service that exposes approved EDC- or CTMS-scoped assistant capabilities backed by AWS Bedrock AgentCore.
+- **Platform_Playground**: The Platform-owned agent catalog, AgentCore invocation proxy, streaming chat, and per-mutation approval boundary shared by the Aurinara product shells.
 - **User**: An individual account with identity, status, and assigned roles. Accounts are one per individual and are never shared.
 - **Role**: A named set of permission codes with a scope of system, study, or site.
 - **Permission**: A stable permission code (for example `form.enter`) that authorizes a specific action.
@@ -73,7 +73,7 @@ The system is intended for regulated clinical environments and is delivered in p
 
 ## Ownership and Boundary Rules
 
-The EDC_System and CTMS_Module are co-equal first-party modules inside the Unified_Clinical_Platform. They share authentication, authorization, audit, notifications, file-storage primitives, export-job infrastructure, observability, environment/configuration, API conventions, optional AI controls, and Coordination_Service, but shared primitives do not make either module authoritative for the other's records.
+The EDC_System and CTMS_Module are co-equal first-party modules inside the Unified_Clinical_Platform. They share authentication, authorization, audit, notifications, file-storage primitives, export-job infrastructure, observability, environment/configuration, API conventions, Platform Playground controls, and Coordination_Service, but shared primitives do not make either module authoritative for the other's records.
 
 EDC is authoritative for Study_Version and clinical study configuration, Clinical_Subject_Registry and clinical subject identity, protocol visit definitions and Visit_Instances, eCRF metadata and clinical data capture, Queries and complete query message history, SDV, clinical review, freeze/lock, Electronic_Signatures, Clinical_Attachments, clinical dashboards/reports, and clinical exports. CTMS is authoritative for operational study and site profiles/readiness/activation/contacts, enrollment targets and operational milestones/statuses, Monitoring_Plans and Monitoring_Activities, Operational_Tasks and operational follow-ups, operational dashboards/reports, Operational_Attachments, and operational exports.
 
@@ -493,17 +493,18 @@ A CTMS_Operational_Projection is an explicit, minimized, authorized, read-only v
 4. WHEN a request is processed, THE EDC_System SHALL emit one structured log entry containing the request identifier, UTC timestamp, operation outcome, and duration in milliseconds.
 5. THE EDC_System SHALL record API latency in milliseconds, error rate as a percentage, database connections as a count, and worker job, export, and authentication failures as counts, and SHALL update these metrics at least once every 60 seconds.
 
-### Requirement 31: Optional AI Assistant
+### Requirement 31: Platform Playground
 
-**User Story:** As a data manager, I want an optional AI assistant for clinical data management tasks, so that I can draft edit checks and summarize queries with human oversight.
+**User Story:** As a signed-in user, I want one simple Playground for approved agents, so that I can work across the Aurinara suite with consistent authorization and human oversight.
 
 #### Acceptance Criteria
 
-1. WHERE the AI assistant is enabled, THE AI_Assistant_Service SHALL expose chat, edit-check drafting, and query summarization operations backed by AWS Bedrock AgentCore; IF the AI assistant is disabled, THEN THE AI_Assistant_Service SHALL expose none of those operations.
-2. WHERE the AI assistant is enabled, THE AI_Assistant_Service SHALL stream each response through Server-Sent Events or WebSocket and SHALL provide a terminal completion or error indication within the same stream.
-3. BEFORE sending clinical context to the AI assistant, THE AI_Assistant_Service SHALL verify the requesting User's Authorization_Scope and SHALL send no clinical context when the requested context is outside that scope.
-4. IF an AI suggestion would change study data, THEN THE AI_Assistant_Service SHALL require an explicit human confirmation for that specific change and SHALL apply no change when confirmation is absent or declined.
-5. WHEN a confirmed AI-assisted action changes regulated EDC clinical data, THE Audit_Service SHALL record one EDC clinical Audit_Event identifying the User, the changed clinical object, the action, and the AI-assisted origin.
+1. THE EDC frontend SHALL expose `/playground` and SHALL obtain its product-filtered agent catalog and conversations from Aurinara Platform.
+2. THE EDC backend SHALL expose no product-local AI chat, drafting, summarization, or suggestion-application routes.
+3. THE Playground SHALL forward the signed-in user's bearer credential through Platform to AWS Bedrock AgentCore and SHALL stream text, tool status, approval requests, completion, and sanitized error events.
+4. BEFORE any agent invokes a mutating MCP tool, THE Playground SHALL require explicit approval for that specific invocation and SHALL apply no change when approval is absent or denied.
+5. WHEN an approved agent action changes regulated EDC clinical data, the owning EDC service SHALL enforce the user's authorization scope and SHALL create its normal clinical Audit_Event; Playground approval SHALL NOT bypass EDC authorization or ownership controls.
+6. THE Playground SHALL list and resume the signed-in user's durable conversations and SHALL read their message history and long-term recall from AgentCore Memory using the same user and runtime-session identifiers used for invocation.
 
 ### Requirement 32: Unified Platform Clinical Ownership and Coordination
 
@@ -517,7 +518,7 @@ A CTMS_Operational_Projection is an explicit, minimized, authorized, read-only v
 4. WHEN EDC clinical progress or quality data is exposed to CTMS, THE Coordination_Service SHALL deliver only an approved, minimized, authorized CTMS_Operational_Projection containing its source identifier, rule version, correlation identifier, and processing outcome, and SHALL not deliver unapproved clinical fields.
 5. WHEN CTMS operational status or milestone data is exposed to EDC, THE Coordination_Service SHALL deliver only an approved read-only projection or an explicitly configured coordinated transition, and SHALL not change EDC clinical status or clinical data unless the configured transition explicitly authorizes that change.
 6. WHEN CTMS operational work references an EDC Query, THE Coordination_Service SHALL deliver only the approved Query identifier and minimized summary fields, and SHALL reject unrestricted Query messages while Query_Service remains authoritative for Query lifecycle and complete threaded messages.
-7. THE Unified_Clinical_Platform SHALL use shared Auth_Service, Permission_Service, Audit_Service, Notification_Service, file-storage primitives, export-job infrastructure, observability, environment/configuration, API conventions, optional AI controls, and Coordination_Service without transferring EDC clinical authority to CTMS.
+7. THE Unified_Clinical_Platform SHALL use shared Auth_Service, Permission_Service, Audit_Service, Notification_Service, file-storage primitives, export-job infrastructure, observability, environment/configuration, API conventions, Platform Playground controls, and Coordination_Service without transferring EDC clinical authority to CTMS.
 8. IF the CTMS_Module is disabled, empty, or unavailable, THEN THE EDC_System SHALL continue authentication, clinical data capture, clinical audit, clinical export, protocol visit, and clinical lifecycle operations using only EDC-owned state and SHALL return no CTMS-dependent clinical result as authoritative.
 
 ## Clinical Correctness Properties
@@ -579,7 +580,7 @@ For every valid EDC clinical API request and response model supported by Pydanti
 - Requirements 10–18 define EDC clinical data capture, validation, quality workflows, signatures, and immutable clinical audit behavior.
 - Requirements 19–20 define EDC clinical export and clinical dashboard/report content; shared infrastructure and CTMS operational content remain separately owned.
 - Requirements 21–25 define shared API, persistence, architecture, frontend, compliance, and environment controls with EDC clinical scope.
-- Requirements 26–31 define EDC delivery phases, clinical attachments, clinical notifications, performance, observability, and optional AI controls.
+- Requirements 26–31 define EDC delivery phases, clinical attachments, clinical notifications, performance, observability, and the Platform Playground boundary.
 - Requirement 32 defines canonical identity, ownership, projection, coordination, and CTMS non-modification boundaries.
 - Clinical Correctness Properties 1–8 provide the verification mapping for EDC identity, lifecycle, casebook, data integrity, auditability, authorization, content separation, and serialization.
 - The CTMS requirements document remains authoritative for CTMS operational study/site/enrollment/monitoring/work-management behavior, operational dashboards/reports/exports/attachments, coordination recovery, and operational qualification. This document remains authoritative for EDC clinical behavior identified in the ownership rules and glossary.

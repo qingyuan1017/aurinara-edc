@@ -81,7 +81,7 @@ PV_TRACEABILITY_MATRIX: tuple[TraceabilityEntry, ...] = (
     TraceabilityEntry("19. Frontend safety application", "Permission-aware PV routes; consistent labels; Zod; disabled Closed controls; history dialogs", "Property 5; Vitest/Playwright tests"),
     TraceabilityEntry("20. Compliance, validation, environment", "Environment isolation; UTC clock agreement; retention/backup; traceability matrix; state distinctness", "Property 4; environment/compliance integration and smoke tests"),
     TraceabilityEntry("21. PV phased delivery and testing", "Phase gates; automated suites; EDC/CTMS excluded from PV deliverables", "All properties; phase qualification and CI evidence"),
-    TraceabilityEntry("22. Optional AI assistant", "PV-scoped AI_Assistant_Service; scope check; human confirmation; AI-assisted audit origin", "Properties 4, 5; AI streaming/scope/confirmation integration tests"),
+    TraceabilityEntry("22. Platform Playground boundary", "Platform-owned agent catalog and invocation; EDC exposes no local AI route", "Route-boundary test; Platform Playground qualification"),
     TraceabilityEntry("23. Unified platform safety ownership and coordination", "Ownership uniqueness; canonical identity; minimized read-only projections; independent resilience", "Properties 1, 5, 6; ownership-boundary and resilience tests"),
     TraceabilityEntry("24. Performance", "Bounded pagination; async job handoff; concurrency target", "Property 5 (pagination); load/benchmark tests"),
     TraceabilityEntry("25. Reliability and observability", "Liveness/readiness; structured logs; metrics endpoint", "Integration/smoke tests for health/metrics/logs"),

@@ -9,7 +9,7 @@ import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage'
 import { AcceptInvitationPage } from '@/features/auth/AcceptInvitationPage'
 import { AccessDeniedPage } from '@/features/auth/AccessDeniedPage'
 import { AuditViewerPage, UserListPage } from '@/features/admin'
-import { AIAssistantPage } from '@/features/ai'
+import { PlaygroundPage } from '@/features/playground'
 import { CTMSCatalogReportPage, CTMSHomePage, CTMSPlannedWorkspacePage, CTMSPortfolioWorkspacePage, CTMSStudyAreaPage, CTMSStudyCompletionPage, CTMSWorkspacePage, EntityManagementPage, FinancialManagementPage, MonitoringModulePage, PortfolioManagementPage, PortfolioOperationsPage, ReferenceDataPage, type CTMSStudyOperationResource, type CTMSView, type MonitoringModuleView, type StudyWorkspaceView } from '@/features/ctms'
 import { findCTMSReportDefinition } from '@/features/ctms/reportCatalog'
 import { PVHomePage, PVWorkspacePage, type PVView } from '@/features/pv'
@@ -427,10 +427,10 @@ const edcDataFreezeRoute = createRoute({ getParentRoute: () => appShellLayout, p
 const edcDatabaseLockRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/database-lock/manage', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'database-lock' }) })
 const edcLockHistoryRoute = createRoute({ getParentRoute: () => appShellLayout, path: '/studies/$studyId/edc/database-lock/history', component: () => createElement(StudyEDCWorkspaceRoute, { view: 'lock-history' }) })
 
-const aiAssistantRoute = createRoute({
+const playgroundRoute = createRoute({
   getParentRoute: () => appShellLayout,
-  path: '/ai',
-  component: () => createElement(AIAssistantPage),
+  path: '/playground',
+  component: () => createElement(PlaygroundPage),
 })
 
 const notificationsRoute = createRoute({
@@ -741,7 +741,7 @@ const routeTree = rootRoute.addChildren([
       sdvRoute,
       reviewRoute,
       dataCleaningRoute,
-      aiAssistantRoute,
+      playgroundRoute,
       notificationsRoute,
       exportsRoute,
       edcOverviewRoute,

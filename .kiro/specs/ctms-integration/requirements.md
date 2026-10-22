@@ -4,7 +4,7 @@
 
 This document specifies the CTMS_Module inside the Unified_Clinical_Platform. The CTMS_Module is a first-party module in the same authenticated application as the EDC_System. It owns operational planning and execution workflows, while the EDC_System remains authoritative for clinical study configuration, clinical subject records, protocol visits, clinical data, clinical quality workflows, and clinical exports.
 
-The platform SHALL use explicit module ownership rather than treating the two modules as separate systems. Shared platform capabilities provide common identity, authorization, audit, request, notification, storage, export-job, observability, environment, and optional AI controls. Shared study, site, subject, and visit references SHALL point to one canonical identity. CTMS operational records SHALL reference EDC clinical records through approved CTMS_Operational_Projections and Coordination_Events without becoming a second clinical system of record.
+The platform SHALL use explicit module ownership rather than treating the two modules as separate systems. Shared platform capabilities provide common identity, authorization, audit, request, notification, storage, export-job, observability, environment, and Platform Playground controls. Shared study, site, subject, and visit references SHALL point to one canonical identity. CTMS operational records SHALL reference EDC clinical records through approved CTMS_Operational_Projections and Coordination_Events without becoming a second clinical system of record.
 
 The decomposition in this document is intentionally narrower than the complete EDC requirements document. The EDC requirements document remains authoritative for EDC-owned clinical behavior. This document defines the CTMS boundary, the shared platform boundary, the CTMS-owned operational behavior, and the internal coordination rules that connect them.
 
@@ -23,7 +23,7 @@ The Unified_Clinical_Platform owns capabilities that serve both modules and do n
 - export job infrastructure, status tracking, storage, and download controls;
 - health checks, metrics, structured logs, tracing, and operational observability;
 - isolated Environment configuration, secrets, storage, authentication, and logging;
-- optional AI platform controls, scope filtering, confirmation, and audit hooks;
+- Platform Playground catalog, invocation, per-mutation confirmation, and product authorization boundaries;
 - the API_Layer conventions, error envelope, pagination, request identifiers, and OpenAPI publication;
 - the Coordination_Service, which is an internal platform service used by approved module boundaries.
 
@@ -139,7 +139,7 @@ The following matrix is the required disposition of the existing EDC capabilitie
 | Notification_Service | EDC Requirement 28 | Shared Platform with module-owned triggers | Shared notification records and delivery state; EDC and CTMS own their event triggers and recipients. |
 | health, metrics, logs, tracing | EDC Requirement 30 | Shared Platform | Shared health/observability mechanisms with module-specific metrics and sanitized structured fields. |
 | Environment management | EDC Requirement 25 | Shared Platform | Shared isolated deployment, database, storage, secrets, authentication, logging, retention, backup, and restore controls. |
-| AI_Assistant_Service | EDC Requirement 31 | Shared Platform with module-scoped controls | Shared optional AI transport, scope filtering, human confirmation, and audit hooks; EDC and CTMS separately authorize context and actions. |
+| Platform_Playground | EDC Requirement 31 | Aurinara Platform | Product-filtered agent catalog, AgentCore streaming, and approve-once mutation controls; CTMS remains authoritative for its own actions. |
 | Clinical study configuration | EDC Requirements 5, 8, 9, 12 | EDC | Study_Version, protocol visits, eCRF metadata, code lists, and edit checks remain EDC-owned. |
 | Clinical subject registry and casebook | EDC Requirements 7, 8, 10, 11 | EDC | Clinical subject identity, clinical identifiers, study-version binding, Visit_Instances, Form_Instances, Field_Values, repeating records, and casebook remain EDC-owned. |
 | Clinical quality and governance | EDC Requirements 13–18 | EDC | Queries/messages, SDV, review, freeze/lock, signatures, and clinical audit records remain EDC-owned. |
@@ -180,7 +180,7 @@ The following matrix is the required disposition of the existing EDC capabilitie
 8. THE Export_Job_Service SHALL provide shared export job status, queueing, storage, download, and failure handling without owning export content semantics.
 9. THE Health_Observability_Service SHALL provide shared health endpoints, metrics, structured logs, tracing, and readiness signals.
 10. THE Environment_Service SHALL isolate database, object storage, secrets, authentication, and logging configuration for every Environment.
-11. WHERE the optional AI capability is enabled, THE AI_Platform_Service SHALL enforce module-specific Authorization_Scope, data minimization, human confirmation, and audit hooks before an AI action is applied.
+11. THE Platform_Playground SHALL require authenticated module-owned MCP tools, product-specific agent visibility, and explicit per-mutation confirmation without bypassing CTMS authorization or audit controls.
 
 ### Requirement 3: Operational study management
 
