@@ -28,7 +28,7 @@ class Module(StrEnum):
     # the owning module scope (R1.7). Operational_Records remain ``Module.EDC``.
     DESIGNER = "DESIGNER"
     # PV is a third co-equal module. It is listed here so the shared platform
-    # primitives (audit content owner, optional AI controls) can name the PV
+    # primitives (audit content owner, Platform Playground controls) can name the PV
     # module without forking a second enum. PV-owned safety records still live
     # under ``app.models.pv`` and never carry EDC clinical or CTMS operational
     # authority.

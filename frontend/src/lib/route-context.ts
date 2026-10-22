@@ -96,7 +96,7 @@ const STATIC_LABELS: Readonly<Record<string, string>> = {
   sdv: 'SDV Worklist',
   review: 'Clinical Review',
   'edit-checks': 'Edit Checks',
-  ai: 'AI Assistant',
+  playground: 'Playground',
   notifications: 'Notifications',
   exports: 'Exports',
   admin: 'Admin',

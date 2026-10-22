@@ -1,12 +1,5 @@
 """Pydantic contracts for shared cross-cutting primitives."""
 
-from app.schemas.shared.ai_assistant import (
-    AIApplySuggestionRequest,
-    AIChatMessage,
-    AIChatRequest,
-    AIEditCheckDraftRequest,
-    AIQuerySummaryRequest,
-)
 from app.schemas.shared.audit import (
     AuditEventExport,
     AuditEventResponse,
@@ -70,11 +63,6 @@ SHARED_SCHEMA_PACKAGE = "app.schemas.shared"
 
 __all__ = [
     "SHARED_SCHEMA_PACKAGE",
-    "AIApplySuggestionRequest",
-    "AIChatMessage",
-    "AIChatRequest",
-    "AIEditCheckDraftRequest",
-    "AIQuerySummaryRequest",
     "AccessTokenResponse",
     "AuditEventExport",
     "AuditEventResponse",

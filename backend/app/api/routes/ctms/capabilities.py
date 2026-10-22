@@ -20,7 +20,5 @@ async def capabilities() -> dict[str, object]:
         "structured_logging": True,
         "distributed_tracing": True,
         "isolated_environment": True,
-        "optional_ai": settings.ai_assistant_enabled,
-        "ctms_ai": settings.ai_assistant_enabled and settings.ctms_ai_enabled,
     }
     return manifest

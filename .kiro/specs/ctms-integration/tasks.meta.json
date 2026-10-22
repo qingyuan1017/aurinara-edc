@@ -209,7 +209,7 @@
         "timestamp": 1788535041091
       }
     ],
-    "1.8 Add shared observability, environment isolation, and optional AI control hooks": [
+    "1.8 Add shared observability, environment isolation, and Platform Playground boundaries": [
       {
         "executionId": "e293c272-0bc1-4f53-8fb5-573d5fb62de4",
         "chatSessionId": "sess_f70ad2ba-0635-4328-8615-986d4bdf4a24",

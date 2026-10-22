@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { ChevronsUpDown, ChevronRight, Folder, LogOut, Menu, PanelsTopLeft, type LucideIcon } from 'lucide-react'
+import { Bot, ChevronsUpDown, ChevronRight, Folder, LogOut, Menu, PanelsTopLeft, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -320,6 +320,21 @@ function NavigationSections({
   )
 }
 
+function PlaygroundLink({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
+  return (
+    <Link
+      to="/playground"
+      onClick={onNavigate}
+      activeProps={{ className: cn(navLinkClassName, activeNavLinkClassName) }}
+      inactiveProps={{ className: navLinkClassName }}
+      title={collapsed ? 'Playground' : undefined}
+    >
+      <Bot aria-hidden />
+      {collapsed ? null : <span>Playground</span>}
+    </Link>
+  )
+}
+
 /**
  * Presentation-only authenticated navigation. Authority and route resolution
  * remain owned by the existing navigation model and server-authorized routes.
@@ -461,6 +476,7 @@ export function AppSidebar({
             showPV={showPV}
             activeModule={activeModule}
           />
+          <div className="mt-3 border-t border-sidebar-border pt-3"><PlaygroundLink collapsed={collapsed} /></div>
         </nav>
         <div className="flex flex-col gap-2 p-2">{sidebarUser()}</div>
       </aside>
@@ -494,6 +510,7 @@ export function AppSidebar({
               activeModule={activeModule}
               onNavigate={() => onMobileOpenChange(false)}
             />
+            <div className="mt-3 border-t border-sidebar-border pt-3"><PlaygroundLink collapsed={false} onNavigate={() => onMobileOpenChange(false)} /></div>
           </nav>
           <div className="flex flex-col gap-2 p-2">{sidebarUser(false, true)}</div>
         </SheetContent>

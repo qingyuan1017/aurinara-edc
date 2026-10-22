@@ -54,10 +54,10 @@ Tasks marked with `*` are optional test tasks. Property tests use Hypothesis, on
   - Verify CTMS mutations, projections, coordination events, failures, replays, conflicts, attachments, and exports contain complete sanitized audit metadata; verify authoritative data and its audit/outbox record commit or roll back together and remain traversable by correlation ID.
   - **Validates: Requirements 1.7, 2.4–2.5, 3.5, 4.4, 6.14, 7.8, 7.11, 9.1, 9.3–9.4, 9.7, 9.18, 12.1–12.5, 12.10, 14.6**
 
-- [x] 1.8 Add shared observability, environment isolation, and optional AI control hooks
+- [x] 1.8 Add shared observability, environment isolation, and Platform Playground boundaries
   - Add CTMS health/readiness metrics, structured logs, tracing fields, queue/projection counters, and sanitized error categories without clinical values or raw event bodies.
   - Extend environment configuration for isolated database, object storage, secrets, authentication, logging, retention, backup, and restore settings; expose feature capability metadata server-side.
-  - Add optional AI platform hooks that enforce module scope, data minimization, human confirmation, and audit before any CTMS action, without implementing an independent CTMS AI authority.
+  - Keep CTMS actions behind authenticated module-owned MCP tools with explicit Playground confirmation and normal authorization/audit enforcement; do not implement an independent CTMS AI authority.
   - _Requirements: 2.9–2.11, 11.7–11.10, 13.12–13.16, 14.5, 14.10_
 
 ### 2. Phase 1 operational study, site, enrollment, and milestone foundation

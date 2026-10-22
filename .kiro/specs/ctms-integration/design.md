@@ -29,7 +29,7 @@ The revised CTMS requirements decompose broad EDC service names rather than dupl
 
 ### Platform and module topology
 
-The EDC_System and CTMS_Module are feature modules in the same authenticated deployment. They may be organized as separate backend packages and frontend feature areas, but they share request context, authorization, audit, storage, export-job, notification, observability, environment, and optional AI controls. CTMS does not call EDC over its public HTTP API for first-party coordination; approved service contracts and the shared transaction/session boundary are used inside the platform. External integrations, if introduced later, use the versioned API and cannot bypass ownership rules.
+The EDC_System and CTMS_Module are feature modules in the same authenticated deployment. They may be organized as separate backend packages and frontend feature areas, but they share request context, authorization, audit, storage, export-job, notification, observability, environment, and Platform Playground controls. CTMS does not call EDC over its public HTTP API for first-party coordination; approved service contracts and the shared transaction/session boundary are used inside the platform. External integrations, if introduced later, use the versioned API and cannot bypass ownership rules.
 
 ```mermaid
 graph TD
@@ -192,7 +192,7 @@ The following is the migration disposition for existing EDC service names and th
 | `Notification_Service` | Shared Platform with module-owned triggers | Notification persistence, delivery state, read/archive lifecycle | Triggers task assignment, monitoring assignment/reschedule/overdue, and failed coordination notifications | Triggers clinical query/form/export notifications | Shared delivery does not transfer event ownership |
 | Health, metrics, logs, tracing | Shared Platform | Health endpoints, readiness, metrics, structured logs, tracing, sanitized observability | CTMS queue/worker/projection/failed/conflict metrics | EDC clinical/API/worker metrics | Logs never contain clinical values, credentials, raw event bodies, or unrestricted messages |
 | Environment management | Shared Platform | Isolated database, storage, secrets, authentication, logging, retention, backup/restore per Environment | CTMS feature flags and operational settings | EDC clinical settings and migration gates | CTMS configuration cannot collapse environment isolation |
-| Optional `AI_Assistant_Service` | Shared Platform controls with module-scoped authorization | AI transport, context minimization, confirmation, audit hooks | CTMS-scoped operational context/actions only | EDC-scoped clinical context/actions only | AI never bypasses module ownership or server-side confirmation |
+| Platform Playground | Aurinara Platform | Agent catalog, AgentCore streaming, and approval records | Authenticated CTMS MCP actions only | Product-local AI routes are absent | Playground never bypasses module ownership or server-side authorization |
 | Clinical/source attachments and clinical exports | EDC | Shared storage/job primitives only | No authority; may receive approved metadata-only reference | Retains content, filtering, access, audit, and export authority | CTMS deletion/unavailability cannot remove or alter clinical content |
 
 ### Backend package structure
@@ -848,7 +848,7 @@ Feature flags are evaluated server-side and returned as capability metadata. Dis
 | Requirement | Design coverage | Primary verification |
 |---|---|---|
 | 1. Explicit module boundary and canonical identity | Ownership matrix; canonical references; projections; UTC; soft deletion; coordination metadata | Properties 1–2, 6, 15, 20; identity/ownership boundary tests |
-| 2. Shared platform services | Shared Auth, Permission, Audit, Request Context, Notification, File Storage, Export Jobs, Health/Observability, Environment, optional AI | Property 3, 16, 18, 19, 21; integration/security/smoke tests |
+| 2. Shared platform services | Shared Auth, Permission, Audit, Request Context, Notification, File Storage, Export Jobs, Health/Observability, Environment, Platform Playground | Property 3, 16, 18, 19, 21; integration/security/smoke tests |
 | 3. Operational study management | `Operational_Study_Service`, CTMS profiles/plans/readiness/milestones/status, EDC clinical Study/Study_Version authority | Property 4; study lifecycle, audit, scope, and non-mutation tests |
 | 4. Operational site management | `Operational_Site_Service`, activation/readiness/contacts/status, canonical EDC Site reference | Property 5; activation idempotency, archive, audit, and scope tests |
 | 5. Enrollment and subject operations | `Enrollment_Service`, target/milestone models, clinical subject boundary, approved status projections | Property 6, 10, 17; duplicate-subject, projection, report, and clinical protection tests |

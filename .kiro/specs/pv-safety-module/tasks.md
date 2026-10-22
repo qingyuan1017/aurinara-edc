@@ -223,10 +223,10 @@ Tasks marked with `*` are optional test tasks. Property tests use Hypothesis, on
   - Redact prohibited safety data and raw coordination payloads from all observability output.
   - _Requirements: 24.1, 24.2, 24.3, 24.4, 25.1, 25.2, 25.3, 25.4_
 
-- [x] 8.3 Implement the optional PV-scoped AI assistant
-  - Expose chat, narrative-drafting, and case-summarization operations backed by AWS Bedrock AgentCore only when enabled (exposing none when disabled), beginning streaming within 5 seconds and emitting a terminal completion or error within 120 seconds.
-  - Verify the requesting user's Authorization_Scope before sending any safety context, sending none and returning a denial when the context is out of scope, and require explicit human confirmation for any AI suggestion that would change Safety_Data, applying no change when confirmation is declined or not received within 300 seconds.
-  - Record one PV safety Audit_Event identifying the user, changed safety object, action, and AI-assisted origin for a confirmed change, and emit an error within the stream applying no change if the backend or stream fails before completion.
+- [x] 8.3 Adopt the Platform Playground boundary
+  - Remove product-local PV AI routes, schemas, services, feature flags, and capability metadata; the EDC shell consumes the product-filtered catalog and stream from Aurinara Platform.
+  - Keep all Safety_Data access and mutation in authenticated PV-owned MCP tools and require explicit Playground approval for every mutating invocation.
+  - Preserve PV authorization, lifecycle, transaction, and Audit_Event rules for approved agent actions; a Playground approval grants no independent Safety_Data authority.
   - _Requirements: 22.1, 22.2, 22.3, 22.4, 22.5, 22.6_
 
 - [x] 8.4 Write PV database, migration, and boundary integration tests
@@ -241,7 +241,7 @@ Tasks marked with `*` are optional test tasks. Property tests use Hypothesis, on
 
 - [x] 8.6 Write the unified-platform resilience and phased-qualification tests
   - Verify PV continues authentication, safety case capture, assessment, audit, export, and regulatory reporting using only PV-owned state and referenced canonical identity when EDC/CTMS is disabled, empty, or unresponsive within 30 seconds, returning no cross-module-dependent safety result as authoritative.
-  - Provide qualification evidence with at least one passing OQ/PQ test for each phase capability (Phase 1: shared authentication, PV scope enforcement, safety case intake, case lifecycle, seriousness assessment, immutable PV safety audit, EDC non-modification boundaries, safety CSV export; Phase 2: MedDRA/WHODrug coding, causality/expectedness/severity assessments, narratives, reconciliation; Phase 3: regulatory reporting/expedited timelines, ICSR/E2B, advanced exports, optional AI), declaring no phase complete while a required test fails and not counting EDC/CTMS capabilities as PV deliverables.
+  - Provide qualification evidence with at least one passing OQ/PQ test for each phase capability (Phase 1: shared authentication, PV scope enforcement, safety case intake, case lifecycle, seriousness assessment, immutable PV safety audit, EDC non-modification boundaries, safety CSV export; Phase 2: MedDRA/WHODrug coding, causality/expectedness/severity assessments, narratives, reconciliation; Phase 3: regulatory reporting/expedited timelines, ICSR/E2B, advanced exports, Platform Playground boundary), declaring no phase complete while a required test fails and not counting EDC/CTMS capabilities as PV deliverables.
   - **Validates: Requirements 20.6, 21.1, 21.2, 21.3, 21.4, 21.5, 21.6, 23.10**
 
 ### 9. Checkpoint — Phase 1 PV MVP
@@ -252,7 +252,7 @@ Tasks marked with `*` are optional test tasks. Property tests use Hypothesis, on
 
 - Ensure all implemented Phase 2 tests pass, verify one-way read-only reconciliation and projection minimization, and ask the user if questions arise.
 
-### 11. Checkpoint — Phase 3 regulatory reporting, ICSR/E2B, exports, and optional AI
+### 11. Checkpoint — Phase 3 regulatory reporting, ICSR/E2B, exports, and Platform Playground
 
 - Ensure all implemented Phase 3 tests pass, verify regulatory clock correctness, ICSR round-trip fidelity, sanitized failures, and no data change without explicit confirmation, and ask the user if questions arise.
 
@@ -262,7 +262,7 @@ Tasks marked with `*` are optional test tasks. Property tests use Hypothesis, on
 - Each property-based task maps to one of the 8 design Correctness Properties and should use Hypothesis with at least 100 examples, deterministic in-memory repositories/fakes, and no external services; `compute_clock`, `is_overdue`, `produce_e2b`, `parse_e2b`, and `diff` are exercised as pure functions.
 - Property-based tests complement, rather than replace, database transaction, migration, object-storage, export-job, notification, API-contract, security, frontend, performance, and qualification tests.
 - The plan deliberately creates no duplicate clinical or operational tables and no PV route that writes EDC clinical or CTMS operational authority; every shared primitive is reused without transferring ownership of its content semantics.
-- Phase 1 delivers shared authentication reuse, PV scope enforcement, safety case intake and lifecycle, seriousness assessment, immutable PV safety audit, and safety CSV export; Phase 2 delivers coding, assessments, narratives, and read-only reconciliation; Phase 3 delivers regulatory reporting, ICSR/E2B, advanced exports/dashboards/notifications, and the optional AI assistant.
+- Phase 1 delivers shared authentication reuse, PV scope enforcement, safety case intake and lifecycle, seriousness assessment, immutable PV safety audit, and safety CSV export; Phase 2 delivers coding, assessments, narratives, and read-only reconciliation; Phase 3 delivers regulatory reporting, ICSR/E2B, advanced exports/dashboards/notifications, and the Platform Playground boundary.
 - Convert each leaf task into a prompt for a code-generation LLM that implements that step incrementally, builds on prior steps, runs the relevant tests, and leaves every new component wired into an existing route/service or test harness.
 
 ## Task Dependency Graph
