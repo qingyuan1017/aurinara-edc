@@ -5,6 +5,10 @@ import { EDC_NAVIGATION_DEFINITIONS, getEDCLandingPath, getEDCStudyIdFromPath } 
 const studyParams = { studyId: 'study-1' }
 
 describe('study-scoped EDC routes', () => {
+  it('registers the shared workspace outside study scope', () => {
+    expect(router.buildLocation({ to: '/workspace' }).pathname).toBe('/workspace')
+  })
+
   it('registers every first-class EDC navigation destination', () => {
     const routes = EDC_NAVIGATION_DEFINITIONS.flatMap((section) => section.items.map((item) => (
       `/studies/$studyId/edc${item.path}`

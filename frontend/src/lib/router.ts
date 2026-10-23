@@ -10,6 +10,7 @@ import { AcceptInvitationPage } from '@/features/auth/AcceptInvitationPage'
 import { AccessDeniedPage } from '@/features/auth/AccessDeniedPage'
 import { AuditViewerPage, UserListPage } from '@/features/admin'
 import { PlaygroundPage } from '@/features/playground'
+import { WorkspacePage } from '@/features/workspace'
 import { CTMSCatalogReportPage, CTMSHomePage, CTMSPlannedWorkspacePage, CTMSPortfolioWorkspacePage, CTMSStudyAreaPage, CTMSStudyCompletionPage, CTMSWorkspacePage, EntityManagementPage, FinancialManagementPage, MonitoringModulePage, PortfolioManagementPage, PortfolioOperationsPage, ReferenceDataPage, type CTMSStudyOperationResource, type CTMSView, type MonitoringModuleView, type StudyWorkspaceView } from '@/features/ctms'
 import { findCTMSReportDefinition } from '@/features/ctms/reportCatalog'
 import { PVHomePage, PVWorkspacePage, type PVView } from '@/features/pv'
@@ -433,6 +434,12 @@ const playgroundRoute = createRoute({
   component: () => createElement(PlaygroundPage),
 })
 
+const workspaceRoute = createRoute({
+  getParentRoute: () => appShellLayout,
+  path: '/workspace',
+  component: () => createElement(WorkspacePage),
+})
+
 const notificationsRoute = createRoute({
   getParentRoute: () => appShellLayout,
   path: '/notifications',
@@ -742,6 +749,7 @@ const routeTree = rootRoute.addChildren([
       reviewRoute,
       dataCleaningRoute,
       playgroundRoute,
+      workspaceRoute,
       notificationsRoute,
       exportsRoute,
       edcOverviewRoute,

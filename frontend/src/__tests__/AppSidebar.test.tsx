@@ -154,6 +154,7 @@ describe('AppSidebar', () => {
       expect(screen.getAllByRole('link', { name: item.label }).length).toBeGreaterThan(0)
     }
     expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Workspace' })).toHaveAttribute('href', '/workspace')
     expect(screen.getByText('CTMS')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Study Dashboard' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Study Health' })).toBeInTheDocument()
