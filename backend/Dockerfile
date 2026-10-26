@@ -3,7 +3,10 @@ FROM python:3.11-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN groupadd --system aurinara-edc \
+RUN apt-get update \
+    && apt-get upgrade --yes --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system aurinara-edc \
     && useradd --system --gid aurinara-edc --create-home aurinara-edc
 
 WORKDIR /app

@@ -34,5 +34,5 @@ jobs:
         with: {python-version: '3.13'}
       - run: pip install cfn-lint pytest
       - run: cfn-lint -i W1100 W1101 W3002 W3045 -- infra/cloudformation/*.yaml
-      - run: pytest -q tests/test_cloudflare_dns.py
+      - run: python -m pytest -q tests/test_cloudflare_dns.py
       - run: docker build backend
