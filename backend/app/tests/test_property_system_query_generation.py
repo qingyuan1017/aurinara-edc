@@ -72,6 +72,9 @@ class TestSystemQueryGenerationProperty:
         session = AsyncMock()
         session.add = MagicMock()
         session.flush = AsyncMock()
+        existing_result = MagicMock()
+        existing_result.scalars.return_value.first.return_value = None
+        session.execute = AsyncMock(return_value=existing_result)
         session.get = AsyncMock(
             return_value=SimpleNamespace(study_id=study_id, site_id=site_id)
         )
@@ -102,6 +105,7 @@ class TestSystemQueryGenerationProperty:
                 "text": edit_check.description,
                 "actor_id": actor_id,
                 "query_type": QueryType.system,
+                "design_version_id": form.design_version_id,
             }
         else:
             assert result is None

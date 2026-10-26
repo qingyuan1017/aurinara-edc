@@ -27,7 +27,7 @@ const dashboard = {
     monitoring: { total: 5, upcoming: 2 },
     tasks: { total: 7, overdue: 1 },
     readiness: { required_total: 4, required_met: 3, completion_percentage: 75 },
-    milestones: { total: 6 },
+    activation: { total: 6 },
   },
   projected_clinical: [{
     projection_id: 'projection-1',
@@ -78,7 +78,7 @@ describe('CTMS scoped dashboards and reports', () => {
     expect(await screen.findByRole('heading', { name: 'Enrollment' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Monitoring' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Readiness' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Milestones' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Activation' })).toBeInTheDocument()
     expect(screen.getByText('Approved quality signal')).toBeInTheDocument()
     expect(screen.getByText('Server-generated CTMS operational metrics for the study. Totals are authoritative and are not reconstructed from rendered records.')).toBeInTheDocument()
     expect(screen.getByText(/Generated at:/)).toBeInTheDocument()
@@ -103,7 +103,7 @@ describe('CTMS scoped dashboards and reports', () => {
 
     renderWorkspace(<CTMSWorkspacePage view="site-dashboard" siteId="site-1" />)
     expect(await screen.findByText('Server-generated CTMS operational metrics for the site. Totals are authoritative and are not reconstructed from rendered records.')).toBeInTheDocument()
-    expect(screen.getByText('EDC Site ID')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Site dashboard' })).toBeInTheDocument()
 
     const { unmount } = renderWorkspace(<CTMSWorkspacePage view="reports" studyId="study-1" reportType="tasks" />)
     expect((await screen.findAllByText('Confirm monitoring date')).length).toBeGreaterThan(0)

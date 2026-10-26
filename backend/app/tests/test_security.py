@@ -275,10 +275,13 @@ class TestInactivity:
         assert check_inactivity(activity, timeout_minutes=15) is False
 
     def test_exactly_at_boundary(self):
-        # Activity exactly at the threshold boundary
-        activity = datetime.now(UTC) - timedelta(minutes=30)
-        # Should be expired (last_activity < threshold means expired)
-        assert check_inactivity(activity, timeout_minutes=30) is True
+        # Freeze the clock so the boundary assertion is not affected by the
+        # elapsed microseconds between constructing the timestamp and checking it.
+        now = datetime.now(UTC)
+        activity = now - timedelta(minutes=30)
+        with patch("app.core.security.datetime") as clock:
+            clock.now.return_value = now
+            assert check_inactivity(activity, timeout_minutes=30) is False
 
 
 # ---------------------------------------------------------------------------

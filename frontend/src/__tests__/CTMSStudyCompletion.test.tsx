@@ -117,10 +117,10 @@ describe('CTMS study completion workspace', () => {
     renderPage('sites')
     fireEvent.click(await screen.findByRole('button', { name: 'Add Site' }))
     expect(await screen.findByRole('option', { name: 'General Hospital' })).toBeInTheDocument()
-    fireEvent.change(screen.getByRole('combobox', { name: 'Available Site' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: /Available site/i }), {
       target: { value: '44444444-4444-4444-8444-444444444444' },
     })
-    fireEvent.change(screen.getByRole('textbox', { name: 'Study Site ID' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Site number' }), {
       target: { value: 'SITE-101' },
     })
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Add Site' })).getByRole('button', { name: 'Add Site' }))

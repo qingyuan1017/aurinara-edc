@@ -215,6 +215,7 @@ async def _run_edc_workflow(
         design_service.get_schedule_of_assessment = AsyncMock(
             return_value=SimpleNamespace(entries=())
         )
+        design_service.list_subject_phase_definitions = AsyncMock(return_value=[])
         subject_service = SubjectService(design_service=design_service)
         for target_status in lifecycle_path:
             await subject_service.transition_status(

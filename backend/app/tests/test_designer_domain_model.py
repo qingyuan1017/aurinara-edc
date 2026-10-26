@@ -347,8 +347,8 @@ async def test_subject_phase_associates_only_same_version_real_visits():
                 await phase_service.create_phase_definition(
                     session,
                     design_version_id=version.id,
-                    name="Study complete",
-                    phase_type=SubjectPhaseType.complete,
+                    name="Arm selection",
+                    phase_type=SubjectPhaseType.arm,
                     display_order=2,
                     visit_definition_ids=[visit.id],
                     actor_id=actor_id,

@@ -50,7 +50,9 @@ class MemoryStorage:
 @st.composite
 def download_case_strategy(draw):
     """Generate parent types, scopes, and authorization outcomes."""
-    object_type = draw(st.sampled_from(list(FileAttachmentObjectType)))
+    # This property covers EDC clinical parents. Operational is a CTMS-owned
+    # pseudo-parent with a separate permission contract.
+    object_type = draw(st.sampled_from(list(PARENT_READ_PERMISSIONS)))
     study_id = draw(st.uuids())
     site_id = None if object_type is FileAttachmentObjectType.study else draw(st.uuids())
     mode = draw(st.sampled_from(["authorized", "missing_read", "out_of_scope"]))

@@ -55,6 +55,7 @@ class _Session:
     def __init__(self) -> None:
         self.add = MagicMock()
         self.flush = AsyncMock()
+        self.execute = AsyncMock()
 
 
 def _system_user(user_id):
@@ -193,6 +194,9 @@ async def _run_edc_query_and_attachment_workflow() -> dict[str, object]:
     with patch(
         "app.services.edc.query_service.audit_service.record",
         new=record_query_audit,
+    ), patch(
+        "app.services.edc.query_service.lock_service.is_hard_locked",
+        new=AsyncMock(return_value=False),
     ):
         await QueryService().respond(
             session, query, "EDC response remains in the query thread", actor_id

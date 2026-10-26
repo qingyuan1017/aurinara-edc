@@ -188,6 +188,7 @@ describe('task 4.3 export and edit-check composition', () => {
 
     expect(await screen.findByRole('heading', { name: 'Edit-check builder' })).toBeInTheDocument()
     fireEvent.change(screen.getByPlaceholderText('AE start before end'), { target: { value: 'Required weight' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced JSON' }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Rule definition' }), { target: { value: '{invalid' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save check' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Rule JSON must be valid JSON.')

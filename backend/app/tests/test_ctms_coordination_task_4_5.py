@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.audit import AuditService
 from app.core.database import Base
 from app.models.ctms.coordination import (
     CoordinationEventLog,
@@ -139,7 +140,11 @@ async def test_target_and_target_audit_roll_back_as_one_transaction(db_session: 
     event = await _accept(service, db_session, key="target-atomic-1")
     await db_session.commit()
 
-    monkeypatch.setattr("app.services.ctms.ctms_projection_service.audit_service.record", AsyncMock(side_effect=RuntimeError("audit unavailable")))
+    monkeypatch.setattr(
+        AuditService,
+        "record",
+        AsyncMock(side_effect=RuntimeError("audit unavailable")),
+    )
     with pytest.raises(RuntimeError, match="audit unavailable"):
         await service.process(db_session, event_id=event.event_id, worker_id="worker-1")
     await db_session.rollback()

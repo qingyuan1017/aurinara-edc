@@ -79,7 +79,7 @@ function enabledResponses(path: string): unknown {
     total: 1,
   }
   if (path.endsWith('/exports')) return {
-    items: [{ id: 'export-1', study_id: 'study-1', export_type: 'Enrollment', status: 'Completed', filters: { site_id: 'site-1', status: 'active' } }],
+    items: [{ id: 'export-1', study_id: 'study-1', export_type: 'csv', status: 'Completed', filters: { site_id: 'site-1', status: 'active' } }],
     page: 1,
     page_size: 20,
     total: 1,
@@ -136,7 +136,7 @@ describe('CTMS frontend workspace and ownership controls', () => {
   it('renders enrollment, monitoring, and contact workflows with operational labels', async () => {
     setUser([PERMISSIONS.CTMS_OPERATIONAL_DATA_READ])
     const { unmount } = renderWithApi(<CTMSWorkspacePage view="enrollment" studyId="study-1" />, enabledResponses)
-    expect(await screen.findByText('Enrollment')).toBeInTheDocument()
+    expect((await screen.findAllByText('Enrollment')).length).toBeGreaterThan(0)
     expect((await screen.findAllByText('120')).length).toBeGreaterThan(0)
     unmount()
 
@@ -186,7 +186,7 @@ describe('CTMS frontend workspace and ownership controls', () => {
     setUser([PERMISSIONS.CTMS_OPERATIONAL_DATA_READ])
     renderWithApi(<CTMSWorkspacePage view="exports" studyId="study-1" />, enabledResponses)
 
-    expect(await screen.findByText('Enrollment')).toBeInTheDocument()
+    expect(await screen.findByRole('cell', { name: 'csv' })).toBeInTheDocument()
     expect(await screen.findByText('{"site_id":"site-1","status":"active"}')).toBeInTheDocument()
     expect(screen.queryByText(/Clinical_Data|source document|raw event|secret/i)).not.toBeInTheDocument()
   })

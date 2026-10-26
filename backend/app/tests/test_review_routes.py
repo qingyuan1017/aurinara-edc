@@ -13,6 +13,7 @@ from app.core.security import create_access_token, hash_password
 from app.main import create_app
 from app.models.edc.form_data import FormInstance, FormInstanceStatus
 from app.models.edc.form_metadata import FormDefinition
+from app.models.edc.lock import FreezeLock
 from app.models.edc.review import ReviewStatus
 from app.models.edc.site import Site, SiteStatus, StudySiteUser
 from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
@@ -57,6 +58,7 @@ async def async_engine():
             FormInstance,
             FieldValue,
             ReviewStatus,
+            FreezeLock,
             AuditEvent,
             Notification,
         )

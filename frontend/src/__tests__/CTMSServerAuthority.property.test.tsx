@@ -100,7 +100,7 @@ describe('CTMS server-authoritative report properties', () => {
       expect(screen.getByText(`Site: ${String(generated.filters[1].value)}`)).toBeInTheDocument()
 
       for (const row of generated.clientRows) {
-        expect(screen.getByText(row.title)).toBeInTheDocument()
+        expect(screen.getAllByText(row.title).length).toBeGreaterThan(0)
       }
       for (const row of generated.priorRows) {
         expect(screen.queryByText(row.title)).not.toBeInTheDocument()

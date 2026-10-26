@@ -100,6 +100,22 @@ _EDC_REEXPORT_SHIMS = frozenset(
 # The one sanctioned Designer import an operational EDC service may make: the
 # visit_service thin delegate to the Designer visit-definition authoring service.
 _EDC_SANCTIONED_DESIGNER_IMPORTS: dict[str, frozenset[str]] = {
+    # Runtime edit-check evaluation consumes published rules and writes only
+    # EDC-owned validation/query records; it does not author Designer definitions.
+    "data_capture_service": frozenset(
+        {"app.services.designer.edit_check_service"}
+    ),
+    # Local canonical-study creation bootstraps the initial draft phase flow.
+    # Production canonical identity remains Platform-managed and this path is
+    # disabled when platform authorization is enforced.
+    "study_service": frozenset(
+        {"app.services.designer.subject_phase_service"}
+    ),
+    # Export rendering reuses the pure, non-persisting schema builder from the
+    # Designer variable service; it never calls its authoring methods.
+    "raw_dataset_export_service": frozenset(
+        {"app.services.designer.raw_data_variable_service"}
+    ),
     "visit_service": frozenset(
         {"app.services.designer.visit_definition_service"}
     ),

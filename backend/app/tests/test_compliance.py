@@ -24,6 +24,7 @@ import pytest
 
 from app.core.audit import AuditService
 from app.core.config import Environment, Settings
+from app.core.exceptions import ValidationError
 from app.core.permissions import PERMISSION_CODES
 from app.models.shared.audit import AuditEvent
 from app.services.edc.data_capture_service import DataCaptureService
@@ -135,10 +136,11 @@ class TestALCOAReasonForChange:
         # Create a submitted form instance
         form_instance = MagicMock(spec=FormInstance)
         form_instance.status = FormInstanceStatus.submitted
+        form_instance.data_entry_status = FormInstanceStatus.submitted
         form_instance.id = uuid.uuid4()
 
         # Attempt change without reason — should raise ValidationError
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ValidationError, match="Reason_For_Change"):
             await service.change_value(
                 mock_session,
                 form_instance=form_instance,
@@ -147,8 +149,6 @@ class TestALCOAReasonForChange:
                 reason=None,  # Missing reason
                 actor_id=uuid.uuid4(),
             )
-
-        assert "Reason_For_Change" in str(exc_info.value.message)
 
     @pytest.mark.asyncio
     async def test_change_value_requires_reason_when_empty_string(self):
@@ -160,9 +160,10 @@ class TestALCOAReasonForChange:
 
         form_instance = MagicMock(spec=FormInstance)
         form_instance.status = FormInstanceStatus.submitted
+        form_instance.data_entry_status = FormInstanceStatus.submitted
         form_instance.id = uuid.uuid4()
 
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ValidationError, match="Reason_For_Change"):
             await service.change_value(
                 mock_session,
                 form_instance=form_instance,
@@ -171,8 +172,6 @@ class TestALCOAReasonForChange:
                 reason="   ",  # Whitespace only
                 actor_id=uuid.uuid4(),
             )
-
-        assert "Reason_For_Change" in str(exc_info.value.message)
 
     @pytest.mark.asyncio
     async def test_audit_event_contains_reason_when_provided(self):
@@ -419,11 +418,17 @@ class TestScopeEnforcementVerification:
 
             source = route_file.read_text()
 
-            # Must import require_permission or PermissionGuard
+            # Routes may use a dependency guard or enforce object scope through
+            # the injected PermissionService before invoking the mutation.
             has_guard_import = (
                 "require_permission" in source
                 or "PermissionGuard" in source
                 or "get_current_user" in source
+                or (
+                    "get_permission_service" in source
+                    and "PermissionService" in source
+                    and ".require(" in source
+                )
             )
             if not has_guard_import:
                 violations.append(f"{route_file.name}: does not import permission guard dependency")

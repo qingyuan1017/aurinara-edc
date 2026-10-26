@@ -83,7 +83,23 @@ async def async_engine():
         SubjectPhaseTransition as SubjectPhaseTransitionModel,
     )
     from app.models.designer.visit import VisitDefinition as VisitDefinitionModel
+    from app.models.edc.form_data import FieldValue as FieldValueModel
     from app.models.edc.form_data import FormInstance as FormInstanceModel
+    from app.models.edc.form_record import FormRecord as FormRecordModel
+    from app.models.edc.lock import FreezeLock as FreezeLockModel
+    from app.models.edc.operations import (
+        SDRResult as SDRResultModel,
+    )
+    from app.models.edc.operations import (
+        SDRSelection as SDRSelectionModel,
+    )
+    from app.models.edc.operations import (
+        SDRSetting as SDRSettingModel,
+    )
+    from app.models.edc.query import Query as QueryModel
+    from app.models.edc.review import ReviewStatus as ReviewStatusModel
+    from app.models.edc.sdv import SDVStatus as SDVStatusModel
+    from app.models.edc.signature import Signature as SignatureModel
     from app.models.edc.site import Site as SiteModel
     from app.models.edc.site import StudySiteUser as StudySiteUserModel
     from app.models.edc.study import Study as StudyModel
@@ -133,6 +149,16 @@ async def async_engine():
             ScheduleOfAssessmentModel,
             ScheduleOfAssessmentEntryModel,
             FormInstanceModel,
+            FieldValueModel,
+            FormRecordModel,
+            QueryModel,
+            ReviewStatusModel,
+            SDVStatusModel,
+            SDRSettingModel,
+            SDRSelectionModel,
+            SDRResultModel,
+            FreezeLockModel,
+            SignatureModel,
         )
     ]
     tables.append(arm_definition_visits)

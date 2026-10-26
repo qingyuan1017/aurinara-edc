@@ -24,10 +24,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.request_context import request_id_var
 from app.core.security import hash_password
-from app.models.edc.form_data import FormInstance, FormInstanceStatus
+from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
 from app.models.edc.form_metadata import FormDefinition
 from app.models.edc.form_record import FormRecord
-from app.models.edc.site import Site, SiteStatus
+from app.models.edc.lock import FreezeLock
+from app.models.edc.signature import Signature
+from app.models.edc.site import Site, SiteStatus, StudySiteUser
 from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject, SubjectStatus
 from app.models.shared.audit import AuditEvent
@@ -69,10 +71,14 @@ async def _create_engine_and_session():
             Study,
             StudyVersion,
             Site,
+            StudySiteUser,
             Subject,
             FormDefinition,
             FormInstance,
+            FieldValue,
             FormRecord,
+            FreezeLock,
+            Signature,
             AuditEvent,
         )
     ]
@@ -151,6 +157,7 @@ async def _seed_repeating_form(session: AsyncSession) -> tuple[User, FormInstanc
         subject=subject,
         form_definition=form_definition,
     )
+    form_instance.field_values = []
     session.add_all([actor, study, version, site, subject, form_definition, form_instance])
     await session.flush()
     return actor, form_instance

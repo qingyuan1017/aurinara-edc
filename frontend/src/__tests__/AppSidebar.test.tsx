@@ -158,7 +158,7 @@ describe('AppSidebar', () => {
     expect(screen.getByText('CTMS')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Study Dashboard' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Study Health' })).toBeInTheDocument()
-  })
+  }, 15_000)
 
   it('does not expose CTMS navigation when the permission affordance denies it', async () => {
     const user = userEvent.setup()

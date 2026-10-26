@@ -237,6 +237,7 @@ class TestRecordsRoutes:
 
         restored = await client.post(
             f"/api/v1/records/{record.id}/restore",
+            json={},
             headers=_auth(seeded["user"]),
         )
         assert restored.status_code == 200

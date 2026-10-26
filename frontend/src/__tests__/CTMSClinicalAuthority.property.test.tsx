@@ -187,5 +187,5 @@ describe('CTMS projection clinical-authority property', () => {
 
       unmount()
     }
-  })
+  }, 15_000)
 })

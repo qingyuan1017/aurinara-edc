@@ -37,7 +37,9 @@ def _form(status: FormInstanceStatus = FormInstanceStatus.submitted) -> FormInst
         id=uuid.uuid4(),
         subject_id=uuid.uuid4(),
         form_definition_id=uuid.uuid4(),
+        design_version_id=uuid.uuid4(),
         status=status,
+        data_entry_status=status.value,
         data_jsonb={"weight": "72", "consent": True},
         created_at=datetime.now(UTC),
     )
@@ -91,7 +93,7 @@ class TestSign:
         assert len(result.data_hash) == 64
         assert result.status == SignatureStatus.valid
         assert result.signed_at.tzinfo == UTC
-        assert form.status == FormInstanceStatus.signed
+        assert form.status == FormInstanceStatus.submitted
         audit.record.assert_awaited_once()
         audit_kwargs = audit.record.call_args.kwargs
         assert audit_kwargs["action"] == "sign"

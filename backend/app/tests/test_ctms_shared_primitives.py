@@ -43,7 +43,7 @@ async def test_ctms_mutation_writes_history_audit_and_outbox_without_commit(monk
     session.add = MagicMock()
     audit_event = object()
     audit_record = AsyncMock(return_value=audit_event)
-    monkeypatch.setattr("app.services.ctms.ctms_atomicity_service.audit_service.record", audit_record)
+    monkeypatch.setattr(AuditService, "record", audit_record)
 
     history, outbox, audit = await CTMSAtomicityService().record_mutation(
         session,

@@ -179,7 +179,10 @@ class TestHybridStorageConsistencyProperty:
             mock_event.id = uuid.uuid4()
             return mock_event
 
-        with patch.object(AuditService, "record", mock_record):
+        with patch.object(AuditService, "record", mock_record), patch(
+            "app.services.edc.data_capture_service.lock_service.is_modification_blocked",
+            new=AsyncMock(return_value=False),
+        ):
             result = await service.save_draft(mock_session, fi, values, actor_id)
 
         # Property 1: data_jsonb contains exactly the same keys as field_values

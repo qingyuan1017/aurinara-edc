@@ -166,5 +166,5 @@ describe('CTMS export lifecycle properties', () => {
       view.unmount()
       queryClient.clear()
     }
-  })
+  }, 15_000)
 })

@@ -198,7 +198,10 @@ class TestPostSubmissionReasonProperty:
 
         with patch(
             "app.services.edc.data_capture_service.audit_service"
-        ) as mock_audit:
+        ) as mock_audit, patch(
+            "app.services.edc.data_capture_service.lock_service.is_modification_blocked",
+            new=AsyncMock(return_value=False),
+        ):
             mock_audit.record = AsyncMock()
             result = await service.change_value(
                 mock_session, fi, field_id, new_value, reason, actor_id

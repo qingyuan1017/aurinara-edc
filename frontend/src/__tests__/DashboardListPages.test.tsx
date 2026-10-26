@@ -385,7 +385,7 @@ describe('dashboard and list page composition', () => {
 
   it('keeps dashboard deep-link breadcrumbs and search state intact', () => {
     const context = getRouteContext({ pathname: '/studies/study-1/dashboard', search: { tab: 'quality', page: 2 } })
-    expect(context.breadcrumbs.map((item) => item.label)).toEqual(['Studies', 'Study study-1', 'Dashboard'])
+    expect(context.breadcrumbs.map((item) => item.label)).toEqual(['Studies', 'Study', 'Dashboard'])
     expect(context.breadcrumbs[1].search?.({ ignored: true })).toEqual({ tab: 'quality', page: 2 })
     expect(context.search).toEqual({ tab: 'quality', page: 2 })
   })

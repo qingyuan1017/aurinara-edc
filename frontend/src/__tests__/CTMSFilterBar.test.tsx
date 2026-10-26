@@ -21,7 +21,7 @@ describe('CTMSFilterBar semantic presentation', () => {
     )
 
     expect(screen.getByRole('heading', { name: 'Filters' })).toHaveClass('text-foreground')
-    expect(screen.getByRole('combobox', { name: 'Status filter' })).toHaveClass('border-input', 'bg-background', 'focus-visible:ring-ring')
+    expect(screen.getByRole('combobox', { name: 'Status filter' })).toHaveClass('border-input', 'bg-transparent', 'focus-visible:ring-ring/50')
     expect(screen.getByRole('combobox', { name: 'Priority filter' })).toHaveClass('border-input', 'bg-background', 'focus-visible:ring-ring')
     expect(screen.getByText('Status: Open')).toHaveClass('bg-info/15', 'text-info')
     expect(screen.getByText('Site: site-1')).toHaveClass('bg-info/15', 'text-info')

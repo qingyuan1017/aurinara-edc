@@ -31,6 +31,15 @@ from app.core.database import Base
 from app.core.exceptions import ConflictError
 from app.core.request_context import request_id_var
 from app.core.security import hash_password
+from app.models.designer.schedule_of_assessment import (
+    ScheduleOfAssessment,
+    ScheduleOfAssessmentEntry,
+)
+from app.models.designer.subject_phase_definition import (
+    SubjectPhaseDefinition,
+    SubjectPhaseVisitDefinition,
+)
+from app.models.designer.subject_phase_transition import SubjectPhaseTransition
 from app.models.edc.site import Site, SiteStatus
 from app.models.edc.study import Study, StudyStatus, StudyVersion, StudyVersionStatus
 from app.models.edc.subject import Subject, SubjectStatus
@@ -78,6 +87,11 @@ async def _create_engine_and_session():
             Site,
             StudySiteUser,
             Subject,
+            SubjectPhaseDefinition,
+            SubjectPhaseVisitDefinition,
+            SubjectPhaseTransition,
+            ScheduleOfAssessment,
+            ScheduleOfAssessmentEntry,
             AuditEvent,
             VisitDefinition,
             VisitInstance,

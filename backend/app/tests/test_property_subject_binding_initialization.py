@@ -28,6 +28,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import Base
 from app.core.request_context import request_id_var
 from app.core.security import hash_password
+from app.models.designer.schedule_of_assessment import (
+    ScheduleOfAssessment,
+    ScheduleOfAssessmentEntry,
+)
+from app.models.designer.subject_phase_definition import (
+    SubjectPhaseDefinition,
+    SubjectPhaseVisitDefinition,
+)
+from app.models.designer.subject_phase_transition import SubjectPhaseTransition
 from app.models.edc.form_data import FieldValue, FormInstance
 from app.models.edc.form_metadata import (
     Codelist,
@@ -100,6 +109,11 @@ async def _create_engine_and_session():
             CodelistItem,
             FormInstance,
             FieldValue,
+            SubjectPhaseDefinition,
+            SubjectPhaseVisitDefinition,
+            SubjectPhaseTransition,
+            ScheduleOfAssessment,
+            ScheduleOfAssessmentEntry,
             AuditEvent,
         )
     ]
@@ -199,6 +213,24 @@ async def _seed_study_with_definitions(
         )
         session.add(fd)
         form_defs.append(fd)
+    await session.flush()
+
+    schedule = ScheduleOfAssessment(design_version_id=version.id)
+    session.add(schedule)
+    await session.flush()
+    session.add_all(
+        [
+            ScheduleOfAssessmentEntry(
+                schedule_of_assessment_id=schedule.id,
+                form_definition_id=form.id,
+                visit_definition_id=visit.id,
+                display_order=index + 1,
+            )
+            for index, (visit, form) in enumerate(
+                (visit, form) for visit in visit_defs for form in form_defs
+            )
+        ]
+    )
     await session.flush()
 
     return {

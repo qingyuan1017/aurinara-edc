@@ -55,6 +55,10 @@ from app.models.designer.form_metadata import (
     FormDefinition,
     FormSection,
 )
+from app.models.designer.schedule_of_assessment import (
+    ScheduleOfAssessment,
+    ScheduleOfAssessmentEntry,
+)
 from app.models.designer.study_version import StudyVersion, StudyVersionStatus
 from app.models.designer.visit import VisitDefinition
 from app.models.edc.form_data import FieldValue, FormInstance, FormInstanceStatus
@@ -180,6 +184,18 @@ async def _seed_published_design(session: AsyncSession) -> dict:
         display_order=1,
     )
     session.add(field)
+
+    schedule = ScheduleOfAssessment(design_version_id=version.id)
+    session.add(schedule)
+    await session.flush()
+    session.add(
+        ScheduleOfAssessmentEntry(
+            schedule_of_assessment_id=schedule.id,
+            form_definition_id=form.id,
+            visit_definition_id=visit_def.id,
+            display_order=1,
+        )
+    )
 
     site = Site(
         study_id=study.id,

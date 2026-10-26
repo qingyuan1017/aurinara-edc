@@ -61,9 +61,10 @@ describe('EDC frontend resilience around optional CTMS', () => {
   ])('preserves EDC navigation when CTMS is $name', async ({ enabled, phase, showsCTMS }) => {
     renderShell({ enabled, phase })
     const primaryNavigation = within(screen.getByRole('navigation', { name: 'Primary navigation' }))
-    for (const label of edcNavigation) expect(await primaryNavigation.findByText(label)).toBeInTheDocument()
-    if (showsCTMS) expect(await primaryNavigation.findByText('CTMS')).toBeInTheDocument()
-    else expect(primaryNavigation.queryByText('CTMS')).not.toBeInTheDocument()
+    for (const label of edcNavigation) expect(await primaryNavigation.findByRole('link', { name: label })).toBeInTheDocument()
+    const ctmsOption = screen.getByRole('option', { name: /CTMS/ })
+    if (showsCTMS) expect(ctmsOption).toBeEnabled()
+    else expect(ctmsOption).toBeDisabled()
   })
 
   it('keeps the clinical casebook and dashboard indicators available without CTMS records', async () => {

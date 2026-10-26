@@ -23,7 +23,7 @@ from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.api.deps import get_db
-from app.core.audit import audit_service
+from app.core.audit import AuditService
 from app.core.database import Base
 from app.core.security import create_access_token
 from app.main import create_app
@@ -524,7 +524,10 @@ async def test_phase1_audit_failure_rolls_back_ctms_mutation_without_touching_ed
     async def fail_audit(*args, **kwargs):
         raise RuntimeError("injected audit failure")
 
-    monkeypatch.setattr(audit_service, "record", fail_audit)
+    # Patch the method on the class. Patching the singleton instance leaves a
+    # restored bound method in its instance dictionary, which shadows later
+    # class-level patches and leaks state into tests that run afterward.
+    monkeypatch.setattr(AuditService, "record", fail_audit)
     service = OperationalStudyService()
     before = await _snapshot_edc(phase1_session)
 

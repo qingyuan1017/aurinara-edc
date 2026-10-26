@@ -146,7 +146,11 @@ class TestDraftSaveProperty:
         mock_session = _make_mock_session(len(values))
 
         with patch.object(service, "_upsert_field_value", side_effect=tracking_upsert), \
-             patch.object(service, "_sync_data_jsonb", new_callable=AsyncMock):
+             patch.object(service, "_sync_data_jsonb", new_callable=AsyncMock), \
+             patch(
+                 "app.services.edc.data_capture_service.lock_service.is_modification_blocked",
+                 new=AsyncMock(return_value=False),
+             ):
             result = await service.save_draft(mock_session, fi, values, actor_id)
 
         # Property: status is In Progress after save_draft

@@ -83,6 +83,7 @@ describe('navigation model adapter', () => {
       'study-management',
       'sites',
       'monitoring',
+      'operational-compliance',
       'contracts',
       'financials',
       'tasks-issues',

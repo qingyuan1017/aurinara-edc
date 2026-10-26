@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppShell } from '@/components/layout/AppShell'
 import { CTMSWorkspacePage } from '@/features/ctms/WorkspacePage'
@@ -129,6 +129,12 @@ function expectCTMSLink(label: string, expected: boolean) {
   expect(hasCTMSLink).toBe(expected)
 }
 
+function expandNavigationSections(container: HTMLElement) {
+  for (const button of within(container).getAllByRole('button')) {
+    if (button.getAttribute('aria-expanded') === 'false') fireEvent.click(button)
+  }
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   currentPathname = '/ctms'
@@ -145,12 +151,14 @@ describe('CTMS persona, workspace, and EDC-shell component coverage', () => {
   ])('resolves CTMS navigation for $persona', async ({ role, granted, required }) => {
     renderShell(granted, enabledManifest, role, '/studies/study-1/ctms')
 
-    expect(await screen.findByLabelText('CTMS navigation')).toBeInTheDocument()
+    const navigation = await screen.findByLabelText('CTMS navigation')
+    expandNavigationSections(navigation)
     for (const label of required) expectCTMSLink(label, true)
   })
 
   it('preserves every baseline EDC navigation item when CTMS is disabled or unavailable', async () => {
     const disabled = renderShell(permissions.viewer, { module: 'CTMS', enabled: false, phase: 0, capabilities: [] }, 'CTMS_Viewer', '/')
+    expandNavigationSections(screen.getByRole('navigation', { name: 'Primary navigation' }))
     expectBaselineEDCNavigation()
     expect(screen.queryByLabelText('CTMS navigation')).not.toBeInTheDocument()
     disabled.unmount()
@@ -168,6 +176,7 @@ describe('CTMS persona, workspace, and EDC-shell component coverage', () => {
         </ThemeProvider>
       </QueryClientProvider>,
     )
+    expandNavigationSections(screen.getByRole('navigation', { name: 'Primary navigation' }))
     expectBaselineEDCNavigation()
     await vi.waitFor(() => expect(screen.queryByLabelText('CTMS navigation')).not.toBeInTheDocument())
   })

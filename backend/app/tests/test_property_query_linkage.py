@@ -116,6 +116,11 @@ class TestQueryLinkageProperties:
         and initial status is Open.
         """
         service = QueryService()
+        service._resolve_target_context = AsyncMock(
+            return_value=(
+                data["study_id"], data["site_id"], data["subject_id"], uuid.uuid4()
+            )
+        )
         session = _make_mock_session()
 
         with patch("app.services.edc.query_service.audit_service") as mock_audit:
@@ -165,6 +170,14 @@ class TestQueryLinkageProperties:
         messages are never removed or reordered.
         """
         service = QueryService()
+        service._resolve_target_context = AsyncMock(
+            return_value=(
+                creation["study_id"],
+                creation["site_id"],
+                creation["subject_id"],
+                uuid.uuid4(),
+            )
+        )
         session = _make_mock_session()
 
         # Track all QueryMessage objects added to the session
@@ -248,6 +261,14 @@ class TestQueryLinkageProperties:
         chronological order in the thread.
         """
         service = QueryService()
+        service._resolve_target_context = AsyncMock(
+            return_value=(
+                creation["study_id"],
+                creation["site_id"],
+                creation["subject_id"],
+                uuid.uuid4(),
+            )
+        )
         session = _make_mock_session()
 
         # Track messages with their creation timestamps
@@ -321,6 +342,11 @@ class TestQueryLinkageProperties:
         linked to exactly one kind of affected object.
         """
         service = QueryService()
+        service._resolve_target_context = AsyncMock(
+            return_value=(
+                data["study_id"], data["site_id"], data["subject_id"], uuid.uuid4()
+            )
+        )
         session = _make_mock_session()
 
         with patch("app.services.edc.query_service.audit_service") as mock_audit:
