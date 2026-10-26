@@ -120,7 +120,7 @@ class _MemoryStorage:
 @pytest.fixture
 async def db_session() -> AsyncSession:
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    import app.models  # noqa: F401 - register all mapped EDC, CTMS, and PV models
+    import app.models
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)

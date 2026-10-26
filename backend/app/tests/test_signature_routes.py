@@ -24,7 +24,7 @@ from app.models.shared.identity import Permission, Role, RolePermission, User, U
 @pytest.fixture
 async def async_engine():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    import app.models  # noqa: F401
+    import app.models
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

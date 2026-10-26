@@ -30,7 +30,7 @@ async def async_engine():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     # Importing app.models registers every model with the shared metadata. The
     # SQLite variants of JSONB columns make the complete graph testable here.
-    import app.models  # noqa: F401
+    import app.models
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

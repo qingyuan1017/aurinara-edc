@@ -115,7 +115,7 @@ _READ_PREFIXES = ("get_", "list_", "permits_")
 @pytest.fixture
 async def async_engine():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    import app.models  # noqa: F401  (register every ORM table)
+    import app.models
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)

@@ -59,7 +59,7 @@ def repeating_record_scenario(draw: st.DrawFn) -> tuple[list[dict], int]:
 
 async def _create_engine_and_session():
     """Create the minimum SQLite schema needed by the record service."""
-    import app.models  # noqa: F401  # Register all ORM relationships first.
+    import app.models  # Register all ORM relationships first.
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     tables = [

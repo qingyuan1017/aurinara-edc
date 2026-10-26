@@ -342,7 +342,7 @@ class TestAuditAtomicityProperties:
         # Assertion 3: Correct actor
         for call in audit_calls:
             assert call["actor_id"] == mutation["actor_id"], (
-                f"change_value audit event actor_id mismatch"
+                "change_value audit event actor_id mismatch"
             )
 
         # Assertion 4: Correct action

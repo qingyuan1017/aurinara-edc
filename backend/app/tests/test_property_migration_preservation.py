@@ -44,7 +44,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-import app.models  # noqa: F401  (register every ORM table for create_all)
+import app.models
 from app.core.database import Base
 from app.models.designer.codelist import Codelist, CodelistItem
 from app.models.designer.form_metadata import (

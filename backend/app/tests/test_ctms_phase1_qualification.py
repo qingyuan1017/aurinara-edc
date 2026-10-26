@@ -49,7 +49,7 @@ async def phase1_engine():
     """Create the complete local schema, including both module boundaries."""
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    import app.models  # noqa: F401 - register all mapped EDC and CTMS models
+    import app.models
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)

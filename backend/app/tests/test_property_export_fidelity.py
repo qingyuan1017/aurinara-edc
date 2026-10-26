@@ -337,7 +337,7 @@ class TestExportFilteringAndFidelityProperties:
             f"After fail_export, status must be Failed, got '{result.status}'"
         )
         assert result.error_message == error_msg, (
-            f"After fail_export, error_message must be set"
+            "After fail_export, error_message must be set"
         )
         assert result.completed_at is not None, (
             "After fail_export, completed_at must be set"

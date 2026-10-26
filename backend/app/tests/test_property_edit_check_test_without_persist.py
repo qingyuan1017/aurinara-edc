@@ -111,7 +111,7 @@ def edit_check_test_cases(draw: st.DrawFn) -> EditCheckTestCase:
 @pytest.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
     """Provide a real SQLite session for checking all non-persistence targets."""
-    import app.models  # noqa: F401  # Register every ORM relationship first.
+    import app.models  # Register every ORM relationship first.
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as connection:

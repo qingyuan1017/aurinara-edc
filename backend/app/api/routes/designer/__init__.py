@@ -22,7 +22,9 @@ from app.api.routes.designer.codelists import (
 from app.api.routes.designer.coding_settings import router as coding_settings_router
 from app.api.routes.designer.crf_access import router as crf_access_router
 from app.api.routes.designer.custom_functions import router as custom_functions_router
-from app.api.routes.designer.custom_functions import version_router as custom_function_versions_router
+from app.api.routes.designer.custom_functions import (
+    version_router as custom_function_versions_router,
+)
 from app.api.routes.designer.edit_checks import (
     router as edit_checks_router,
 )

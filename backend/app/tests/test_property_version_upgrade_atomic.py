@@ -355,7 +355,7 @@ async def _count_on_version(
 async def test_version_upgrade_rebind_is_atomic_and_complete(shape, inject_failure):
     """Rebind is all-or-nothing and complete across varied graphs (R8.3, R8.15)."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-    import app.models  # noqa: F401  (register every ORM table)
+    import app.models
 
     try:
         async with engine.begin() as connection:

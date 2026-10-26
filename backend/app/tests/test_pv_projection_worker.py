@@ -373,7 +373,7 @@ class TestMigrationAdditivity:
         assert all(not name.startswith("ctms_") for name in module._PROJECTION_TABLES)
 
     def test_projection_tables_use_expected_conventions(self) -> None:
-        import app.models  # noqa: F401 - register mapped models
+        import app.models
 
         tables = Base.metadata.tables
         assert {"pv_edc_ae_projections", "pv_coordination_refs"}.issubset(tables)

@@ -71,7 +71,7 @@ def test_pv_phase1_revision_is_additive_and_pv_prefixed():
 
 
 def test_pv_model_metadata_conventions_and_no_duplicate_tables():
-    import app.models  # noqa: F401 - register all mapped models
+    import app.models
 
     tables = Base.metadata.tables
     assert _PV_TABLES.issubset(tables)
@@ -119,7 +119,7 @@ def test_pv_model_metadata_conventions_and_no_duplicate_tables():
 
 @pytest.mark.asyncio
 async def test_pv_phase1_schema_creates_and_soft_deletion_columns_persist():
-    import app.models  # noqa: F401
+    import app.models
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     try:
